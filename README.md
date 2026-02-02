@@ -1,6 +1,8 @@
 
 # BSAI301 – Group Project  
 
+Groupname(Waiting to name) - EX2 - Team12
+Members List: Chen-JunYu, Liu-YiBin, Nie-HaoYu, Guo-HaoXuan
 
 ## 1. Project Goal
 
