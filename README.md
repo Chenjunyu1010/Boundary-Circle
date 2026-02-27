@@ -71,12 +71,11 @@ Build your identity within each circle:
 | Layer | Technology |
 |-------|------------|
 | **Backend** | FastAPI (Python 3.9+) |
-| **Frontend** | Streamlit (Prototype) |
-| **Database** | PostgreSQL |
-| **Vector Store** | ChromaDB |
-| **AI/LLM** | DeepSeek / OpenAI API |
-| **Containerization** | Docker |
-| **CI/CD** | GitHub Actions |
+| **Frontend** | Streamlit |
+| **Database** | SQLite (Zero-config, embedded) |
+| **ORM** | SQLModel |
+| **AI/LLM** | DeepSeek API (for basic matching evaluation) |
+| **Version Control** | Git & GitHub |
 
 ---
 
@@ -90,12 +89,11 @@ Build your identity within each circle:
 │           FastAPI Backend               │
 │  /auth | /circles | /tags | /matching   │
 ├─────────────────────────────────────────┤
-│         Matching Engine                 │
-│   Tag Similarity | LLM Ranking          │
+│         Matching Service                │
+│   Tag Heuristics | DeepSeek API         │
 ├─────────────────────────────────────────┤
 │         Data Layer                      │
-│   PostgreSQL (Relational)               │
-│   ChromaDB (Vector Embeddings)          │
+│   SQLite (via SQLModel)                 │
 └─────────────────────────────────────────┘
 ```
 
@@ -106,8 +104,6 @@ Build your identity within each circle:
 ### Prerequisites
 
 - Python 3.9+
-- Docker (optional, for containerized deployment)
-- PostgreSQL (for local development)
 
 ### Local Development
 
@@ -139,10 +135,8 @@ docker run -p 8000:8000 boundary-circle
 ### API Documentation
 
 Once the backend is running, visit:
-- **Swagger UI**: http://localhost:8000/docs
-- **ReDoc**: http://localhost:8000/redoc
+- **Swagger UI (Interactive API)**: http://localhost:8000/docs
 - **Health Check**: http://localhost:8000/health
-
 ---
 
 ## 📦 Core API Endpoints
@@ -186,6 +180,27 @@ Once the backend is running, visit:
 | **Testing** | 12 | QA, Bug Fixes |
 | **Demo** | 13-14 | Final Presentation |
 
+
+## 🗺️ Phased Implementation Plan
+
+To ensure steady progress and avoid getting stuck on complex infrastructure, we follow a phased approach:
+
+### Milestone 1: Core Foundation (The Skeleton)
+- Set up FastAPI + SQLModel + SQLite.
+- Create `User` and `Circle` database models.
+- Implement basic CRUD APIs: create user, create circle, list circles.
+- Build basic Streamlit UI: Login page and Circle Lobby.
+
+### Milestone 2: Identity & Teaming (The Meat)
+- Create `Tag` and `Team` database models.
+- Implement API for joining a circle and adding personal tags.
+- Implement API for creating a team recruitment post.
+- Build Streamlit UI for Circle details, viewing members, and posting teams.
+
+### Milestone 3: AI Matching (The Brain)
+- Implement basic heuristic matching (e.g., matching required tags vs. user tags).
+- Integrate DeepSeek API to generate short "compatibility explanations" based on tag intersections.
+- Polish the UI to display matching scores and AI feedback.
 ---
 
 ## 📄 Documentation
