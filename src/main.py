@@ -1,26 +1,44 @@
 from fastapi import FastAPI
+from contextlib import asynccontextmanager
 
-# 初始化 APP
+# Import database and models
+from src.db.database import create_db_and_tables
+from src.models.core import User, Circle  # Keep this to ensure models are registered
+
+# Import routers (we will create these next)
+from src.api import users, circles
+
+# This runs when the app starts
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Create tables if they don't exist
+    print("Creating database tables...")
+    create_db_and_tables()
+    yield
+    print("Shutting down...")
+
+# Initialize APP
 app = FastAPI(
-    title="SE Project API",
-    description="Backend API for our Software Engineering Project",
-    version="0.1.0"
+    title="Boundary Circle API",
+    description="Backend API for Team 12 Software Engineering Project",
+    version="0.1.0",
+    lifespan=lifespan
 )
 
-# 1. 根路径 (Root Endpoint)
-# 作用：确认系统是否存活
+# 1. Root Endpoint
 @app.get("/")
 def read_root():
-    return {"message": "Welcome to SE Project API", "status": "active"}
+    return {
+        "message": "Welcome to Boundary Circle API", 
+        "status": "active",
+        "docs_url": "/docs"
+    }
 
-# 2. 健康检查 (Health Check)
-# 作用：这也是 SE 的加分项，用于监控系统状态
+# 2. Health Check
 @app.get("/health")
 def health_check():
     return {"status": "healthy"}
 
-# 3. (预留) AI 功能接口
-# 之后你们的 AI 模型就在这里调用
-@app.get("/predict")
-def predict_demo(input_text: str = ""):
-    return {"input": input_text, "result": "AI model placeholder"}
+# Include routers
+app.include_router(users.router)
+app.include_router(circles.router)
