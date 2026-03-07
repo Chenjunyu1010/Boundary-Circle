@@ -22,7 +22,11 @@ jobs:
       run: |
         python -m pip install --upgrade pip
         pip install -r requirements.txt
-        
+    
+    - name: Set PYTHONPATH
+      run: |
+        echo "PYTHONPATH=${{ github.workspace }}" >> $GITHUB_ENV
+    
     - name: Run Tests with Pytest
       run: |
-        pytest
+        pytest -v

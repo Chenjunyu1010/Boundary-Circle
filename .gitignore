@@ -221,8 +221,8 @@ env/
 *.pt
 *.h5
 *.onnx
-data/
-models/
+/data/
+/models/
 
 # IDE settings
 .vscode/
