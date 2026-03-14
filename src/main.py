@@ -4,9 +4,10 @@ from contextlib import asynccontextmanager
 # Import database and models
 from src.db.database import create_db_and_tables
 from src.models.core import User, Circle  # Keep this to ensure models are registered
+from src.models.tags import TagDefinition, UserTag, CircleMember # <--- 新增这行
 
 # Import routers (we will create these next)
-from src.api import users, circles
+from src.api import users, circles, tags  # <--- 修改这行
 
 # This runs when the app starts
 @asynccontextmanager
@@ -42,3 +43,4 @@ def health_check():
 # Include routers
 app.include_router(users.router)
 app.include_router(circles.router)
+app.include_router(tags.router)           # <--- 新增这行
