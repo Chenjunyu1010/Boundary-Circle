@@ -5,6 +5,7 @@ Provides session management and authentication state handling.
 """
 
 import streamlit as st
+import logging
 
 from .api import api_client
 
@@ -54,7 +55,7 @@ def _fetch_user_info() -> bool:
             st.session_state.email = data.get("email")
             return True
     except Exception:
-        pass
+        logging.exception("Failed to fetch user info from /auth/me")
     return False
 
 
