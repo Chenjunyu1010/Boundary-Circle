@@ -10,7 +10,9 @@ import streamlit as st
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parent.parent))
+parent_dir = str(Path(__file__).parent.parent)
+if parent_dir not in sys.path:
+    sys.path.insert(0, parent_dir)
 
 from utils.auth import login, register, is_authenticated, init_session_state
 from utils.validation import validate_email, validate_password, validate_username
