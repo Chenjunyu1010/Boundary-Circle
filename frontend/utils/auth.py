@@ -69,7 +69,17 @@ def login(email: str, password: str) -> tuple[bool, str]:
 
         if response.ok:
             data = response.json()
-            st.session_state.access_token = data.get("access_token")
+            access_token = data.get("access_token")
+            if not access_token:
+                # Treat missing or empty access token as a login failure
+                st.session_state.access_token = None
+                st.session_state.logged_in = False
+                st.session_state.user_id = None
+                st.session_state.username = None
+                st.session_state.email = None
+                return False, "Login failed: invalid authentication response from server."
+
+            st.session_state.access_token = access_token
 
             if api_client.mock_mode:
                 user = data.get("user", {})
