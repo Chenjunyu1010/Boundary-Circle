@@ -52,7 +52,7 @@ def load_frontend_modules(monkeypatch, mock_mode: str = "true"):
     return fake_streamlit, api_module, auth_module, validation_module
 
 
-def test_api_client_mock_login_response_matches_auth_contract(monkeypatch):
+def test_api_client_login_mock_mode_response_matches_auth_contract(monkeypatch):
     fake_streamlit, api_module, _, _ = load_frontend_modules(monkeypatch)
     fake_streamlit.session_state.access_token = "token-123"
 
@@ -76,7 +76,7 @@ def test_api_client_mock_login_response_matches_auth_contract(monkeypatch):
     }
 
 
-def test_register_and_login_update_session_state(monkeypatch):
+def test_auth_register_and_login_valid_credentials_update_session_state(monkeypatch):
     fake_streamlit, _, auth_module, _ = load_frontend_modules(monkeypatch)
 
     auth_module.init_session_state()
@@ -102,7 +102,7 @@ def test_register_and_login_update_session_state(monkeypatch):
     assert fake_streamlit.session_state.email == "alice@example.com"
 
 
-def test_logout_clears_authentication_state(monkeypatch):
+def test_auth_logout_when_called_clears_authentication_state(monkeypatch):
     fake_streamlit, _, auth_module, _ = load_frontend_modules(monkeypatch)
 
     auth_module.init_session_state()
