@@ -35,7 +35,7 @@ class APIClient:
             headers["Authorization"] = f"Bearer {token}"
         return headers
 
-    def _mock_response(self, endpoint: str, method: str, data: dict = None) -> dict:
+    def _mock_response(self, endpoint: str, method: str, data: Optional[dict] = None) -> dict:
         """Generate mock response matching real API format."""
 
         # Login response
@@ -77,8 +77,8 @@ class APIClient:
         self,
         method: str,
         endpoint: str,
-        data: dict = None,
-        params: dict = None
+        data: Optional[dict] = None,
+        params: Optional[dict] = None
     ) -> requests.Response:
         """Make HTTP request with token support."""
         url = f"{self.base_url}{endpoint}"
@@ -103,15 +103,15 @@ class APIClient:
             headers=headers
         )
 
-    def get(self, endpoint: str, params: dict = None) -> requests.Response:
+    def get(self, endpoint: str, params: Optional[dict] = None) -> requests.Response:
         """GET request."""
         return self.request("GET", endpoint, params=params)
 
-    def post(self, endpoint: str, data: dict = None) -> requests.Response:
+    def post(self, endpoint: str, data: Optional[dict] = None) -> requests.Response:
         """POST request."""
         return self.request("POST", endpoint, data=data)
 
-    def put(self, endpoint: str, data: dict = None) -> requests.Response:
+    def put(self, endpoint: str, data: Optional[dict] = None) -> requests.Response:
         """PUT request."""
         return self.request("PUT", endpoint, data=data)
 
