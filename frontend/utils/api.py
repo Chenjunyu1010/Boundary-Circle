@@ -7,6 +7,7 @@ Supports MOCK_MODE for development without backend.
 import os
 from typing import Optional
 
+import json
 import requests
 import streamlit as st
 
@@ -85,20 +86,14 @@ class APIClient:
 
         if self.mock_mode:
             mock_data = self._mock_response(endpoint, method, data)
-
-            class MockResponse:
-                def __init__(self, json_data, status_code=200):
-                    self._json_data = json_data
-                    self.status_code = status_code
-                    self.ok = status_code < 400
-
-                def json(self):
-                    return self._json_data
-
-                text = ""
-                reason = "OK"
-
-            return MockResponse(mock_data)
+            response = requests.Response()
+            response.status_code = 200
+            response._content = json.dumps(mock_data).encode("utf-8")
+            response.headers["Content-Type"] = "application/json"
+            response.url = url
+            response.reason = "OK"
+            response.request = requests.Request(method=method, url=url).prepare()
+            return response
 
         return requests.request(
             method=method,
