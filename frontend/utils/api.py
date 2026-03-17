@@ -91,9 +91,9 @@ class APIClient:
             }
 
         # Get circle detail
-        if endpoint.startswith("/circles/") and endpoint.endswith("/join") == False and endpoint.endswith("/leave") == False and method == "GET":
+        if method == "GET":
             import re
-            match = re.match(r"/circles/(\d+)", endpoint)
+            match = re.fullmatch(r"/circles/(\d+)", endpoint)
             if match:
                 circle_id = int(match.group(1))
                 circles_map = {
