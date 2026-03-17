@@ -47,6 +47,7 @@ def main():
 
         with col1:
             st.page_link("pages/1_auth.py", label="Login/Register", icon="🔐")
+            st.page_link("pages/2_Circles.py", label="Circle Hall", icon="🎪")
 
         with col2:
             if st.button("Logout", icon="🚪"):
