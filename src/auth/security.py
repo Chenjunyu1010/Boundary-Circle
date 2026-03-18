@@ -5,7 +5,7 @@ import json
 import os
 import secrets
 from datetime import datetime, timedelta, timezone
-from typing import Any
+from typing import Any, Dict, Optional
 
 
 SECRET_KEY = os.getenv("SECRET_KEY", "development-secret-change-me")
@@ -49,7 +49,7 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
     return hmac.compare_digest(candidate_digest, stored_digest)
 
 
-def create_access_token(subject: str, expires_delta: timedelta | None = None) -> str:
+def create_access_token(subject: str, expires_delta: Optional[timedelta] = None) -> str:
     expire_at = datetime.now(timezone.utc) + (
         expires_delta or timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     )
@@ -72,7 +72,7 @@ def create_access_token(subject: str, expires_delta: timedelta | None = None) ->
     return f"{header_segment}.{payload_segment}.{signature_segment}"
 
 
-def decode_access_token(token: str) -> dict[str, Any] | None:
+def decode_access_token(token: str) -> Optional[Dict[str, Any]]:
     try:
         header_segment, payload_segment, signature_segment = token.split(".")
     except ValueError:

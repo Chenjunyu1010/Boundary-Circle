@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, ConfigDict
 from sqlmodel import Session, select
+from typing import Optional
 
 from src.auth.dependencies import get_current_user
 from src.auth.security import create_access_token, get_password_hash, verify_password
@@ -15,12 +16,12 @@ class AuthRegisterRequest(BaseModel):
     username: str
     email: str
     password: str
-    full_name: str | None = None
+    full_name: Optional[str] = None
 
 
 class AuthLoginRequest(BaseModel):
-    email: str | None = None
-    username: str | None = None
+    email: Optional[str] = None
+    username: Optional[str] = None
     password: str
 
 
@@ -35,7 +36,7 @@ class UserResponse(BaseModel):
     id: int
     username: str
     email: str
-    full_name: str | None = None
+    full_name: Optional[str] = None
 
 
 @router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
