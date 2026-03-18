@@ -175,13 +175,38 @@ class APIClient:
         return None
 
     def _create_mock_response(self, url: str, payload) -> requests.Response:
-        """Wrap a mock payload in a requests.Response."""
+        """Wrap a mock payload in a requests.Response.
+
+        Attempts to map common failure payloads (e.g. {"success": False, "message": ...})
+        to appropriate HTTP status codes so that response.ok and status_code behave
+        similarly to a real backend.
+        """
         response = requests.Response()
-        response.status_code = 200
+
+        # Default to HTTP 200 OK.
+        status_code = 200
+        reason = "OK"
+
+        # If the payload explicitly indicates failure, derive a more specific status.
+        if isinstance(payload, dict) and payload.get("success") is False:
+            message = str(payload.get("message", "")).lower()
+            # Default failure is treated as a 400 Bad Request.
+            status_code = 400
+            reason = "Bad Request"
+
+            # Heuristic mapping based on common error messages used in the mock layer.
+            if "not found" in message:
+                status_code = 404
+                reason = "Not Found"
+            elif "already" in message or "duplicate" in message or "exists" in message:
+                status_code = 409
+                reason = "Conflict"
+
+        response.status_code = status_code
         response._content = json.dumps(payload).encode("utf-8")
         response.headers["Content-Type"] = "application/json"
         response.url = url
-        response.reason = "OK"
+        response.reason = reason
         response.request = requests.Request(method="MOCK", url=url).prepare()
         return response
 
