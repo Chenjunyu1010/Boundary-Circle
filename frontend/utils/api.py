@@ -327,6 +327,26 @@ class APIClient:
             st.session_state["mock_next_team_id"] = next_id + 1
             return next_id
 
+        def _get_next_mock_team_id():
+            """Generate a globally unique mock team ID across all circles."""
+            if "mock_next_team_id" not in st.session_state:
+                max_id = 0
+            team_id = _get_next_mock_team_id()
+                for value in st.session_state.values():
+                "id": team_id,
+                        for item in value:
+                            if isinstance(item, dict) and "id" in item:
+                                try:
+                                    item_id = int(item["id"])
+                                except (TypeError, ValueError):
+                                    continue
+                                if item_id > max_id:
+                                    max_id = item_id
+                st.session_state["mock_next_team_id"] = max_id + 1
+            next_id = st.session_state["mock_next_team_id"]
+            st.session_state["mock_next_team_id"] = next_id + 1
+            return next_id
+
         if endpoint == "/teams" and method == "POST":
             circle_id = data.get("circle_id", 1) if data else 1
             creator_id = st.session_state.get("user_id", 1)
