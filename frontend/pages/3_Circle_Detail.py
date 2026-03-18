@@ -195,7 +195,8 @@ def render_tag_form(tag_definitions: list, circle_id: int):
     """Render dynamic tag form based on tag definitions."""
     if not tag_definitions:
         st.info("This circle has no required tags")
-        return {}
+        # No form submission when there are no tags; signal this with None
+        return None
 
     tag_data = {}
 
