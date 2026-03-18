@@ -101,11 +101,25 @@ def send_invitation(team_id: int, user_id: int, team_name: str) -> tuple[bool, s
             f"/teams/{team_id}/invite",
             data={"user_id": user_id, "team_name": team_name},
         )
-        payload = response.json() if response.ok else {}
-        if response.ok and payload.get("status") != "pending":
-            return False, payload.get("message", "Failed to send invitation.")
         if response.ok:
-            return True, "Invitation sent successfully."
+            try:
+                payload = response.json()
+            except Exception:
+                payload = {}
+
+            # Explicit failure if backend reports success == False
+            if payload.get("success") is False:
+                return False, payload.get("message", "Failed to send invitation.")
+
+            # Mock/backend contract: if a status field is present and is not "pending",
+            # treat it as a failure. If status is absent, consider the request successful.
+            status = payload.get("status")
+            if status is not None and status != "pending":
+                return False, payload.get("message", "Failed to send invitation.")
+
+            # Otherwise, treat the 2xx response as a success.
+            return True, payload.get("message", "Invitation sent successfully.")
+
         return False, f"Failed to send invitation: {response.reason}"
     except Exception as exc:
         return False, f"Error sending invitation: {exc}"
