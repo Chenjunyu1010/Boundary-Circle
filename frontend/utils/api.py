@@ -307,13 +307,33 @@ class APIClient:
                     joined_circles.remove(circle_id)
                 return {"success": True, "message": "Successfully left the circle", "circle_id": circle_id}
 
+        def _get_next_mock_team_id():
+            """Generate a globally unique mock team ID across all circles."""
+            if "mock_next_team_id" not in st.session_state:
+                max_id = 0
+                # Best-effort scan for existing team-like dicts with an 'id' key
+                for value in st.session_state.values():
+                    if isinstance(value, list):
+                        for item in value:
+                            if isinstance(item, dict) and "id" in item:
+                                try:
+                                    item_id = int(item["id"])
+                                except (TypeError, ValueError):
+                                    continue
+                                if item_id > max_id:
+                                    max_id = item_id
+                st.session_state["mock_next_team_id"] = max_id + 1
+            next_id = st.session_state["mock_next_team_id"]
+            st.session_state["mock_next_team_id"] = next_id + 1
+            return next_id
+
         if endpoint == "/teams" and method == "POST":
             circle_id = data.get("circle_id", 1) if data else 1
             creator_id = st.session_state.get("user_id", 1)
             teams = self._ensure_mock_teams(circle_id)
-            next_id = max((team.get("id", 0) for team in teams), default=0) + 1
+            team_id = _get_next_mock_team_id()
             team = {
-                "id": next_id,
+                "id": team_id,
                 "name": data.get("name", "New Team") if data else "New Team",
                 "description": data.get("description", "") if data else "",
                 "max_members": data.get("max_members", 5) if data else 5,
