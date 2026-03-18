@@ -183,18 +183,14 @@ class APIClient:
         """
         response = requests.Response()
 
-        # Default to HTTP 200 OK.
         status_code = 200
         reason = "OK"
 
-        # If the payload explicitly indicates failure, derive a more specific status.
         if isinstance(payload, dict) and payload.get("success") is False:
             message = str(payload.get("message", "")).lower()
-            # Default failure is treated as a 400 Bad Request.
             status_code = 400
             reason = "Bad Request"
 
-            # Heuristic mapping based on common error messages used in the mock layer.
             if "not found" in message:
                 status_code = 404
                 reason = "Not Found"
@@ -252,7 +248,12 @@ class APIClient:
                 "creator_id": creator_id,
             }
 
-        if endpoint.startswith("/circles/") and method == "GET" and not endpoint.endswith("/join") and not endpoint.endswith("/leave"):
+        if (
+            endpoint.startswith("/circles/")
+            and method == "GET"
+            and not endpoint.endswith("/join")
+            and not endpoint.endswith("/leave")
+        ):
             import re
 
             if endpoint.endswith("/members"):
@@ -307,33 +308,12 @@ class APIClient:
                     joined_circles.remove(circle_id)
                 return {"success": True, "message": "Successfully left the circle", "circle_id": circle_id}
 
-        def _get_next_mock_team_id():
+        def _get_next_mock_team_id() -> int:
             """Generate a globally unique mock team ID across all circles."""
             if "mock_next_team_id" not in st.session_state:
                 max_id = 0
-                # Best-effort scan for existing team-like dicts with an 'id' key
                 for value in st.session_state.values():
                     if isinstance(value, list):
-                        for item in value:
-                            if isinstance(item, dict) and "id" in item:
-                                try:
-                                    item_id = int(item["id"])
-                                except (TypeError, ValueError):
-                                    continue
-                                if item_id > max_id:
-                                    max_id = item_id
-                st.session_state["mock_next_team_id"] = max_id + 1
-            next_id = st.session_state["mock_next_team_id"]
-            st.session_state["mock_next_team_id"] = next_id + 1
-            return next_id
-
-        def _get_next_mock_team_id():
-            """Generate a globally unique mock team ID across all circles."""
-            if "mock_next_team_id" not in st.session_state:
-                max_id = 0
-            team_id = _get_next_mock_team_id()
-                for value in st.session_state.values():
-                "id": team_id,
                         for item in value:
                             if isinstance(item, dict) and "id" in item:
                                 try:
