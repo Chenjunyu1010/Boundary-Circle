@@ -84,7 +84,6 @@ def create_team(
                 "max_members": max_members,
                 "required_tags": required_tags,
                 "circle_id": circle_id,
-                "creator_id": creator_id,
             },
         )
         if response.ok:
