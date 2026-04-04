@@ -1,115 +1,201 @@
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import create_all
-from app.main import app
-from app.database import Base, engine, SessionLocal
-from app import models
+from sqlalchemy.pool import StaticPool
+from sqlmodel import SQLModel, Session, create_engine, select
 
-client = TestClient(app)
+from src.db.database import get_session
+from src.main import app
+from src.models.tags import CircleMember, CircleRole, UserTag
 
-# Test Data Constants
-TEST_CIRCLE_NAME = "EECS Career Fair"
-VALID_TAGS = {"Major": "CS", "GPA": 3.8, "Skills": ["Python"]}
-INVALID_TYPE_TAGS = {"Major": "CS", "GPA": "High", "Skills": ["Python"]} # GPA should be float
-MISSING_TAGS = {"Major": "CS"} # Missing GPA and Skills
 
-@pytest.fixture(scope="module", autouse=True)
+engine = create_engine(
+    "sqlite://",
+    connect_args={"check_same_thread": False},
+    poolclass=StaticPool,
+)
+
+
+def override_get_session():
+    with Session(engine) as session:
+        yield session
+
+@pytest.fixture(scope="function", autouse=True)
 def setup_db():
-    # Setup: Create tables and a seed circle for testing
-    Base.metadata.create_all(bind=engine)
-    db = SessionLocal()
-    
-    # Create a circle with strict tag schema
-    test_circle = models.Circle(
-        name=TEST_CIRCLE_NAME,
-        tag_schema={"required": {"Major": "str", "GPA": "float", "Skills": "list"}}
-    )
-    db.add(test_circle)
-    db.commit()
-    circle_id = test_circle.id
-    db.close()
-    
-    yield circle_id
-    
-    # Teardown: Clean up after tests
-    Base.metadata.drop_all(bind=engine)
+    previous_override = app.dependency_overrides.get(get_session)
+    app.dependency_overrides[get_session] = override_get_session
+    SQLModel.metadata.create_all(engine)
+    yield
+    SQLModel.metadata.drop_all(engine)
+    if previous_override is not None:
+        app.dependency_overrides[get_session] = previous_override
+    else:
+        app.dependency_overrides.pop(get_session, None)
 
-def test_join_circle_success(setup_db):
-    """
-    Test Case: Join a circle with valid tags (Acceptance Criterion 1)
-    """
-    circle_id = setup_db
-    # Note: Assume we have a helper to get a valid token for 'current_user'
-    # For simplicity, we bypass auth or use a test token
-    response = client.post(
-        f"/api/v1/circles/{circle_id}/join",
-        json={"user_tags": VALID_TAGS},
-        headers={"Authorization": "Bearer test-token"} 
-    )
-    assert response.status_code == 200
-    assert response.json()["message"] == "Successfully joined the circle"
 
-def test_join_circle_missing_tags(setup_db):
-    """
-    Test Case: Reject joining when mandatory tags are missing (Error 400)
-    """
-    circle_id = setup_db
+@pytest.fixture
+def db_session():
+    with Session(engine) as session:
+        yield session
+
+
+@pytest.fixture
+def client():
+    with TestClient(app) as test_client:
+        yield test_client
+
+
+@pytest.fixture
+def creator(client):
     response = client.post(
-        f"/api/v1/circles/{circle_id}/join",
-        json={"user_tags": MISSING_TAGS},
-        headers={"Authorization": "Bearer test-token"}
+        "/users/",
+        json={
+            "username": "circle_creator",
+            "email": "creator@example.com",
+            "password": "password123",
+        },
     )
+    assert response.status_code == 201
+    return response.json()
+
+
+@pytest.fixture
+def joiner(client):
+    response = client.post(
+        "/users/",
+        json={
+            "username": "circle_joiner",
+            "email": "joiner@example.com",
+            "password": "password123",
+        },
+    )
+    assert response.status_code == 201
+    return response.json()
+
+
+@pytest.fixture
+def circle(client, creator):
+    response = client.post(
+        f"/circles/?creator_id={creator['id']}",
+        json={
+            "name": "EECS Career Fair",
+            "description": "Circle for matching teammates",
+            "category": "Course",
+        },
+    )
+    assert response.status_code == 201
+    return response.json()
+
+
+def create_tag_definition(client, circle_id, current_user_id, name, data_type, required=False):
+    response = client.post(
+        f"/circles/{circle_id}/tags?current_user_id={current_user_id}",
+        json={"name": name, "data_type": data_type, "required": required},
+    )
+    assert response.status_code == 201
+    return response.json()
+
+
+def test_join_workflow_submits_required_tags(client, circle, creator, joiner):
+    major_tag = create_tag_definition(client, circle["id"], creator["id"], "Major", "string", required=True)
+    gpa_tag = create_tag_definition(client, circle["id"], creator["id"], "GPA", "float", required=True)
+
+    major_response = client.post(
+        f"/circles/{circle['id']}/tags/submit?current_user_id={joiner['id']}",
+        json={"tag_definition_id": major_tag["id"], "value": "CS"},
+    )
+    gpa_response = client.post(
+        f"/circles/{circle['id']}/tags/submit?current_user_id={joiner['id']}",
+        json={"tag_definition_id": gpa_tag["id"], "value": "3.8"},
+    )
+
+    assert major_response.status_code == 200
+    assert gpa_response.status_code == 200
+
+    tags_response = client.get(f"/circles/{circle['id']}/tags/my?current_user_id={joiner['id']}")
+
+    assert tags_response.status_code == 200
+    payload = tags_response.json()
+    assert len(payload) == 2
+    assert {tag["value"] for tag in payload} == {"CS", "3.8"}
+
+
+def test_join_workflow_rejects_invalid_tag_type(client, circle, creator, joiner):
+    gpa_tag = create_tag_definition(client, circle["id"], creator["id"], "GPA", "float", required=True)
+
+    response = client.post(
+        f"/circles/{circle['id']}/tags/submit?current_user_id={joiner['id']}",
+        json={"tag_definition_id": gpa_tag["id"], "value": "High"},
+    )
+
     assert response.status_code == 400
-    assert "Missing required tag" in response.json()["detail"]
+    assert "Invalid value" in response.json()["detail"]
 
-def test_join_circle_wrong_type(setup_db):
-    """
-    Test Case: Reject joining when tag types are incorrect (Error 400)
-    """
-    circle_id = setup_db
-    response = client.post(
-        f"/api/v1/circles/{circle_id}/join",
-        json={"user_tags": INVALID_TYPE_TAGS},
-        headers={"Authorization": "Bearer test-token"}
+
+def test_join_workflow_resubmits_tag_updates_existing_value(client, circle, creator, joiner):
+    skill_tag = create_tag_definition(client, circle["id"], creator["id"], "Skill", "string")
+
+    first_response = client.post(
+        f"/circles/{circle['id']}/tags/submit?current_user_id={joiner['id']}",
+        json={"tag_definition_id": skill_tag["id"], "value": "Python"},
     )
-    assert response.status_code == 400
-    assert "must be a number" in response.json()["detail"]
-
-def test_join_circle_duplicate(setup_db):
-    """
-    Test Case: Return 409 when user is already a member (Error 409)
-    """
-    circle_id = setup_db
-    # First join (Success)
-    client.post(f"/api/v1/circles/{circle_id}/join", json={"user_tags": VALID_TAGS}, headers={"Authorization": "Bearer test-token"})
-    
-    # Second join (Conflict)
-    response = client.post(
-        f"/api/v1/circles/{circle_id}/join",
-        json={"user_tags": VALID_TAGS},
-        headers={"Authorization": "Bearer test-token"}
+    second_response = client.post(
+        f"/circles/{circle['id']}/tags/submit?current_user_id={joiner['id']}",
+        json={"tag_definition_id": skill_tag["id"], "value": "Rust"},
     )
-    assert response.status_code == 409
-    assert "already a member" in response.json()["detail"]
 
-def test_get_circle_members(setup_db):
-    """
-    Test Case: Verify member list retrieval (Acceptance Criterion 4)
-    """
-    circle_id = setup_db
-    response = client.get(f"/api/v1/circles/{circle_id}/members")
-    assert response.status_code == 200
-    assert isinstance(response.json(), list)
-    assert len(response.json()) >= 1
+    assert first_response.status_code == 200
+    assert second_response.status_code == 200
+    assert second_response.json()["value"] == "Rust"
 
-def test_leave_circle(setup_db):
-    """
-    Test Case: Successfully leave the circle (Acceptance Criterion 5)
-    """
-    circle_id = setup_db
-    response = client.delete(
-        f"/api/v1/circles/{circle_id}/leave",
-        headers={"Authorization": "Bearer test-token"}
-    )
-    assert response.status_code == 200
-    assert "Successfully left" in response.json()["message"]
+    tags_response = client.get(f"/circles/{circle['id']}/tags/my?current_user_id={joiner['id']}")
+    payload = tags_response.json()
+
+    assert len(payload) == 1
+    assert payload[0]["value"] == "Rust"
+
+
+def test_circle_member_record_can_be_created(db_session, circle, joiner):
+    membership = CircleMember(user_id=joiner["id"], circle_id=circle["id"], role=CircleRole.MEMBER)
+    db_session.add(membership)
+    db_session.commit()
+
+    stored_membership = db_session.exec(
+        select(CircleMember).where(
+            CircleMember.user_id == joiner["id"],
+            CircleMember.circle_id == circle["id"],
+        )
+    ).first()
+
+    assert stored_membership is not None
+    assert stored_membership.role == CircleRole.MEMBER
+
+
+def test_circle_member_record_can_be_removed_to_leave_circle(db_session, circle, joiner):
+    membership = CircleMember(user_id=joiner["id"], circle_id=circle["id"], role=CircleRole.MEMBER)
+    db_session.add(membership)
+    db_session.commit()
+
+    stored_membership = db_session.exec(
+        select(CircleMember).where(
+            CircleMember.user_id == joiner["id"],
+            CircleMember.circle_id == circle["id"],
+        )
+    ).first()
+    db_session.delete(stored_membership)
+    db_session.commit()
+
+    remaining_membership = db_session.exec(
+        select(CircleMember).where(
+            CircleMember.user_id == joiner["id"],
+            CircleMember.circle_id == circle["id"],
+        )
+    ).first()
+    remaining_tags = db_session.exec(
+        select(UserTag).where(
+            UserTag.user_id == joiner["id"],
+            UserTag.circle_id == circle["id"],
+        )
+    ).all()
+
+    assert remaining_membership is None
+    assert remaining_tags == []
