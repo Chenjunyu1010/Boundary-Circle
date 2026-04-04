@@ -27,8 +27,8 @@ class SessionState(dict):
 
 def load_circle_modules(monkeypatch):
     for name in [
-        "frontend.pages.2_Circles",
-        "frontend.pages.3_Circle_Detail",
+        "frontend.pages.circles",
+        "frontend.pages.circle_detail",
         "frontend.utils.api",
         "frontend.utils.auth",
         "streamlit",
@@ -38,40 +38,44 @@ def load_circle_modules(monkeypatch):
         sys.modules.pop(name, None)
 
     fake_streamlit = ModuleType("streamlit")
-    fake_streamlit.session_state = SessionState()
-    fake_streamlit.query_params = {}
-    fake_streamlit.set_page_config = lambda *args, **kwargs: None
-    fake_streamlit.switch_page = lambda *args, **kwargs: None
-    fake_streamlit.warning = lambda *args, **kwargs: None
-    fake_streamlit.stop = lambda: None
-    fake_streamlit.success = lambda *args, **kwargs: None
-    fake_streamlit.error = lambda *args, **kwargs: None
-    fake_streamlit.info = lambda *args, **kwargs: None
-    fake_streamlit.markdown = lambda *args, **kwargs: None
-    fake_streamlit.title = lambda *args, **kwargs: None
-    fake_streamlit.page_link = lambda *args, **kwargs: None
-    fake_streamlit.columns = lambda *args, **kwargs: (None, None)
-    fake_streamlit.container = lambda *args, **kwargs: None
-    fake_streamlit.button = lambda *args, **kwargs: False
-    fake_streamlit.rerun = lambda: None
-    fake_streamlit.form = lambda *args, **kwargs: None
-    fake_streamlit.form_submit_button = lambda *args, **kwargs: False
-    fake_streamlit.text_input = lambda *args, **kwargs: ""
-    fake_streamlit.text_area = lambda *args, **kwargs: ""
-    fake_streamlit.selectbox = lambda label, options, **kwargs: options[0] if options else None
-    fake_streamlit.multiselect = lambda *args, **kwargs: []
-    fake_streamlit.number_input = lambda *args, **kwargs: 0
-    fake_streamlit.checkbox = lambda *args, **kwargs: False
-    fake_streamlit.caption = lambda *args, **kwargs: None
-    fake_streamlit.write = lambda *args, **kwargs: None
-    fake_streamlit.avatar = lambda *args, **kwargs: None
+    fake_streamlit_attrs = {
+        "session_state": SessionState(),
+        "query_params": {},
+        "set_page_config": lambda *args, **kwargs: None,
+        "switch_page": lambda *args, **kwargs: None,
+        "warning": lambda *args, **kwargs: None,
+        "stop": lambda: None,
+        "success": lambda *args, **kwargs: None,
+        "error": lambda *args, **kwargs: None,
+        "info": lambda *args, **kwargs: None,
+        "markdown": lambda *args, **kwargs: None,
+        "title": lambda *args, **kwargs: None,
+        "page_link": lambda *args, **kwargs: None,
+        "columns": lambda *args, **kwargs: (None, None),
+        "container": lambda *args, **kwargs: None,
+        "button": lambda *args, **kwargs: False,
+        "rerun": lambda: None,
+        "form": lambda *args, **kwargs: None,
+        "form_submit_button": lambda *args, **kwargs: False,
+        "text_input": lambda *args, **kwargs: "",
+        "text_area": lambda *args, **kwargs: "",
+        "selectbox": lambda label, options, **kwargs: options[0] if options else None,
+        "multiselect": lambda *args, **kwargs: [],
+        "number_input": lambda *args, **kwargs: 0,
+        "checkbox": lambda *args, **kwargs: False,
+        "caption": lambda *args, **kwargs: None,
+        "write": lambda *args, **kwargs: None,
+        "avatar": lambda *args, **kwargs: None,
+    }
+    for attr_name, value in fake_streamlit_attrs.items():
+        setattr(fake_streamlit, attr_name, value)
 
     monkeypatch.setitem(sys.modules, "streamlit", fake_streamlit)
     monkeypatch.setenv("MOCK_MODE", "false")
     monkeypatch.setenv("API_BASE_URL", "http://127.0.0.1:8000")
 
-    circles_module = importlib.import_module("frontend.pages.2_Circles")
-    detail_module = importlib.import_module("frontend.pages.3_Circle_Detail")
+    circles_module = importlib.import_module("frontend.pages.circles")
+    detail_module = importlib.import_module("frontend.pages.circle_detail")
     return fake_streamlit, circles_module, detail_module
 
 

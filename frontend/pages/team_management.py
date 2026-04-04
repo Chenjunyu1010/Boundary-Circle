@@ -158,7 +158,7 @@ def render_team_list() -> None:
     if not circle_id:
         st.warning("Join a circle first to view teams.")
         if st.button("Go to Circle Hall", key="go_circle_hall_list"):
-            st.switch_page("pages/2_Circles.py")
+            st.switch_page("pages/circles.py")
         return
 
     teams = fetch_teams(circle_id)
@@ -205,7 +205,7 @@ def render_create_team() -> None:
     if not circle_id:
         st.warning("Join a circle first to create a team.")
         if st.button("Go to Circle Hall", key="go_circle_hall_create"):
-            st.switch_page("pages/2_Circles.py")
+            st.switch_page("pages/circles.py")
         return
 
     with st.form("create_team_form"):
@@ -304,9 +304,14 @@ def render_my_teams() -> None:
                     )
                     invite_submitted = st.form_submit_button("Send Invitation")
                     if invite_submitted:
+                        team_id = team.get("id")
+                        selected_user_id = options[selected_member]
+                        if team_id is None or selected_user_id is None:
+                            st.error("Unable to send invitation because team data is incomplete.")
+                            continue
                         success, message = send_invitation(
-                            team_id=team.get("id"),
-                            user_id=options[selected_member],
+                            team_id=team_id,
+                            user_id=selected_user_id,
                             team_name=team.get("name", "Team"),
                         )
                         if success:
@@ -377,7 +382,11 @@ def render_invitation_management() -> None:
                         key=f"accept_invitation_{invite.get('id')}",
                         type="primary",
                     ):
-                        success, message = respond_to_invitation(invite.get("id"), True)
+                        invite_id = invite.get("id")
+                        if invite_id is None:
+                            st.error("Unable to respond because invitation data is incomplete.")
+                            continue
+                        success, message = respond_to_invitation(invite_id, True)
                         if success:
                             st.success(message)
                             st.rerun()
@@ -385,7 +394,11 @@ def render_invitation_management() -> None:
                             st.error(message)
                 with reject_col:
                     if st.button("Reject", key=f"reject_invitation_{invite.get('id')}"):
-                        success, message = respond_to_invitation(invite.get("id"), False)
+                        invite_id = invite.get("id")
+                        if invite_id is None:
+                            st.error("Unable to respond because invitation data is incomplete.")
+                            continue
+                        success, message = respond_to_invitation(invite_id, False)
                         if success:
                             st.info(message)
                             st.rerun()
@@ -420,7 +433,7 @@ def main() -> None:
     if not st.session_state.get("current_circle_id"):
         st.warning("Join a circle first to access team management.")
         if st.button("Go to Circle Hall", key="go_circle_hall_main"):
-            st.switch_page("pages/2_Circles.py")
+            st.switch_page("pages/circles.py")
         return
 
     team_tab, create_tab, my_tab, invitation_tab = st.tabs(
