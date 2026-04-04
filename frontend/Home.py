@@ -46,8 +46,8 @@ def main():
         col1, col2 = st.columns(2)
 
         with col1:
-            st.page_link("pages/1_auth.py", label="Login/Register", icon="🔐")
-            st.page_link("pages/2_Circles.py", label="Circle Hall", icon="🎪")
+            st.page_link("pages/auth.py", label="Login/Register", icon="🔐")
+            st.page_link("pages/circles.py", label="Circle Hall", icon="🎪")
 
         with col2:
             if st.button("Logout", icon="🚪"):
@@ -67,7 +67,7 @@ def main():
         col1, col2 = st.columns(2)
 
         with col1:
-            st.page_link("pages/1_auth.py", label="Login / Register", icon="🔐")
+            st.page_link("pages/auth.py", label="Login / Register", icon="🔐")
 
         st.markdown("---")
         st.info("This is the home page. Use the link above to login or register an account.")

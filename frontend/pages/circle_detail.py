@@ -263,7 +263,7 @@ def main():
 
     if not circle:
         st.error("Circle not found")
-        st.page_link("2_Circles.py", label="<- Back to Circle Hall", icon="🏠")
+        st.page_link("pages/circles.py", label="<- Back to Circle Hall", icon="🏠")
         return
 
     # Check join status
@@ -275,7 +275,7 @@ def main():
     st.markdown(f"**Description:** {circle.get('description', 'No description')}")
 
     # Back link
-    st.page_link("2_Circles.py", label="<- Back to Circle Hall", icon="🏠")
+    st.page_link("pages/circles.py", label="<- Back to Circle Hall", icon="🏠")
 
     st.markdown("---")
 

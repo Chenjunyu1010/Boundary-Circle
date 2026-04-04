@@ -216,6 +216,9 @@ venv/
 env/
 .env
 
+# Local runtime state
+boundary_circle.db
+
 # AI Models & Datasets (禁止传大文件)
 *.pth
 *.pt
