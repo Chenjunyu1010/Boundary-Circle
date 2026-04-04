@@ -1,15 +1,20 @@
-from pydantic import BaseModel, Field
-from typing import Dict, Any, Optional
+from pydantic import BaseModel
+from typing import Dict, Any, List
 
-# Schema for joining a circle
-class CircleJoin(BaseModel):
-    # Flexible dictionary to store tags like {"GPA": 3.8, "Skills": ["Python", "Java"]}
-    user_tags: Dict[str, Any] 
+# Request schema for joining a circle and submitting tags
+class CircleJoinRequest(BaseModel):
+    # e.g., {"Major": "CS", "GPA": 3.8, "Skills": ["Python"]}
+    user_tags: Dict[str, Any]
 
-class CircleRead(BaseModel):
-    id: int
-    name: str
-    tag_schema: Dict[str, Any] # Defines what tags are required
+# Output schema for a single circle member
+class MemberOut(BaseModel):
+    user_id: int
+    username: str
+    tags: Dict[str, Any]
 
     class Config:
         from_attributes = True
+
+# Standard response for successful actions
+class MessageResponse(BaseModel):
+    message: str
