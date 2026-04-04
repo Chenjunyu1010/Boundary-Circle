@@ -9,6 +9,7 @@ Boundary Circle is a FastAPI + Streamlit project for circle-based identity, tag 
 - Per-circle tag definition management
 - Per-user tag submission and update flows
 - Circle join-related tag workflow coverage in automated tests
+- Team creation, invitation, response, and leave flows with backend/API tests
 - Streamlit pages for auth, circle browsing, circle detail, and team-management UI scaffolding
 
 ## Project structure
@@ -67,10 +68,18 @@ Run the full suite:
 pytest -v
 ```
 
-Run a focused workflow test:
+Run focused workflow tests:
 
 ```bash
 pytest -v tests/test_circles_join.py
+pytest -v tests/test_teams_api.py
+pytest -v tests/test_integration.py
+```
+
+Generate a coverage report for backend code:
+
+```bash
+pytest --cov=src --cov-report=html
 ```
 
 ## API surface
@@ -85,6 +94,13 @@ Current backend routes are centered around these areas:
 - `/circles/{circle_id}/tags/my` - list a user's submitted tags in a circle
 - `/tags/definitions/{tag_def_id}` - update and delete tag definitions
 - `/tags/{user_tag_id}` - delete a submitted user tag
+- `/teams` - create teams
+- `/circles/{circle_id}/teams` - list teams in a circle
+- `/circles/{circle_id}/members` - list circle members
+- `/teams/{team_id}/invite` - send team invitations
+- `/invitations` - list invitations for the current user
+- `/invitations/{invite_id}/respond` - accept or reject an invitation
+- `/teams/{team_id}/leave` - leave a team
 
 Interactive docs are available at `http://localhost:8000/docs` once the backend is running.
 
@@ -98,5 +114,5 @@ docker run -p 8000:8000 boundary-circle
 ## Notes
 
 - The repository includes archived planning and legacy files under `docs/archive/` for reference only.
-- Team-management frontend pages exist, but backend support is still incomplete compared with auth/circle/tag flows.
+- Team-management frontend pages exist, and backend team/invitation support now covers creation, invitation, response, and leave flows.
 - This project is maintained as a course software-engineering repository rather than a polished production service.
