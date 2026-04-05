@@ -82,6 +82,34 @@ Generate a coverage report for backend code:
 pytest --cov=src --cov-report=html
 ```
 
+Generate local JUnit and coverage outputs equivalent to CI:
+
+```bash
+mkdir -p test-results
+pytest \
+  --junitxml=test-results/pytest.xml \
+  --cov=src \
+  --cov=frontend \
+  --cov-report=term-missing \
+  --cov-report=xml:coverage.xml
+```
+
+The repository includes `pytest-cov`, and the CI workflow now uploads two report-friendly artifacts on every run:
+
+- `pytest-results` containing `test-results/pytest.xml`
+- `coverage-report` containing `coverage.xml`
+
+These artifacts are intended to provide verifiable testing evidence for project tracking and progress-report writing.
+
+See `docs/report-evidence.md` for a quick mapping from report sections to repository evidence.
+
+Coverage should be discussed with the correct scope:
+
+- Backend-only coverage: `pytest --cov=src --cov-report=term-missing`
+- Broader repository coverage used by CI: `pytest --cov=src --cov=frontend --cov-report=term-missing`
+
+The backend-only percentage is higher because the current automated tests exercise the FastAPI backend more thoroughly than the Streamlit page code.
+
 ## API surface
 
 Current backend routes are centered around these areas:
