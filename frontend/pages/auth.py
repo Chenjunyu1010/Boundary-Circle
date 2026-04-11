@@ -88,7 +88,7 @@ def main():
         from utils.auth import get_current_user
         user = get_current_user()
         st.info(f"You are logged in as: {user.get('username', 'User')}")
-        st.page_link("../Home.py", label="Go to Home", icon="🏠")
+        st.page_link("Home.py", label="Go to Home", icon="🏠")
         return
 
     tab_login, tab_register = st.tabs(["Login", "Register"])

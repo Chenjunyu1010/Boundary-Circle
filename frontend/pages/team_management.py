@@ -98,7 +98,7 @@ def send_invitation(team_id: int, user_id: int, team_name: str) -> tuple[bool, s
     try:
         response = api_client.post(
             f"/teams/{team_id}/invite",
-            data={"user_id": user_id, "team_name": team_name},
+            data={"user_id": user_id},
         )
         if response.ok:
             try:
@@ -372,7 +372,8 @@ def render_invitation_management() -> None:
     else:
         for invite in pending:
             with st.container(border=True):
-                st.markdown(f"**{invite.get('team_name', 'Unknown Team')}**")
+                team_display = invite.get("team_name") or f"Team #{invite.get('team_id')}"
+                st.markdown(f"**{team_display}**")
                 st.caption(f"Invited by user {invite.get('inviter_id')}")
 
                 accept_col, reject_col = st.columns(2)
@@ -414,7 +415,8 @@ def render_invitation_management() -> None:
             with st.container(border=True):
                 col_left, col_right = st.columns([3, 1])
                 with col_left:
-                    st.markdown(f"**{invite.get('team_name', 'Unknown Team')}**")
+                    team_display = invite.get("team_name") or f"Team #{invite.get('team_id')}"
+                    st.markdown(f"**{team_display}**")
                     st.caption(f"Status: {invite.get('status', 'unknown')}")
                 with col_right:
                     if invite.get("status") == "accepted":
