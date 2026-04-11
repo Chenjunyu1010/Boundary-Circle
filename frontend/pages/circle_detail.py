@@ -7,6 +7,7 @@ Displays circle information, members, and allows joining/leaving.
 import json
 import sys
 from pathlib import Path
+from typing import Optional
 
 # Add parent directory to path for imports
 parent_dir = str(Path(__file__).parent.parent)
@@ -70,7 +71,7 @@ def create_tag_definition(
     name: str,
     data_type: str,
     required: bool,
-    options: str | None,
+    options: Optional[str],
 ) -> tuple[bool, str]:
     """Create a tag definition for a circle (creator only)."""
     current_user = get_current_user()
@@ -509,7 +510,7 @@ def main():
                 if not new_tag_name.strip():
                     st.error("name is required")
                 else:
-                    options_payload: str | None = None
+                    options_payload: Optional[str] = None
                     if new_tag_type == "enum":
                         if not new_tag_options.strip():
                             st.error("options is required for enum type")
