@@ -1,7 +1,7 @@
 """
 API client for Boundary Circle frontend.
 
-Supports MOCK_MODE so the Streamlit pages can be exercised without a backend.
+Uses the real backend API by default, with optional mock mode for development/tests.
 """
 
 import json
@@ -13,14 +13,14 @@ import streamlit as st
 
 
 BASE_URL = os.environ.get("API_BASE_URL", "http://127.0.0.1:8000")
-MOCK_MODE = os.environ.get("MOCK_MODE", "true").lower() == "true"
+MOCK_MODE = os.environ.get("MOCK_MODE", "false").lower() == "true"
 
 
 class APIClient:
     """HTTP client with optional mock responses."""
 
-    def __init__(self, base_url: str = BASE_URL):
-        self.base_url = base_url
+    def __init__(self):
+        self.base_url = BASE_URL
         self.mock_mode = MOCK_MODE
 
     def _get_token(self) -> Optional[str]:
@@ -35,45 +35,47 @@ class APIClient:
             headers["Authorization"] = f"Bearer {token}"
         return headers
 
-    def _get_mock_circles(self) -> list[dict]:
-        """Return default circles."""
-        return [
-            {
-                "id": 1,
-                "name": "AI Course Project",
-                "description": "Find teammates for the course project.",
-                "category": "Course",
-                "creator_id": 1,
-            },
-            {
-                "id": 2,
-                "name": "Frontend Studio",
-                "description": "Discuss frontend patterns and polish UI.",
-                "category": "Interest",
-                "creator_id": 2,
-            },
-            {
-                "id": 3,
-                "name": "Backend Architecture",
-                "description": "Design APIs, schemas, and services.",
-                "category": "Interest",
-                "creator_id": 1,
-            },
-            {
-                "id": 4,
-                "name": "Algorithm Sprint",
-                "description": "Practice contest problems together.",
-                "category": "Event",
-                "creator_id": 3,
-            },
-            {
-                "id": 5,
-                "name": "Open Source Club",
-                "description": "Collaborate on open source contributions.",
-                "category": "Community",
-                "creator_id": 2,
-            },
-        ]
+    def _ensure_mock_circles(self) -> list[dict]:
+        """Return mutable mock circles stored in session state."""
+        if "mock_circles" not in st.session_state:
+            st.session_state.mock_circles = [
+                {
+                    "id": 1,
+                    "name": "AI Course Project",
+                    "description": "Find teammates for the course project.",
+                    "category": "Course",
+                    "creator_id": 1,
+                },
+                {
+                    "id": 2,
+                    "name": "Frontend Studio",
+                    "description": "Discuss frontend patterns and polish UI.",
+                    "category": "Interest",
+                    "creator_id": 2,
+                },
+                {
+                    "id": 3,
+                    "name": "Backend Architecture",
+                    "description": "Design APIs, schemas, and services.",
+                    "category": "Interest",
+                    "creator_id": 1,
+                },
+                {
+                    "id": 4,
+                    "name": "Algorithm Sprint",
+                    "description": "Practice contest problems together.",
+                    "category": "Event",
+                    "creator_id": 3,
+                },
+                {
+                    "id": 5,
+                    "name": "Open Source Club",
+                    "description": "Collaborate on open source contributions.",
+                    "category": "Community",
+                    "creator_id": 2,
+                },
+            ]
+        return st.session_state.mock_circles
 
     def _get_mock_tags(self, circle_id: int) -> list[dict]:
         """Return tag definitions for a circle."""
@@ -236,17 +238,21 @@ class APIClient:
             }
 
         if endpoint == "/circles" and method == "GET":
-            return self._get_mock_circles()
+            return self._ensure_mock_circles()
 
         if endpoint == "/circles" and method == "POST":
+            circles = self._ensure_mock_circles()
+            next_circle_id = max((circle.get("id", 0) for circle in circles), default=0) + 1
             creator_id = st.session_state.get("user_id", 1)
-            return {
-                "id": 6,
+            new_circle = {
+                "id": next_circle_id,
                 "name": data.get("name", "New Circle") if data else "New Circle",
                 "description": data.get("description", "") if data else "",
                 "category": data.get("category", "General") if data else "General",
                 "creator_id": creator_id,
             }
+            circles.append(new_circle)
+            return new_circle
 
         if (
             endpoint.startswith("/circles/")
@@ -274,7 +280,7 @@ class APIClient:
             match = re.match(r"/circles/(\d+)", endpoint)
             if match:
                 circle_id = int(match.group(1))
-                circles = {circle["id"]: circle for circle in self._get_mock_circles()}
+                circles = {circle["id"]: circle for circle in self._ensure_mock_circles()}
                 return circles.get(
                     circle_id,
                     {
