@@ -5,9 +5,10 @@ from contextlib import asynccontextmanager
 from src.db.database import create_db_and_tables
 from src.models.core import User, Circle  # Keep this to ensure models are registered
 from src.models.tags import TagDefinition, UserTag, CircleMember # <--- 新增这行
+from src.models.teams import Team, TeamMember, Invitation
 
 # Import routers (we will create these next)
-from src.api import auth, users, circles, tags  # <--- 修改这行
+from src.api import auth, users, circles, tags, teams  # <--- 修改这行
 
 # This runs when the app starts
 @asynccontextmanager
@@ -45,3 +46,4 @@ app.include_router(users.router)
 app.include_router(auth.router)
 app.include_router(circles.router)
 app.include_router(tags.router)           # <--- 新增这行
+app.include_router(teams.router)

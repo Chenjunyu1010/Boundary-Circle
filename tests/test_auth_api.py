@@ -98,3 +98,13 @@ def test_register_rejects_duplicate_email():
 
     assert duplicate_response.status_code == 400
     assert duplicate_response.json()["detail"] == "Email already registered"
+
+
+def test_protected_route_rejects_invalid_token():
+    me_response = client.get(
+        "/auth/me",
+        headers={"Authorization": "Bearer definitely-not-a-valid-token"},
+    )
+
+    assert me_response.status_code == 401
+    assert me_response.json()["detail"] == "Invalid authentication credentials"

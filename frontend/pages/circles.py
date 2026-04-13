@@ -68,6 +68,7 @@ def create_circle(name: str, description: str, category: str = "General") -> tup
 def open_circle_detail(circle_id: int):
     """Persist selected circle id and navigate to the detail page."""
     st.session_state.selected_circle_id = circle_id
+    st.session_state.current_circle_id = circle_id
     st.switch_page("pages/circle_detail.py")
 
 
