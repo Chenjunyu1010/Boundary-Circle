@@ -2,6 +2,7 @@ from fastapi.testclient import TestClient
 
 from src.main import app
 from src.models.tags import CircleMember, CircleRole
+from src.models.teams import TeamMember
 
 
 client = TestClient(app)
@@ -127,7 +128,7 @@ def test_team_creator_can_send_invitation(db_session):
     assert payload["status"] == "pending"
 
 
-def test_non_creator_cannot_send_invitation(db_session):
+def test_team_member_can_send_invitation(db_session):
     creator, creator_headers = register_and_login("creator2", "creator2@example.com")
     member, member_headers = register_and_login("member2", "member2@example.com")
     invitee, _ = register_and_login("invitee2", "invitee2@example.com")
@@ -155,6 +156,8 @@ def test_non_creator_cannot_send_invitation(db_session):
     )
     assert team_response.status_code == 201
     team = team_response.json()
+    db_session.add(TeamMember(team_id=team["id"], user_id=member["id"]))
+    db_session.commit()
 
     invitation_response = client.post(
         f"/teams/{team['id']}/invite",
@@ -162,8 +165,59 @@ def test_non_creator_cannot_send_invitation(db_session):
         json={"user_id": invitee["id"], "team_name": team["name"]},
     )
 
-    assert invitation_response.status_code == 403
-    assert invitation_response.json()["detail"] == "Only the team creator can send invitations"
+    assert invitation_response.status_code == 201
+    payload = invitation_response.json()
+    assert payload["team_id"] == team["id"]
+    assert payload["inviter_id"] == member["id"]
+    assert payload["invitee_id"] == invitee["id"]
+
+
+def test_invitations_endpoint_returns_received_only(db_session):
+    creator, creator_headers = register_and_login("receivedcreator", "receivedcreator@example.com")
+    invitee, invitee_headers = register_and_login("receivedinvitee", "receivedinvitee@example.com")
+    circle_response = client.post(
+        f"/circles/?creator_id={creator['id']}",
+        json={"name": "Received Invitations Circle", "description": "Circle for invitation inbox"},
+    )
+    assert circle_response.status_code == 201
+    circle = circle_response.json()
+
+    db_session.add(add_circle_member(circle["id"], invitee["id"]))
+    db_session.commit()
+
+    team_response = client.post(
+        "/teams",
+        headers=creator_headers,
+        json={
+            "name": "Received Team",
+            "description": "Team for received-only invitation list",
+            "circle_id": circle["id"],
+            "max_members": 3,
+            "required_tags": [],
+        },
+    )
+    assert team_response.status_code == 201
+    team = team_response.json()
+
+    invitation_response = client.post(
+        f"/teams/{team['id']}/invite",
+        headers=creator_headers,
+        json={"user_id": invitee["id"], "team_name": team["name"]},
+    )
+    assert invitation_response.status_code == 201
+    invitation = invitation_response.json()
+
+    sender_invitations_response = client.get("/invitations", headers=creator_headers)
+    assert sender_invitations_response.status_code == 200
+    sender_invitations = sender_invitations_response.json()
+    assert sender_invitations == []
+
+    receiver_invitations_response = client.get("/invitations", headers=invitee_headers)
+    assert receiver_invitations_response.status_code == 200
+    receiver_invitations = receiver_invitations_response.json()
+    assert len(receiver_invitations) == 1
+    assert receiver_invitations[0]["id"] == invitation["id"]
+    assert receiver_invitations[0]["invitee_id"] == invitee["id"]
 
 
 def test_accept_invitation_adds_team_member(db_session):
