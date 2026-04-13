@@ -134,8 +134,11 @@ def send_invitation(
     team = session.get(Team, team_id)
     if team is None:
         raise HTTPException(status_code=404, detail="Team not found")
-    if team.creator_id != current_user.id:
-        raise HTTPException(status_code=403, detail="Only the team creator can send invitations")
+    inviter_is_member = session.exec(
+        select(TeamMember).where(TeamMember.team_id == team_id, TeamMember.user_id == current_user.id)
+    ).first()
+    if team.creator_id != current_user.id and inviter_is_member is None:
+        raise HTTPException(status_code=403, detail="Only team creator or members can send invitations")
 
     require_circle_member(
         team.circle_id,
@@ -178,11 +181,7 @@ def list_invitations(
 ):
     if current_user.id is None:
         raise HTTPException(status_code=500, detail="Current user ID missing")
-    return session.exec(
-        select(Invitation).where(
-            (Invitation.invitee_id == current_user.id) | (Invitation.inviter_id == current_user.id)
-        )
-    ).all()
+    return session.exec(select(Invitation).where(Invitation.invitee_id == current_user.id)).all()
 
 
 @router.post("/invitations/{invite_id}/respond")
