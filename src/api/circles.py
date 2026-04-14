@@ -76,7 +76,7 @@ def join_circle(
         )
     ).first()
     if existing_membership is not None:
-        return {"success": True, "message": "Already a member", "circle_id": circle_id}
+        raise HTTPException(status_code=409, detail="Already a member")
 
     session.add(
         CircleMember(

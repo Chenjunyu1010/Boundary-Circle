@@ -199,3 +199,139 @@ def test_circle_member_record_can_be_removed_to_leave_circle(db_session, circle,
 
     assert remaining_membership is None
     assert remaining_tags == []
+
+
+
+def register_and_login(client: TestClient, username: str, email: str) -> tuple[dict, dict]:
+    register_response = client.post(
+        "/auth/register",
+        json={
+            "username": username,
+            "email": email,
+            "password": "secret123",
+        },
+    )
+    assert register_response.status_code == 201
+
+    login_response = client.post(
+        "/auth/login",
+        json={"email": email, "password": "secret123"},
+    )
+    assert login_response.status_code == 200
+
+    token = login_response.json()["access_token"]
+    headers = {"Authorization": f"Bearer {token}"}
+    return register_response.json(), headers
+
+
+@pytest.fixture
+def authenticated_joiner(client):
+    return register_and_login(client, "api_joiner", "api_joiner@example.com")
+
+
+def test_join_circle_creates_membership(client, db_session, circle, authenticated_joiner):
+    joiner, headers = authenticated_joiner
+
+    response = client.post(f"/circles/{circle['id']}/join", headers=headers)
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "success": True,
+        "message": "Successfully joined the circle",
+        "circle_id": circle["id"],
+    }
+
+    membership = db_session.exec(
+        select(CircleMember).where(
+            CircleMember.user_id == joiner["id"],
+            CircleMember.circle_id == circle["id"],
+        )
+    ).first()
+    assert membership is not None
+    assert membership.role == CircleRole.MEMBER
+
+
+def test_join_circle_rejects_duplicate_membership(client, db_session, circle, authenticated_joiner):
+    joiner, headers = authenticated_joiner
+
+    first_response = client.post(f"/circles/{circle['id']}/join", headers=headers)
+    second_response = client.post(f"/circles/{circle['id']}/join", headers=headers)
+
+    assert first_response.status_code == 200
+    assert second_response.status_code == 409
+    assert second_response.json()["detail"] == "Already a member"
+
+    memberships = db_session.exec(
+        select(CircleMember).where(
+            CircleMember.user_id == joiner["id"],
+            CircleMember.circle_id == circle["id"],
+        )
+    ).all()
+    assert len(memberships) == 1
+
+
+def test_leave_circle_removes_membership_and_circle_tags(client, db_session, circle, creator, authenticated_joiner):
+    joiner, headers = authenticated_joiner
+
+    join_response = client.post(f"/circles/{circle['id']}/join", headers=headers)
+    assert join_response.status_code == 200
+
+    skill_tag = create_tag_definition(client, circle["id"], creator["id"], "Skill", "string")
+    submit_response = client.post(
+        f"/circles/{circle['id']}/tags/submit?current_user_id={joiner['id']}",
+        json={"tag_definition_id": skill_tag["id"], "value": "Python"},
+    )
+    assert submit_response.status_code == 200
+
+    leave_response = client.delete(f"/circles/{circle['id']}/leave", headers=headers)
+
+    assert leave_response.status_code == 200
+    assert leave_response.json() == {
+        "success": True,
+        "message": "Successfully left the circle",
+        "circle_id": circle["id"],
+    }
+
+    membership = db_session.exec(
+        select(CircleMember).where(
+            CircleMember.user_id == joiner["id"],
+            CircleMember.circle_id == circle["id"],
+        )
+    ).first()
+    tags = db_session.exec(
+        select(UserTag).where(
+            UserTag.user_id == joiner["id"],
+            UserTag.circle_id == circle["id"],
+        )
+    ).all()
+
+    assert membership is None
+    assert tags == []
+
+
+def test_leave_circle_without_membership_returns_not_found(client, circle, authenticated_joiner):
+    _, headers = authenticated_joiner
+
+    response = client.delete(f"/circles/{circle['id']}/leave", headers=headers)
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Membership not found"
+
+
+def test_list_circle_members_returns_joined_user(client, circle, authenticated_joiner):
+    joiner, headers = authenticated_joiner
+
+    join_response = client.post(f"/circles/{circle['id']}/join", headers=headers)
+    assert join_response.status_code == 200
+
+    members_response = client.get(f"/circles/{circle['id']}/members", headers=headers)
+
+    assert members_response.status_code == 200
+    members = members_response.json()
+    assert any(
+        member["id"] == joiner["id"]
+        and member["username"] == joiner["username"]
+        and member["email"] == joiner["email"]
+        and member["circle_id"] == circle["id"]
+        for member in members
+    )
