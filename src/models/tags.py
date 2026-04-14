@@ -1,5 +1,6 @@
 from typing import Optional
 from enum import Enum
+from sqlalchemy import UniqueConstraint
 from sqlmodel import Field, SQLModel
 from datetime import datetime, timezone
 
@@ -36,6 +37,10 @@ class UserTag(SQLModel, table=True):
 
 # 4. CircleMember - 圈子成员关系
 class CircleMember(SQLModel, table=True):
+    __table_args__ = (
+        UniqueConstraint("user_id", "circle_id", name="uq_circle_member_user_circle"),
+    )
+
     id: Optional[int] = Field(default=None, primary_key=True)
     user_id: int = Field(foreign_key="user.id", index=True)
     circle_id: int = Field(foreign_key="circle.id", index=True)
