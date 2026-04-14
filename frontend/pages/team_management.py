@@ -1,11 +1,15 @@
 """    
 Team management page.
 
-Provides team listing, creation, invitation sending, and invitation handling.
+Provides team listing, creation, invitation sending, invitation handling,
+plus matching-based recommendations.
 """
+
+from __future__ import annotations
 
 import sys
 from pathlib import Path
+from typing import Iterable, Tuple
 
 import streamlit as st
 
@@ -33,7 +37,7 @@ def fetch_teams(circle_id: int) -> list[dict]:
         if response.ok:
             return response.json()
         st.error(f"Failed to load teams: {response.reason}")
-    except Exception as exc:
+    except Exception as exc:  # pragma: no cover - defensive
         st.error(f"Error loading teams: {exc}")
     return []
 
@@ -45,7 +49,7 @@ def fetch_circle_members(circle_id: int) -> list[dict]:
         if response.ok:
             return response.json()
         st.error(f"Failed to load members: {response.reason}")
-    except Exception as exc:
+    except Exception as exc:  # pragma: no cover - defensive
         st.error(f"Error loading members: {exc}")
     return []
 
@@ -57,9 +61,58 @@ def fetch_invitations() -> list[dict]:
         if response.ok:
             return response.json()
         st.error(f"Failed to load invitations: {response.reason}")
-    except Exception as exc:
+    except Exception as exc:  # pragma: no cover - defensive
         st.error(f"Error loading invitations: {exc}")
     return []
+
+
+def fetch_matching_users(team_id: int) -> list[dict]:
+    """Fetch matching user recommendations for a given team.
+
+    Returns a list of UserMatch-like dicts from `/matching/users`.
+    """
+    try:
+        response = api_client.get("/matching/users", params={"team_id": team_id})
+        if response.ok:
+            return response.json()
+        st.error(f"Failed to load matching users: {response.reason}")
+    except Exception as exc:  # pragma: no cover - defensive
+        st.error(f"Error loading matching users: {exc}")
+    return []
+
+
+def fetch_matching_teams(circle_id: int) -> list[dict]:
+    """Fetch matching team recommendations for the current user in a circle."""
+    try:
+        response = api_client.get("/matching/teams", params={"circle_id": circle_id})
+        if response.ok:
+            return response.json()
+        st.error(f"Failed to load matching teams: {response.reason}")
+    except Exception as exc:  # pragma: no cover - defensive
+        st.error(f"Error loading matching teams: {exc}")
+    return []
+
+
+def split_user_teams(teams: Iterable[dict], user_id: int) -> Tuple[list[dict], list[dict]]:
+    """Split teams into (created_by_user, joined_by_user) lists.
+
+    A team is considered "created" when `creator_id == user_id`. A team is
+    considered "joined" when `user_id` is present in `member_ids` but the
+    team is not created by the user. This mirrors the logic used in tests
+    and keeps the semantics explicit for the UI.
+    """
+    created: list[dict] = []
+    joined: list[dict] = []
+
+    for team in teams:
+        creator_id = team.get("creator_id")
+        member_ids = team.get("member_ids", []) or []
+        if creator_id == user_id:
+            created.append(team)
+        elif user_id in member_ids:
+            joined.append(team)
+
+    return created, joined
 
 
 def create_team(
@@ -89,7 +142,7 @@ def create_team(
         if response.ok:
             return True, "Team created successfully."
         return False, f"Failed to create team: {response.reason}"
-    except Exception as exc:
+    except Exception as exc:  # pragma: no cover - defensive
         return False, f"Error creating team: {exc}"
 
 
@@ -103,7 +156,7 @@ def send_invitation(team_id: int, user_id: int, team_name: str) -> tuple[bool, s
         if response.ok:
             try:
                 payload = response.json()
-            except Exception:
+            except Exception:  # pragma: no cover - defensive
                 payload = {}
 
             # Explicit failure if backend reports success == False
@@ -120,7 +173,7 @@ def send_invitation(team_id: int, user_id: int, team_name: str) -> tuple[bool, s
             return True, payload.get("message", "Invitation sent successfully.")
 
         return False, f"Failed to send invitation: {response.reason}"
-    except Exception as exc:
+    except Exception as exc:  # pragma: no cover - defensive
         return False, f"Error sending invitation: {exc}"
 
 
@@ -135,19 +188,8 @@ def respond_to_invitation(invite_id: int, accept: bool) -> tuple[bool, str]:
             payload = response.json()
             return payload.get("success", False), payload.get("message", "Invitation updated.")
         return False, f"Failed to respond: {response.reason}"
-    except Exception as exc:
+    except Exception as exc:  # pragma: no cover - defensive
         return False, f"Error responding to invitation: {exc}"
-
-
-def split_user_teams(teams: list[dict], user_id: int) -> tuple[list[dict], list[dict]]:
-    """Split teams into created teams and joined teams for the current user."""
-    created_teams = [team for team in teams if team.get("creator_id") == user_id]
-    joined_teams = [
-        team
-        for team in teams
-        if team.get("creator_id") != user_id and user_id in team.get("member_ids", [])
-    ]
-    return created_teams, joined_teams
 
 
 def render_team_list() -> None:
@@ -211,7 +253,11 @@ def render_create_team() -> None:
     with st.form("create_team_form"):
         team_name = st.text_input("Team Name *", max_chars=50)
         team_description = st.text_area("Description", max_chars=500)
-        max_members = st.selectbox("Max Members", options=[2, 3, 4, 5, 6, 7, 8], index=3)
+        max_members = st.selectbox(
+            "Max Members",
+            options=[2, 3, 4, 5, 6, 7, 8],
+            index=3,
+        )
         required_tags = st.multiselect(
             "Required Tags (Optional)",
             options=["skill", "availability", "role", "experience", "interest"],
@@ -425,6 +471,104 @@ def render_invitation_management() -> None:
                         st.error("Rejected")
 
 
+def render_matching_section() -> None:
+    """Render matching-based recommendations for teams and users."""
+    current_user = get_current_user()
+    user_id = current_user.get("id")
+    if user_id is None:
+        st.warning("Please log in again.")
+        return
+
+    circle_id = st.session_state.get("current_circle_id")
+    if not circle_id:
+        st.info("Join a circle first to use matching recommendations.")
+        return
+
+    st.subheader("Recommend members for my team")
+    teams = fetch_teams(circle_id)
+
+    my_teams = [
+        team
+        for team in teams
+        if user_id in team.get("member_ids", [])
+        or team.get("creator_id") == user_id
+    ]
+
+    if not my_teams:
+        st.info("You are not a member or creator of any teams in this circle yet.")
+    else:
+        team_labels = [
+            f"{team.get('name', 'Unnamed')} (members {team.get('current_members', 0)}/"
+            f"{team.get('max_members', 0)})"
+            for team in my_teams
+        ]
+        selected_label = st.selectbox(
+            "Select a team to find potential members",
+            options=team_labels,
+        )
+        selected_team = my_teams[team_labels.index(selected_label)]
+
+        if st.button("Get user recommendations", type="primary"):
+            matches = fetch_matching_users(selected_team["id"])
+            if not matches:
+                st.info("No matching users found yet.")
+            else:
+                for match in matches:
+                    with st.container(border=True):
+                        st.markdown(
+                            f"**{match.get('username', 'Unknown user')}** "
+                            f"({match.get('email', 'N/A')})"
+                        )
+                        cov = match.get("coverage_score", 0.0)
+                        jac = match.get("jaccard_score", 0.0)
+                        st.caption(
+                            f"Coverage: {cov:.2f} · Similarity: {jac:.2f}"
+                        )
+                        matched = ", ".join(match.get("matched_tags", [])) or "-"
+                        missing = ", ".join(match.get("missing_required_tags", [])) or "-"
+                        st.write(f"Matched tags: {matched}")
+                        st.write(f"Missing required tags: {missing}")
+
+                        if st.button(
+                            "Invite to team",
+                            key=f"invite_match_{selected_team['id']}_{match['user_id']}",
+                        ):
+                            success, message = send_invitation(
+                                selected_team["id"],
+                                match["user_id"],
+                                selected_team.get("name", "Team"),
+                            )
+                            if success:
+                                st.success(message)
+                            else:
+                                st.error(message)
+
+    st.markdown("---")
+    st.subheader("Recommend teams for me")
+
+    if st.button("Find teams for me", key="find_matching_teams", type="primary"):
+        matches = fetch_matching_teams(circle_id)
+        if not matches:
+            st.info("No matching teams found yet.")
+        else:
+            for item in matches:
+                team = item.get("team", {})
+                with st.container(border=True):
+                    st.markdown(f"**{team.get('name', 'Unnamed Team')}**")
+                    st.caption(team.get("description", "No description"))
+                    st.write(
+                        f"Members: {team.get('current_members', 0)}/"
+                        f"{team.get('max_members', 0)}"
+                    )
+                    cov = item.get("coverage_score", 0.0)
+                    jac = item.get("jaccard_score", 0.0)
+                    st.caption(
+                        f"Coverage: {cov:.2f} · Similarity: {jac:.2f}"
+                    )
+                    missing = ", ".join(item.get("missing_required_tags", [])) or "-"
+                    st.write(f"Missing required tags: {missing}")
+
+
 def main() -> None:
     """Render the team management page."""
     st.title("Team Management")
@@ -438,8 +582,8 @@ def main() -> None:
             st.switch_page("pages/circles.py")
         return
 
-    team_tab, create_tab, my_tab, invitation_tab = st.tabs(
-        ["Team List", "Create Team", "My Teams", "Invitations"]
+    team_tab, create_tab, my_tab, invitation_tab, matching_tab = st.tabs(
+        ["Team List", "Create Team", "My Teams", "Invitations", "Matching"]
     )
     with team_tab:
         render_team_list()
@@ -449,6 +593,8 @@ def main() -> None:
         render_my_teams()
     with invitation_tab:
         render_invitation_management()
+    with matching_tab:
+        render_matching_section()
 
 
 if __name__ == "__main__":

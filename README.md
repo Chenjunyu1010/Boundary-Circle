@@ -10,6 +10,7 @@ Boundary Circle is a FastAPI + Streamlit project for circle-based identity, tag 
 - Per-user tag submission and update flows
 - Circle join-related tag workflow coverage in automated tests
 - Team creation, invitation, response, and leave flows with backend/API tests
+- Matching recommendations for teams and users (backend APIs and Streamlit "Matching" tab)
 - Streamlit pages for auth, circle browsing, circle detail, and team-management UI scaffolding
 
 ## Project structure
@@ -129,6 +130,8 @@ Current backend routes are centered around these areas:
 - `/invitations` - list invitations for the current user
 - `/invitations/{invite_id}/respond` - accept or reject an invitation
 - `/teams/{team_id}/leave` - leave a team
+- `/matching/users` - recommend users for a given team (team creator or members only)
+- `/matching/teams` - recommend suitable teams for the current user in a circle
 
 Interactive docs are available at `http://localhost:8000/docs` once the backend is running.
 
