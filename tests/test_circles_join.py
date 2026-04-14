@@ -1,5 +1,6 @@
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.pool import StaticPool
 from sqlmodel import SQLModel, Session, create_engine, select
 
@@ -168,6 +169,18 @@ def test_circle_member_record_can_be_created(db_session, circle, joiner):
 
     assert stored_membership is not None
     assert stored_membership.role == CircleRole.MEMBER
+
+
+def test_circle_member_record_rejects_duplicate_membership(db_session, circle, joiner):
+    first_membership = CircleMember(user_id=joiner["id"], circle_id=circle["id"], role=CircleRole.MEMBER)
+    second_membership = CircleMember(user_id=joiner["id"], circle_id=circle["id"], role=CircleRole.MEMBER)
+    db_session.add(first_membership)
+    db_session.commit()
+
+    db_session.add(second_membership)
+    with pytest.raises(IntegrityError):
+        db_session.commit()
+    db_session.rollback()
 
 
 def test_circle_member_record_can_be_removed_to_leave_circle(db_session, circle, joiner):

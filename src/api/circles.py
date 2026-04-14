@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, select
 from typing import List
 
@@ -85,7 +86,11 @@ def join_circle(
             role=CircleRole.MEMBER,
         )
     )
-    session.commit()
+    try:
+        session.commit()
+    except IntegrityError:
+        session.rollback()
+        raise HTTPException(status_code=409, detail="Already a member") from None
     return {"success": True, "message": "Successfully joined the circle", "circle_id": circle_id}
 
 
