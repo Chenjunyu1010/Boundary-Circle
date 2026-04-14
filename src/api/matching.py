@@ -1,0 +1,244 @@
+from __future__ import annotations
+
+from typing import List
+
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlmodel import Session, SQLModel, select
+
+from src.auth.dependencies import get_current_user
+from src.db.database import get_session
+from src.models.core import Circle, User
+from src.models.tags import CircleMember
+from src.models.teams import Team, TeamMember, TeamRead, TeamStatus, decode_required_tags
+from src.services.matching import (
+    build_team_profile,
+    coverage_score,
+    get_team_member_ids,
+    get_user_tag_names_for_circle,
+    jaccard_score,
+)
+
+
+router = APIRouter(prefix="/matching", tags=["Matching"])
+
+
+class UserMatch(SQLModel):
+    """Match result for recommending users to join a team."""
+
+    user_id: int
+    username: str
+    email: str
+    coverage_score: float
+    jaccard_score: float
+    matched_tags: List[str]
+    missing_required_tags: List[str]
+
+
+class TeamMatch(SQLModel):
+    """Match result for recommending teams to a user."""
+
+    team: TeamRead
+    coverage_score: float
+    jaccard_score: float
+    missing_required_tags: List[str]
+
+
+def _ensure_circle_member_or_creator(
+    *,
+    session: Session,
+    circle: Circle,
+    user: User,
+    detail: str = "User must join the circle first",
+) -> None:
+    """Ensure the user is either the circle creator or a member of the circle."""
+    if user.id is None:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Current user ID missing",
+        )
+
+    if circle.creator_id == user.id:
+        return
+
+    membership = session.exec(
+        select(CircleMember).where(
+            CircleMember.circle_id == circle.id,
+            CircleMember.user_id == user.id,
+        )
+    ).first()
+    if membership is None:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=detail)
+
+
+@router.get("/users", response_model=List[UserMatch])
+def match_users_for_team(
+    team_id: int,
+    limit: int = 10,
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> List[UserMatch]:
+    """Recommend candidate users for a given team based on tag coverage.
+
+    The current user must be a member or creator of the team and a member
+    (or creator) of the associated circle.
+    """
+    team = session.get(Team, team_id)
+    if team is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Team not found")
+
+    circle = session.get(Circle, team.circle_id)
+    if circle is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Circle not found")
+
+    # Ensure user is in the circle
+    _ensure_circle_member_or_creator(session=session, circle=circle, user=current_user)
+
+    # Ensure user is creator or member of the team
+    if current_user.id is None:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Current user ID missing",
+        )
+
+    is_team_member = session.exec(
+        select(TeamMember).where(
+            TeamMember.team_id == team.id,
+            TeamMember.user_id == current_user.id,
+        )
+    ).first()
+    if team.creator_id != current_user.id and is_team_member is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only team creator or members can view recommendations",
+        )
+
+    required_tags = set(decode_required_tags(team.required_tags_json))
+    team_profile = build_team_profile(session=session, team=team)
+
+    team_member_ids = set(get_team_member_ids(session=session, team_id=team.id or 0))
+    if current_user.id in team_member_ids:
+        # already included via TeamMember table, but keep explicit for safety
+        pass
+
+    # Collect all circle members as initial candidates
+    memberships = session.exec(
+        select(CircleMember).where(CircleMember.circle_id == circle.id)
+    ).all()
+
+    candidates: List[UserMatch] = []
+    for membership in memberships:
+        user_id = membership.user_id
+        if user_id in team_member_ids:
+            continue
+        if user_id == current_user.id:
+            continue
+
+        user = session.get(User, user_id)
+        if user is None:
+            continue
+
+        user_tags = get_user_tag_names_for_circle(
+            session=session,
+            user_id=user_id,
+            circle_id=circle.id,
+        )
+        cov = coverage_score(required=required_tags, user_tags=user_tags)
+        if cov == 0.0:
+            # 允许部分覆盖，但至少要满足一个 required 标签
+            continue
+
+        jac = jaccard_score(team_profile, user_tags)
+
+        matched_tags = sorted(required_tags & user_tags)
+        missing_required = sorted(required_tags - user_tags)
+
+        candidates.append(
+            UserMatch(
+                user_id=user.id,
+                username=user.username,
+                email=user.email,
+                coverage_score=cov,
+                jaccard_score=jac,
+                matched_tags=matched_tags,
+                missing_required_tags=missing_required,
+            )
+        )
+
+    # Normalise limit
+    if limit <= 0:
+        limit = 10
+    limit = min(limit, 50)
+
+    candidates.sort(key=lambda m: (m.coverage_score, m.jaccard_score), reverse=True)
+    return candidates[:limit]
+
+
+@router.get("/teams", response_model=List[TeamMatch])
+def match_teams_for_user(
+    circle_id: int,
+    limit: int = 10,
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> List[TeamMatch]:
+    """Recommend teams in a circle for the current user based on tags.
+
+    The current user must be the circle creator or a member of the circle.
+    """
+    circle = session.get(Circle, circle_id)
+    if circle is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Circle not found")
+
+    _ensure_circle_member_or_creator(session=session, circle=circle, user=current_user)
+
+    if current_user.id is None:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Current user ID missing",
+        )
+
+    user_tags = get_user_tag_names_for_circle(
+        session=session,
+        user_id=current_user.id,
+        circle_id=circle_id,
+    )
+
+    from src.api.teams import build_team_read  # local import to avoid circular import at module level
+
+    teams = session.exec(select(Team).where(Team.circle_id == circle_id)).all()
+
+    results: List[TeamMatch] = []
+    for team in teams:
+        team_read = build_team_read(team, session)
+
+        # Skip teams the user already joined
+        if current_user.id in team_read.member_ids:
+            continue
+
+        # Skip locked or full teams
+        if team_read.status == TeamStatus.LOCKED:
+            continue
+
+        required_tags = set(decode_required_tags(team.required_tags_json))
+        cov = coverage_score(required=required_tags, user_tags=user_tags)
+        if cov == 0.0:
+            continue
+
+        team_profile = build_team_profile(session=session, team=team)
+        jac = jaccard_score(team_profile, user_tags)
+        missing_required = sorted(required_tags - user_tags)
+
+        results.append(
+            TeamMatch(
+                team=team_read,
+                coverage_score=cov,
+                jaccard_score=jac,
+                missing_required_tags=missing_required,
+            )
+        )
+
+    if limit <= 0:
+        limit = 10
+    limit = min(limit, 50)
+
+    results.sort(key=lambda m: (m.coverage_score, m.jaccard_score), reverse=True)
+    return results[:limit]
