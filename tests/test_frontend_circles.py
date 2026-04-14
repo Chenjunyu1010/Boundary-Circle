@@ -28,7 +28,7 @@ class SessionState(dict):
 def load_circle_modules(monkeypatch):
     for name in [
         "frontend.pages.circles",
-        "frontend.pages.circle_detail",
+        "frontend.views.circle_detail",
         "frontend.utils.api",
         "frontend.utils.auth",
         "streamlit",
@@ -75,7 +75,7 @@ def load_circle_modules(monkeypatch):
     monkeypatch.setenv("API_BASE_URL", "http://127.0.0.1:8000")
 
     circles_module = importlib.import_module("frontend.pages.circles")
-    detail_module = importlib.import_module("frontend.pages.circle_detail")
+    detail_module = importlib.import_module("frontend.views.circle_detail")
     return fake_streamlit, circles_module, detail_module
 
 
