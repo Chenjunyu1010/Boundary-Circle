@@ -38,7 +38,8 @@ def test_team_creator_can_send_invitation(db_session):
     creator, creator_headers = register_and_login("captain", "captain@example.com")
     invitee, _ = register_and_login("invitee", "invitee@example.com")
     circle_response = client.post(
-        f"/circles/?creator_id={creator['id']}",
+        "/circles/",
+        headers=creator_headers,
         json={"name": "Invite Circle", "description": "Circle for invitations"},
     )
     assert circle_response.status_code == 201
@@ -79,7 +80,8 @@ def test_team_member_can_send_invitation(db_session):
     member, member_headers = register_and_login("member2", "member2@example.com")
     invitee, _ = register_and_login("invitee2", "invitee2@example.com")
     circle_response = client.post(
-        f"/circles/?creator_id={creator['id']}",
+        "/circles/",
+        headers=creator_headers,
         json={"name": "Restricted Invite Circle", "description": "Circle for auth checks"},
     )
     assert circle_response.status_code == 201
@@ -124,7 +126,8 @@ def test_non_team_member_cannot_send_invitation(db_session):
     outsider, outsider_headers = register_and_login("outsider3", "outsider3@example.com")
     invitee, _ = register_and_login("invitee3", "invitee3@example.com")
     circle_response = client.post(
-        f"/circles/?creator_id={creator['id']}",
+        "/circles/",
+        headers=creator_headers,
         json={"name": "Unauthorized Invite Circle", "description": "Only team members can invite"},
     )
     assert circle_response.status_code == 201
@@ -162,7 +165,8 @@ def test_duplicate_pending_invitation_is_rejected(db_session):
     creator, creator_headers = register_and_login("captain4", "captain4@example.com")
     invitee, _ = register_and_login("invitee4", "invitee4@example.com")
     circle_response = client.post(
-        f"/circles/?creator_id={creator['id']}",
+        "/circles/",
+        headers=creator_headers,
         json={"name": "Duplicate Invite Circle", "description": "Duplicate invitation checks"},
     )
     assert circle_response.status_code == 201
@@ -204,7 +208,8 @@ def test_duplicate_pending_invitation_is_rejected(db_session):
 def test_inviting_nonexistent_user_fails(db_session):
     creator, creator_headers = register_and_login("captain5", "captain5@example.com")
     circle_response = client.post(
-        f"/circles/?creator_id={creator['id']}",
+        "/circles/",
+        headers=creator_headers,
         json={"name": "Missing Invitee Circle", "description": "Invitee existence check"},
     )
     assert circle_response.status_code == 201
@@ -235,16 +240,18 @@ def test_inviting_nonexistent_user_fails(db_session):
 
 def test_cross_circle_member_cannot_be_invited(db_session):
     creator, creator_headers = register_and_login("boundarycaptain", "boundarycaptain@example.com")
-    invitee, _ = register_and_login("crosscircleuser", "crosscircleuser@example.com")
+    invitee, invitee_headers = register_and_login("crosscircleuser", "crosscircleuser@example.com")
     circle_response = client.post(
-        f"/circles/?creator_id={creator['id']}",
+        "/circles/",
+        headers=creator_headers,
         json={"name": "Boundary Circle A", "description": "Invite boundary checks"},
     )
     assert circle_response.status_code == 201
     circle = circle_response.json()
 
     other_circle_response = client.post(
-        f"/circles/?creator_id={invitee['id']}",
+        "/circles/",
+        headers=invitee_headers,
         json={"name": "Boundary Circle B", "description": "Separate circle"},
     )
     assert other_circle_response.status_code == 201
@@ -277,7 +284,8 @@ def test_invitations_endpoint_returns_received_only(db_session):
     creator, creator_headers = register_and_login("receivedcreator", "receivedcreator@example.com")
     invitee, invitee_headers = register_and_login("receivedinvitee", "receivedinvitee@example.com")
     circle_response = client.post(
-        f"/circles/?creator_id={creator['id']}",
+        "/circles/",
+        headers=creator_headers,
         json={"name": "Received Invitations Circle", "description": "Circle for invitation inbox"},
     )
     assert circle_response.status_code == 201
@@ -324,7 +332,8 @@ def test_accept_invitation_adds_team_member(db_session):
     creator, creator_headers = register_and_login("acceptcaptain", "acceptcaptain@example.com")
     invitee, invitee_headers = register_and_login("acceptmember", "acceptmember@example.com")
     circle_response = client.post(
-        f"/circles/?creator_id={creator['id']}",
+        "/circles/",
+        headers=creator_headers,
         json={"name": "Accept Circle", "description": "Circle for acceptance flow"},
     )
     assert circle_response.status_code == 201
@@ -374,7 +383,8 @@ def test_reject_invitation_keeps_team_recruiting(db_session):
     creator, creator_headers = register_and_login("rejectcaptain", "rejectcaptain@example.com")
     invitee, invitee_headers = register_and_login("rejectmember", "rejectmember@example.com")
     circle_response = client.post(
-        f"/circles/?creator_id={creator['id']}",
+        "/circles/",
+        headers=creator_headers,
         json={"name": "Reject Circle", "description": "Circle for rejection flow"},
     )
     assert circle_response.status_code == 201
@@ -423,7 +433,8 @@ def test_team_auto_locks_when_full(db_session):
     creator, creator_headers = register_and_login("lockcaptain", "lockcaptain@example.com")
     invitee, invitee_headers = register_and_login("lockmember", "lockmember@example.com")
     circle_response = client.post(
-        f"/circles/?creator_id={creator['id']}",
+        "/circles/",
+        headers=creator_headers,
         json={"name": "Lock Circle", "description": "Circle for locking flow"},
     )
     assert circle_response.status_code == 201
@@ -473,7 +484,8 @@ def test_accept_invitation_rejects_when_team_is_full(db_session):
     invitee_a, invitee_a_headers = register_and_login("fullmembera", "fullmembera@example.com")
     invitee_b, invitee_b_headers = register_and_login("fullmemberb", "fullmemberb@example.com")
     circle_response = client.post(
-        f"/circles/?creator_id={creator['id']}",
+        "/circles/",
+        headers=creator_headers,
         json={"name": "Full Team Circle", "description": "Capacity guard checks"},
     )
     assert circle_response.status_code == 201

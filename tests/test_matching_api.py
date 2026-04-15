@@ -38,7 +38,8 @@ def test_match_users_for_team_orders_by_coverage_and_jaccard(db_session) -> None
 
     # Create circle via API
     circle_response = client.post(
-        f"/circles/?creator_id={creator['id']}",
+        "/circles/",
+        headers=creator_headers,
         json={"name": "Matching Circle", "description": "Circle for matching tests"},
     )
     assert circle_response.status_code == 201
@@ -185,7 +186,8 @@ def test_match_teams_for_user_basic(db_session) -> None:
         "circle_creator2", "circle_creator2@example.com"
     )
     circle_response = client.post(
-        f"/circles/?creator_id={creator['id']}",
+        "/circles/",
+        headers=creator_headers,
         json={"name": "Team Match Circle", "description": "Circle for team matching"},
     )
     assert circle_response.status_code == 201
@@ -278,7 +280,8 @@ def test_match_users_requires_team_membership(db_session) -> None:
         "perm_creator", "perm_creator@example.com"
     )
     circle_response = client.post(
-        f"/circles/?creator_id={creator['id']}",
+        "/circles/",
+        headers=creator_headers,
         json={"name": "Perm Circle", "description": "Circle for permission tests"},
     )
     assert circle_response.status_code == 201
@@ -325,7 +328,8 @@ def test_match_teams_requires_circle_membership(db_session) -> None:
         "circle_creator3", "circle_creator3@example.com"
     )
     circle_response = client.post(
-        f"/circles/?creator_id={creator['id']}",
+        "/circles/",
+        headers=creator_headers,
         json={"name": "Outer Circle", "description": "Circle for permission tests"},
     )
     assert circle_response.status_code == 201
@@ -349,7 +353,8 @@ def test_match_teams_skips_locked_teams(db_session) -> None:
     )
 
     circle_response = client.post(
-        f"/circles/?creator_id={creator['id']}",
+        "/circles/",
+        headers=creator_headers,
         json={"name": "Lock Circle", "description": "Circle for locked team tests"},
     )
     assert circle_response.status_code == 201
@@ -436,7 +441,8 @@ def test_match_users_with_no_required_tags_returns_candidates(db_session) -> Non
         "noreq_creator", "noreq_creator@example.com"
     )
     circle_response = client.post(
-        f"/circles/?creator_id={creator['id']}",
+        "/circles/",
+        headers=creator_headers,
         json={"name": "NoReq Circle", "description": "Circle for no-required tags"},
     )
     assert circle_response.status_code == 201

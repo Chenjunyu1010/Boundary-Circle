@@ -83,7 +83,6 @@ def create_tag_definition(
                 "options": options,
                 "description": None,
             },
-            params={"current_user_id": user_id},
         )
         if response.ok:
             return True, "Tag definition created successfully."
@@ -120,7 +119,6 @@ def submit_member_tags(circle_id: int, tag_definitions: list, tag_data: dict) ->
             response = api_client.post(
                 f"/circles/{circle_id}/tags/submit",
                 data={"tag_definition_id": tag["id"], "value": value},
-                params={"current_user_id": user_id},
             )
             if not response.ok:
                 detail = ""
@@ -210,7 +208,6 @@ def join_circle(circle_id: int, tag_definitions: list, tag_data: dict) -> tuple[
                     "tag_definition_id": tag["id"],
                     "value": value,
                 },
-                params={"current_user_id": user_id},
             )
             if not response.ok:
                 detail = ""

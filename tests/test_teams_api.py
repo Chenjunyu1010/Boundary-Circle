@@ -32,7 +32,8 @@ def register_and_login(username: str, email: str) -> tuple[dict, dict]:
 def test_create_team_requires_authenticated_circle_member():
     creator, creator_headers = register_and_login("teamcreator", "teamcreator@example.com")
     circle_response = client.post(
-        f"/circles/?creator_id={creator['id']}",
+        "/circles/",
+        headers=creator_headers,
         json={"name": "Issue37 Team Circle", "description": "Circle for team tests"},
     )
     assert circle_response.status_code == 201
@@ -62,7 +63,8 @@ def test_create_team_requires_authenticated_circle_member():
 def test_create_team_rejects_invalid_max_members():
     creator, creator_headers = register_and_login("invalidteam", "invalidteam@example.com")
     circle_response = client.post(
-        f"/circles/?creator_id={creator['id']}",
+        "/circles/",
+        headers=creator_headers,
         json={"name": "Invalid Team Circle", "description": "Circle for invalid create"},
     )
     assert circle_response.status_code == 201
@@ -84,10 +86,11 @@ def test_create_team_rejects_invalid_max_members():
 
 
 def test_non_circle_member_cannot_create_team():
-    creator, _ = register_and_login("outercreator", "outercreator@example.com")
+    creator, creator_headers = register_and_login("outercreator", "outercreator@example.com")
     outsider, outsider_headers = register_and_login("outsider", "outsider@example.com")
     circle_response = client.post(
-        f"/circles/?creator_id={creator['id']}",
+        "/circles/",
+        headers=creator_headers,
         json={"name": "Member Guard Circle", "description": "Only members can create teams"},
     )
     assert circle_response.status_code == 201
@@ -113,7 +116,8 @@ def test_member_can_leave_team(db_session):
     creator, creator_headers = register_and_login("leavecaptain", "leavecaptain@example.com")
     invitee, invitee_headers = register_and_login("leavemember", "leavemember@example.com")
     circle_response = client.post(
-        f"/circles/?creator_id={creator['id']}",
+        "/circles/",
+        headers=creator_headers,
         json={"name": "Leave Circle", "description": "Circle for leave flow"},
     )
     assert circle_response.status_code == 201

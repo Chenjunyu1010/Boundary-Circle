@@ -3,150 +3,238 @@ from fastapi.testclient import TestClient
 
 from src.main import app
 
+
 client = TestClient(app)
 
-# ============ 测试用假数据准备 (Fixtures) ============
+
+def register_and_login(
+    username: str,
+    email: str,
+    password: str = "secret123",
+) -> tuple[dict, dict]:
+    register_response = client.post(
+        "/auth/register",
+        json={"username": username, "email": email, "password": password},
+    )
+    assert register_response.status_code == 201
+
+    login_response = client.post(
+        "/auth/login",
+        json={"email": email, "password": password},
+    )
+    assert login_response.status_code == 200
+
+    token = login_response.json()["access_token"]
+    return register_response.json(), {"Authorization": f"Bearer {token}"}
+
+
 @pytest.fixture
 def creator():
-    """圈子创建者（管理员）"""
-    res = client.post("/users/", json={"username": "creator", "email": "c@test.com", "password": "123"})
-    return res.json()
+    return register_and_login("creator", "creator@test.com")
+
 
 @pytest.fixture
 def normal_user():
-    """普通成员"""
-    res = client.post("/users/", json={"username": "normal", "email": "n@test.com", "password": "123"})
-    return res.json()
+    return register_and_login("normal", "normal@test.com")
+
 
 @pytest.fixture
 def circle(creator):
-    """测试圈子"""
-    res = client.post(f"/circles/?creator_id={creator['id']}", json={"name": "AI Circle", "description": "Test"})
-    return res.json()
+    creator_user, creator_headers = creator
+    response = client.post(
+        "/circles/",
+        headers=creator_headers,
+        json={"name": "AI Circle", "description": "Test"},
+    )
+    assert response.status_code == 201
+    payload = response.json()
+    assert payload["creator_id"] == creator_user["id"]
+    return payload
 
-# ============ 核心 API 测试 ============
 
-def test_create_tag_def_as_creator(creator, circle):
-    """测试创建标签定义（管理员权限验证通过）"""
-    tag_data = {"name": "Tech Stack", "data_type": "string"}
-    res = client.post(f"/circles/{circle['id']}/tags?current_user_id={creator['id']}", json=tag_data)
-    assert res.status_code == 201
-    assert res.json()["name"] == "Tech Stack"
+def create_tag_definition(circle_id: int, headers: dict, payload: dict) -> dict:
+    response = client.post(f"/circles/{circle_id}/tags", headers=headers, json=payload)
+    assert response.status_code == 201
+    return response.json()
 
-def test_create_tag_def_as_normal_user(normal_user, circle):
-    """测试创建标签定义（普通成员权限验证，应被拒绝）"""
-    tag_data = {"name": "Role", "data_type": "enum", "options": '["Backend"]'}
-    res = client.post(f"/circles/{circle['id']}/tags?current_user_id={normal_user['id']}", json=tag_data)
-    assert res.status_code == 403
-    assert "Only circle creator can define tags" in res.json()["detail"]
+
+def test_create_tag_definition_requires_authentication(circle):
+    response = client.post(
+        f"/circles/{circle['id']}/tags",
+        json={"name": "Tech Stack", "data_type": "string"},
+    )
+    assert response.status_code == 401
+
+
+def test_create_tag_definition_rejects_spoofed_query_param_without_auth(circle, creator):
+    creator_user, _ = creator
+    response = client.post(
+        f"/circles/{circle['id']}/tags?current_user_id={creator_user['id']}",
+        json={"name": "Tech Stack", "data_type": "string"},
+    )
+    assert response.status_code == 401
+
+
+def test_create_tag_definition_as_creator(creator, circle):
+    _, creator_headers = creator
+    response = client.post(
+        f"/circles/{circle['id']}/tags",
+        headers=creator_headers,
+        json={"name": "Tech Stack", "data_type": "string"},
+    )
+    assert response.status_code == 201
+    assert response.json()["name"] == "Tech Stack"
+
+
+def test_create_tag_definition_as_normal_user(normal_user, circle):
+    _, normal_headers = normal_user
+    response = client.post(
+        f"/circles/{circle['id']}/tags",
+        headers=normal_headers,
+        json={"name": "Role", "data_type": "enum", "options": '["Backend"]'},
+    )
+    assert response.status_code == 403
+    assert "Only circle creator can define tags" in response.json()["detail"]
+
+
+def test_submit_user_tag_requires_authentication(circle, creator):
+    _, creator_headers = creator
+    tag_definition = create_tag_definition(
+        circle["id"],
+        creator_headers,
+        {"name": "GPA", "data_type": "float"},
+    )
+
+    response = client.post(
+        f"/circles/{circle['id']}/tags/submit",
+        json={"tag_definition_id": tag_definition["id"], "value": "3.8"},
+    )
+    assert response.status_code == 401
+
+
+def test_submit_user_tag_rejects_spoofed_query_param_without_auth(circle, creator, normal_user):
+    _, creator_headers = creator
+    normal_user_payload, _ = normal_user
+    tag_definition = create_tag_definition(
+        circle["id"],
+        creator_headers,
+        {"name": "Role", "data_type": "string"},
+    )
+
+    response = client.post(
+        f"/circles/{circle['id']}/tags/submit?current_user_id={normal_user_payload['id']}",
+        json={"tag_definition_id": tag_definition["id"], "value": "backend"},
+    )
+    assert response.status_code == 401
+
 
 def test_submit_user_tag_valid(creator, normal_user, circle):
-    """测试提交标签（正常提交）"""
-    tag_res = client.post(
-        f"/circles/{circle['id']}/tags?current_user_id={creator['id']}", 
-        json={"name": "GPA", "data_type": "float"}
+    _, creator_headers = creator
+    _, normal_headers = normal_user
+    tag_definition = create_tag_definition(
+        circle["id"],
+        creator_headers,
+        {"name": "GPA", "data_type": "float"},
     )
-    tag_id = tag_res.json()["id"]
 
-    res = client.post(
-        f"/circles/{circle['id']}/tags/submit?current_user_id={normal_user['id']}", 
-        json={"tag_definition_id": tag_id, "value": "3.8"}
+    response = client.post(
+        f"/circles/{circle['id']}/tags/submit",
+        headers=normal_headers,
+        json={"tag_definition_id": tag_definition["id"], "value": "3.8"},
     )
-    assert res.status_code == 200
-    assert res.json()["value"] == "3.8"
+    assert response.status_code == 200
+    assert response.json()["value"] == "3.8"
+
 
 def test_submit_user_tag_invalid_type(creator, normal_user, circle):
-    """测试标签类型验证（传入非法数据）"""
-    tag_res = client.post(
-        f"/circles/{circle['id']}/tags?current_user_id={creator['id']}", 
-        json={"name": "Years of Exp", "data_type": "integer"}
+    _, creator_headers = creator
+    _, normal_headers = normal_user
+    tag_definition = create_tag_definition(
+        circle["id"],
+        creator_headers,
+        {"name": "Years of Exp", "data_type": "integer"},
     )
-    tag_id = tag_res.json()["id"]
 
-    res = client.post(
-        f"/circles/{circle['id']}/tags/submit?current_user_id={normal_user['id']}", 
-        json={"tag_definition_id": tag_id, "value": "Two Years"}
+    response = client.post(
+        f"/circles/{circle['id']}/tags/submit",
+        headers=normal_headers,
+        json={"tag_definition_id": tag_definition["id"], "value": "Two Years"},
     )
-    assert res.status_code == 400
-    assert "Invalid value" in res.json()["detail"]
+    assert response.status_code == 400
+    assert "Invalid value" in response.json()["detail"]
+
 
 def test_submit_user_tag_enum(creator, normal_user, circle):
-    """测试枚举(Enum)类型选项的验证"""
-    tag_res = client.post(
-        f"/circles/{circle['id']}/tags?current_user_id={creator['id']}", 
-        json={"name": "Role", "data_type": "enum", "options": '["Frontend", "Backend"]'}
+    _, creator_headers = creator
+    _, normal_headers = normal_user
+    tag_definition = create_tag_definition(
+        circle["id"],
+        creator_headers,
+        {"name": "Role", "data_type": "enum", "options": '["Frontend", "Backend"]'},
     )
-    tag_id = tag_res.json()["id"]
 
-    res1 = client.post(
-        f"/circles/{circle['id']}/tags/submit?current_user_id={normal_user['id']}", 
-        json={"tag_definition_id": tag_id, "value": "Designer"}
+    invalid_response = client.post(
+        f"/circles/{circle['id']}/tags/submit",
+        headers=normal_headers,
+        json={"tag_definition_id": tag_definition["id"], "value": "Designer"},
     )
-    assert res1.status_code == 400
+    assert invalid_response.status_code == 400
 
-    res2 = client.post(
-        f"/circles/{circle['id']}/tags/submit?current_user_id={normal_user['id']}", 
-        json={"tag_definition_id": tag_id, "value": "Backend"}
+    valid_response = client.post(
+        f"/circles/{circle['id']}/tags/submit",
+        headers=normal_headers,
+        json={"tag_definition_id": tag_definition["id"], "value": "Backend"},
     )
-    assert res2.status_code == 200
+    assert valid_response.status_code == 200
 
-# ============ 针对 Issue #20 与完整 CRUD 的补充测试 ============
 
-def test_create_tag_def_enum_invalid(creator, circle):
-    """测试创建 ENUM 标签时缺少 options 或 JSON 格式错误"""
-    # 缺少 options
-    res1 = client.post(
-        f"/circles/{circle['id']}/tags?current_user_id={creator['id']}", 
-        json={"name": "Role1", "data_type": "enum"}
-    )
-    assert res1.status_code == 400
-    
-    # 非法 JSON 格式
-    res2 = client.post(
-        f"/circles/{circle['id']}/tags?current_user_id={creator['id']}", 
-        json={"name": "Role2", "data_type": "enum", "options": "not-a-list"}
-    )
-    assert res2.status_code == 400
+def test_create_tag_definition_enum_invalid(creator, circle):
+    _, creator_headers = creator
 
-def test_submit_tag_user_not_found(creator, circle):
-    """测试提交标签时伪造不存在的 current_user_id"""
-    tag_res = client.post(
-        f"/circles/{circle['id']}/tags?current_user_id={creator['id']}", 
-        json={"name": "Test", "data_type": "string"}
+    missing_options = client.post(
+        f"/circles/{circle['id']}/tags",
+        headers=creator_headers,
+        json={"name": "Role1", "data_type": "enum"},
     )
-    tag_id = tag_res.json()["id"]
+    assert missing_options.status_code == 400
 
-    res = client.post(
-        f"/circles/{circle['id']}/tags/submit?current_user_id=9999", # 伪造的用户ID
-        json={"tag_definition_id": tag_id, "value": "test"}
+    invalid_json = client.post(
+        f"/circles/{circle['id']}/tags",
+        headers=creator_headers,
+        json={"name": "Role2", "data_type": "enum", "options": "not-a-list"},
     )
-    assert res.status_code == 404
-    assert "User not found" in res.json()["detail"]
+    assert invalid_json.status_code == 400
+
 
 def test_get_my_tags_and_delete(creator, normal_user, circle):
-    """测试完整流程：提交 -> 获取我的标签 -> 删除我的标签"""
-    tag_res = client.post(
-        f"/circles/{circle['id']}/tags?current_user_id={creator['id']}", 
-        json={"name": "Test", "data_type": "string"}
+    _, creator_headers = creator
+    _, normal_headers = normal_user
+    tag_definition = create_tag_definition(
+        circle["id"],
+        creator_headers,
+        {"name": "Test", "data_type": "string"},
     )
-    tag_id = tag_res.json()["id"]
 
-    # 1. 提交标签
-    client.post(
-        f"/circles/{circle['id']}/tags/submit?current_user_id={normal_user['id']}", 
-        json={"tag_definition_id": tag_id, "value": "my_value"}
+    submit_response = client.post(
+        f"/circles/{circle['id']}/tags/submit",
+        headers=normal_headers,
+        json={"tag_definition_id": tag_definition["id"], "value": "my_value"},
     )
-    
-    # 2. 获取我的标签
-    res_get = client.get(f"/circles/{circle['id']}/tags/my?current_user_id={normal_user['id']}")
-    assert res_get.status_code == 200
-    assert len(res_get.json()) == 1
-    user_tag_id = res_get.json()[0]["id"]
-    
-    # 3. 删除标签
-    res_del = client.delete(f"/tags/{user_tag_id}?current_user_id={normal_user['id']}")
-    assert res_del.status_code == 204
-    
-    # 4. 再次获取应为空
-    res_get_after = client.get(f"/circles/{circle['id']}/tags/my?current_user_id={normal_user['id']}")
-    assert len(res_get_after.json()) == 0
+    assert submit_response.status_code == 200
+
+    get_response = client.get(
+        f"/circles/{circle['id']}/tags/my",
+        headers=normal_headers,
+    )
+    assert get_response.status_code == 200
+    assert len(get_response.json()) == 1
+    user_tag_id = get_response.json()[0]["id"]
+
+    delete_response = client.delete(f"/tags/{user_tag_id}", headers=normal_headers)
+    assert delete_response.status_code == 204
+
+    get_after_delete = client.get(
+        f"/circles/{circle['id']}/tags/my",
+        headers=normal_headers,
+    )
+    assert len(get_after_delete.json()) == 0

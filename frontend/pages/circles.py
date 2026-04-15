@@ -46,8 +46,7 @@ def fetch_circles() -> list[dict]:
 def create_circle(name: str, description: str, category: str = "General") -> Tuple[bool, str]:
     """Create a new circle."""
     current_user = get_current_user()
-    creator_id = current_user.get("id")
-    if creator_id is None:
+    if current_user.get("id") is None:
         return False, "Please login again before creating a circle."
 
     try:
@@ -58,7 +57,6 @@ def create_circle(name: str, description: str, category: str = "General") -> Tup
                 "description": description,
                 "category": category,
             },
-            params={"creator_id": creator_id},
         )
         if response.ok:
             return True, "Circle created successfully!"

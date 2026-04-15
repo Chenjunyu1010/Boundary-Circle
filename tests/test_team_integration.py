@@ -32,7 +32,8 @@ def test_join_submit_tags_create_team_invite_and_accept_flow():
     invitee, invitee_headers = register_and_login("issue37invitee", "issue37invitee@example.com")
 
     circle_response = client.post(
-        f"/circles/?creator_id={creator['id']}",
+        "/circles/",
+        headers=creator_headers,
         json={
             "name": "Issue 37 Integration Circle",
             "description": "End-to-end team formation flow",
@@ -52,7 +53,8 @@ def test_join_submit_tags_create_team_invite_and_accept_flow():
     assert invitee["id"] in member_ids
 
     role_tag_response = client.post(
-        f"/circles/{circle['id']}/tags?current_user_id={creator['id']}",
+        f"/circles/{circle['id']}/tags",
+        headers=creator_headers,
         json={
             "name": "Role",
             "data_type": "enum",
@@ -64,25 +66,29 @@ def test_join_submit_tags_create_team_invite_and_accept_flow():
     role_tag = role_tag_response.json()
 
     skill_tag_response = client.post(
-        f"/circles/{circle['id']}/tags?current_user_id={creator['id']}",
+        f"/circles/{circle['id']}/tags",
+        headers=creator_headers,
         json={"name": "Skill", "data_type": "string", "required": True},
     )
     assert skill_tag_response.status_code == 201
     skill_tag = skill_tag_response.json()
 
     submit_role_response = client.post(
-        f"/circles/{circle['id']}/tags/submit?current_user_id={invitee['id']}",
+        f"/circles/{circle['id']}/tags/submit",
+        headers=invitee_headers,
         json={"tag_definition_id": role_tag["id"], "value": "Backend"},
     )
     submit_skill_response = client.post(
-        f"/circles/{circle['id']}/tags/submit?current_user_id={invitee['id']}",
+        f"/circles/{circle['id']}/tags/submit",
+        headers=invitee_headers,
         json={"tag_definition_id": skill_tag["id"], "value": "FastAPI"},
     )
     assert submit_role_response.status_code == 200
     assert submit_skill_response.status_code == 200
 
     my_tags_response = client.get(
-        f"/circles/{circle['id']}/tags/my?current_user_id={invitee['id']}"
+        f"/circles/{circle['id']}/tags/my",
+        headers=invitee_headers,
     )
     assert my_tags_response.status_code == 200
     my_tags = my_tags_response.json()
