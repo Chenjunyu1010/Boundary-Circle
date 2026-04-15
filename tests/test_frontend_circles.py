@@ -79,7 +79,7 @@ def load_circle_modules(monkeypatch):
     return fake_streamlit, circles_module, detail_module
 
 
-def test_create_circle_sends_creator_id_query_param(monkeypatch):
+def test_create_circle_does_not_send_creator_id_query_param(monkeypatch):
     _, circles_module, _ = load_circle_modules(monkeypatch)
 
     class Response:
@@ -102,7 +102,42 @@ def test_create_circle_sends_creator_id_query_param(monkeypatch):
     assert success is True
     assert message == "Circle created successfully!"
     assert captured["endpoint"] == "/circles"
-    assert captured["params"] == {"creator_id": 42}
+    assert captured["params"] is None
+
+
+def test_submit_member_tags_does_not_send_current_user_id_query_param(monkeypatch):
+    _, _, detail_module = load_circle_modules(monkeypatch)
+
+    class Response:
+        ok = True
+        reason = "OK"
+
+    captured_calls = []
+
+    def fake_post(endpoint, data=None, params=None):
+        captured_calls.append(
+            {"endpoint": endpoint, "data": data, "params": params}
+        )
+        return Response()
+
+    monkeypatch.setattr(detail_module, "get_current_user", lambda: {"id": 42})
+    monkeypatch.setattr(detail_module.api_client, "post", fake_post)
+
+    success, message = detail_module.submit_member_tags(
+        7,
+        [{"id": 1, "name": "Role", "data_type": "string", "required": True}],
+        {"Role": "Backend"},
+    )
+
+    assert success is True
+    assert message == "Your tags have been updated."
+    assert captured_calls == [
+        {
+            "endpoint": "/circles/7/tags/submit",
+            "data": {"tag_definition_id": 1, "value": "Backend"},
+            "params": None,
+        }
+    ]
 
 
 def test_resolve_circle_id_prefers_session_state(monkeypatch):

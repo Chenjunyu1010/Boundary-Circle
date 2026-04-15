@@ -3,43 +3,77 @@ from fastapi.testclient import TestClient
 
 from src.main import app
 
+
 client = TestClient(app)
+
+
+def register_and_login(
+    username: str = "testuser",
+    email: str = "test@example.com",
+    password: str = "password123",
+) -> tuple[dict, dict]:
+    register_response = client.post(
+        "/auth/register",
+        json={
+            "username": username,
+            "email": email,
+            "full_name": "Test User",
+            "password": password,
+        },
+    )
+    assert register_response.status_code == 201
+
+    login_response = client.post(
+        "/auth/login",
+        json={"email": email, "password": password},
+    )
+    assert login_response.status_code == 200
+
+    token = login_response.json()["access_token"]
+    return register_response.json(), {"Authorization": f"Bearer {token}"}
+
 
 @pytest.fixture
 def test_user():
-    """创建测试用户"""
+    """Create a basic user via the legacy /users endpoint for list/read tests."""
     user_data = {
-        "username": "testuser",
-        "email": "test@example.com",
-        "full_name": "测试用户",
-        "password": "password123"
+        "username": "plainuser",
+        "email": "plain@example.com",
+        "full_name": "Plain User",
+        "password": "password123",
     }
     response = client.post("/users/", json=user_data)
     return response.json()
 
-@pytest.fixture
-def test_circle(test_user):
-    """创建测试圈子"""
-    circle_data = {
-        "name": "测试圈子",
-        "description": "这是一个测试圈子",
-        "category": "Test"
-    }
-    response = client.post(
-        f"/circles/?creator_id={test_user['id']}", 
-        json=circle_data
-    )
-    return response.json()
 
-# ============ 用户接口测试 ============
+@pytest.fixture
+def authenticated_user():
+    """Create an authenticated user for protected route tests."""
+    return register_and_login("circleowner", "circleowner@example.com")
+
+
+@pytest.fixture
+def test_circle(authenticated_user):
+    """Create a test circle as the authenticated user."""
+    user, headers = authenticated_user
+    circle_data = {
+        "name": "Test Circle",
+        "description": "This is a test circle",
+        "category": "Test",
+    }
+    response = client.post("/circles/", headers=headers, json=circle_data)
+    assert response.status_code == 201
+    payload = response.json()
+    assert payload["creator_id"] == user["id"]
+    return payload
+
 
 def test_create_user():
-    """测试创建用户"""
     user_data = {
         "username": "newuser",
         "email": "new@example.com",
-        "full_name": "新用户",
-        "password": "password123"
+        "full_name": "New User",
+        "password": "password123",
     }
     response = client.post("/users/", json=user_data)
     assert response.status_code == 201
@@ -48,83 +82,86 @@ def test_create_user():
     assert data["email"] == "new@example.com"
     assert "id" in data
 
+
 def test_create_user_duplicate_email(test_user):
-    """测试邮箱重复"""
     user_data = {
         "username": "anotheruser",
         "email": test_user["email"],
-        "password": "password123"
+        "password": "password123",
     }
     response = client.post("/users/", json=user_data)
     assert response.status_code == 400
     assert "Email already registered" in response.json()["detail"]
 
+
 def test_get_users(test_user):
-    """测试获取用户列表"""
     response = client.get("/users/")
     assert response.status_code == 200
     data = response.json()
     assert len(data) > 0
-    assert any(u["username"] == "testuser" for u in data)
+    assert any(user["username"] == "plainuser" for user in data)
+
 
 def test_get_user(test_user):
-    """测试获取单个用户"""
     response = client.get(f"/users/{test_user['id']}")
     assert response.status_code == 200
     data = response.json()
-    assert data["username"] == "testuser"
+    assert data["username"] == "plainuser"
+
 
 def test_get_user_not_found():
-    """测试用户不存在"""
     response = client.get("/users/999")
     assert response.status_code == 404
 
-# ============ 圈子接口测试 ============
 
-def test_create_circle(test_user):
-    """测试创建圈子"""
+def test_create_circle_requires_authentication():
     circle_data = {
-        "name": "新圈子",
-        "description": "描述",
-        "category": "Course"
+        "name": "Secure Circle",
+        "description": "Protected create",
+        "category": "Course",
     }
-    response = client.post(
-        f"/circles/?creator_id={test_user['id']}", 
-        json=circle_data
-    )
+    response = client.post("/circles/", json=circle_data)
+    assert response.status_code == 401
+
+
+def test_create_circle_rejects_spoofed_creator_id_without_auth():
+    circle_data = {
+        "name": "Spoofed Circle",
+        "description": "Should not allow query-param identity",
+        "category": "Course",
+    }
+    response = client.post("/circles/?creator_id=999", json=circle_data)
+    assert response.status_code == 401
+
+
+def test_create_circle_uses_authenticated_user(authenticated_user):
+    user, headers = authenticated_user
+    circle_data = {
+        "name": "Authenticated Circle",
+        "description": "Created with bearer token",
+        "category": "Course",
+    }
+    response = client.post("/circles/", headers=headers, json=circle_data)
     assert response.status_code == 201
     data = response.json()
-    assert data["name"] == "新圈子"
-    assert data["creator_id"] == test_user["id"]
+    assert data["name"] == "Authenticated Circle"
+    assert data["creator_id"] == user["id"]
 
-def test_create_circle_invalid_creator():
-    """测试创建者不存在"""
-    circle_data = {
-        "name": "无效圈子",
-        "description": "描述"
-    }
-    response = client.post(
-        "/circles/?creator_id=999",
-        json=circle_data
-    )
-    assert response.status_code == 404
-    assert "Creator user not found" in response.json()["detail"]
 
 def test_get_circles(test_circle):
-    """测试获取圈子列表"""
     response = client.get("/circles/")
     assert response.status_code == 200
     data = response.json()
     assert len(data) > 0
 
+
 def test_get_circle(test_circle):
-    """测试获取单个圈子"""
     response = client.get(f"/circles/{test_circle['id']}")
     assert response.status_code == 200
     data = response.json()
-    assert data["name"] == "测试圈子"
+    assert data["name"] == "Test Circle"
+
 
 def test_get_circle_not_found():
-    """测试圈子不存在"""
     response = client.get("/circles/999")
     assert response.status_code == 404

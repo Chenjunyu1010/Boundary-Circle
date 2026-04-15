@@ -28,11 +28,12 @@ def register_and_login(username: str, email: str) -> tuple[dict, dict]:
 
 
 def test_full_join_circle_flow():
-    creator, _ = register_and_login("flowcreator", "flowcreator@example.com")
-    joiner, _ = register_and_login("flowjoiner", "flowjoiner@example.com")
+    creator, creator_headers = register_and_login("flowcreator", "flowcreator@example.com")
+    joiner, joiner_headers = register_and_login("flowjoiner", "flowjoiner@example.com")
 
     circle_response = client.post(
-        f"/circles/?creator_id={creator['id']}",
+        "/circles/",
+        headers=creator_headers,
         json={
             "name": "Integration Circle",
             "description": "Circle integration flow",
@@ -43,14 +44,16 @@ def test_full_join_circle_flow():
     circle = circle_response.json()
 
     major_tag_response = client.post(
-        f"/circles/{circle['id']}/tags?current_user_id={creator['id']}",
+        f"/circles/{circle['id']}/tags",
+        headers=creator_headers,
         json={"name": "Major", "data_type": "string", "required": True},
     )
     assert major_tag_response.status_code == 201
     major_tag = major_tag_response.json()
 
     role_tag_response = client.post(
-        f"/circles/{circle['id']}/tags?current_user_id={creator['id']}",
+        f"/circles/{circle['id']}/tags",
+        headers=creator_headers,
         json={
             "name": "Role",
             "data_type": "enum",
@@ -62,11 +65,13 @@ def test_full_join_circle_flow():
     role_tag = role_tag_response.json()
 
     submit_major_response = client.post(
-        f"/circles/{circle['id']}/tags/submit?current_user_id={joiner['id']}",
+        f"/circles/{circle['id']}/tags/submit",
+        headers=joiner_headers,
         json={"tag_definition_id": major_tag['id'], "value": "CS"},
     )
     submit_role_response = client.post(
-        f"/circles/{circle['id']}/tags/submit?current_user_id={joiner['id']}",
+        f"/circles/{circle['id']}/tags/submit",
+        headers=joiner_headers,
         json={"tag_definition_id": role_tag['id'], "value": "Backend"},
     )
 
@@ -74,7 +79,8 @@ def test_full_join_circle_flow():
     assert submit_role_response.status_code == 200
 
     my_tags_response = client.get(
-        f"/circles/{circle['id']}/tags/my?current_user_id={joiner['id']}"
+        f"/circles/{circle['id']}/tags/my",
+        headers=joiner_headers,
     )
     assert my_tags_response.status_code == 200
     payload = my_tags_response.json()

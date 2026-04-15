@@ -47,36 +47,20 @@ def client():
 
 @pytest.fixture
 def creator(client):
-    response = client.post(
-        "/users/",
-        json={
-            "username": "circle_creator",
-            "email": "creator@example.com",
-            "password": "password123",
-        },
-    )
-    assert response.status_code == 201
-    return response.json()
+    return register_and_login(client, "circle_creator", "creator@example.com")
 
 
 @pytest.fixture
 def joiner(client):
-    response = client.post(
-        "/users/",
-        json={
-            "username": "circle_joiner",
-            "email": "joiner@example.com",
-            "password": "password123",
-        },
-    )
-    assert response.status_code == 201
-    return response.json()
+    return register_and_login(client, "circle_joiner", "joiner@example.com")
 
 
 @pytest.fixture
 def circle(client, creator):
+    creator_user, creator_headers = creator
     response = client.post(
-        f"/circles/?creator_id={creator['id']}",
+        "/circles/",
+        headers=creator_headers,
         json={
             "name": "EECS Career Fair",
             "description": "Circle for matching teammates",
@@ -87,9 +71,10 @@ def circle(client, creator):
     return response.json()
 
 
-def create_tag_definition(client, circle_id, current_user_id, name, data_type, required=False):
+def create_tag_definition(client, circle_id, headers, name, data_type, required=False):
     response = client.post(
-        f"/circles/{circle_id}/tags?current_user_id={current_user_id}",
+        f"/circles/{circle_id}/tags",
+        headers=headers,
         json={"name": name, "data_type": data_type, "required": required},
     )
     assert response.status_code == 201
@@ -97,22 +82,29 @@ def create_tag_definition(client, circle_id, current_user_id, name, data_type, r
 
 
 def test_join_workflow_submits_required_tags(client, circle, creator, joiner):
-    major_tag = create_tag_definition(client, circle["id"], creator["id"], "Major", "string", required=True)
-    gpa_tag = create_tag_definition(client, circle["id"], creator["id"], "GPA", "float", required=True)
+    _, creator_headers = creator
+    joiner_user, joiner_headers = joiner
+    major_tag = create_tag_definition(client, circle["id"], creator_headers, "Major", "string", required=True)
+    gpa_tag = create_tag_definition(client, circle["id"], creator_headers, "GPA", "float", required=True)
 
     major_response = client.post(
-        f"/circles/{circle['id']}/tags/submit?current_user_id={joiner['id']}",
+        f"/circles/{circle['id']}/tags/submit",
+        headers=joiner_headers,
         json={"tag_definition_id": major_tag["id"], "value": "CS"},
     )
     gpa_response = client.post(
-        f"/circles/{circle['id']}/tags/submit?current_user_id={joiner['id']}",
+        f"/circles/{circle['id']}/tags/submit",
+        headers=joiner_headers,
         json={"tag_definition_id": gpa_tag["id"], "value": "3.8"},
     )
 
     assert major_response.status_code == 200
     assert gpa_response.status_code == 200
 
-    tags_response = client.get(f"/circles/{circle['id']}/tags/my?current_user_id={joiner['id']}")
+    tags_response = client.get(
+        f"/circles/{circle['id']}/tags/my",
+        headers=joiner_headers,
+    )
 
     assert tags_response.status_code == 200
     payload = tags_response.json()
@@ -121,10 +113,13 @@ def test_join_workflow_submits_required_tags(client, circle, creator, joiner):
 
 
 def test_join_workflow_rejects_invalid_tag_type(client, circle, creator, joiner):
-    gpa_tag = create_tag_definition(client, circle["id"], creator["id"], "GPA", "float", required=True)
+    _, creator_headers = creator
+    _, joiner_headers = joiner
+    gpa_tag = create_tag_definition(client, circle["id"], creator_headers, "GPA", "float", required=True)
 
     response = client.post(
-        f"/circles/{circle['id']}/tags/submit?current_user_id={joiner['id']}",
+        f"/circles/{circle['id']}/tags/submit",
+        headers=joiner_headers,
         json={"tag_definition_id": gpa_tag["id"], "value": "High"},
     )
 
@@ -133,14 +128,18 @@ def test_join_workflow_rejects_invalid_tag_type(client, circle, creator, joiner)
 
 
 def test_join_workflow_resubmits_tag_updates_existing_value(client, circle, creator, joiner):
-    skill_tag = create_tag_definition(client, circle["id"], creator["id"], "Skill", "string")
+    _, creator_headers = creator
+    _, joiner_headers = joiner
+    skill_tag = create_tag_definition(client, circle["id"], creator_headers, "Skill", "string")
 
     first_response = client.post(
-        f"/circles/{circle['id']}/tags/submit?current_user_id={joiner['id']}",
+        f"/circles/{circle['id']}/tags/submit",
+        headers=joiner_headers,
         json={"tag_definition_id": skill_tag["id"], "value": "Python"},
     )
     second_response = client.post(
-        f"/circles/{circle['id']}/tags/submit?current_user_id={joiner['id']}",
+        f"/circles/{circle['id']}/tags/submit",
+        headers=joiner_headers,
         json={"tag_definition_id": skill_tag["id"], "value": "Rust"},
     )
 
@@ -148,7 +147,10 @@ def test_join_workflow_resubmits_tag_updates_existing_value(client, circle, crea
     assert second_response.status_code == 200
     assert second_response.json()["value"] == "Rust"
 
-    tags_response = client.get(f"/circles/{circle['id']}/tags/my?current_user_id={joiner['id']}")
+    tags_response = client.get(
+        f"/circles/{circle['id']}/tags/my",
+        headers=joiner_headers,
+    )
     payload = tags_response.json()
 
     assert len(payload) == 1
@@ -156,13 +158,14 @@ def test_join_workflow_resubmits_tag_updates_existing_value(client, circle, crea
 
 
 def test_circle_member_record_can_be_created(db_session, circle, joiner):
-    membership = CircleMember(user_id=joiner["id"], circle_id=circle["id"], role=CircleRole.MEMBER)
+    joiner_user, _ = joiner
+    membership = CircleMember(user_id=joiner_user["id"], circle_id=circle["id"], role=CircleRole.MEMBER)
     db_session.add(membership)
     db_session.commit()
 
     stored_membership = db_session.exec(
         select(CircleMember).where(
-            CircleMember.user_id == joiner["id"],
+            CircleMember.user_id == joiner_user["id"],
             CircleMember.circle_id == circle["id"],
         )
     ).first()
@@ -172,8 +175,9 @@ def test_circle_member_record_can_be_created(db_session, circle, joiner):
 
 
 def test_circle_member_record_rejects_duplicate_membership(db_session, circle, joiner):
-    first_membership = CircleMember(user_id=joiner["id"], circle_id=circle["id"], role=CircleRole.MEMBER)
-    second_membership = CircleMember(user_id=joiner["id"], circle_id=circle["id"], role=CircleRole.MEMBER)
+    joiner_user, _ = joiner
+    first_membership = CircleMember(user_id=joiner_user["id"], circle_id=circle["id"], role=CircleRole.MEMBER)
+    second_membership = CircleMember(user_id=joiner_user["id"], circle_id=circle["id"], role=CircleRole.MEMBER)
     db_session.add(first_membership)
     db_session.commit()
 
@@ -184,13 +188,14 @@ def test_circle_member_record_rejects_duplicate_membership(db_session, circle, j
 
 
 def test_circle_member_record_can_be_removed_to_leave_circle(db_session, circle, joiner):
-    membership = CircleMember(user_id=joiner["id"], circle_id=circle["id"], role=CircleRole.MEMBER)
+    joiner_user, _ = joiner
+    membership = CircleMember(user_id=joiner_user["id"], circle_id=circle["id"], role=CircleRole.MEMBER)
     db_session.add(membership)
     db_session.commit()
 
     stored_membership = db_session.exec(
         select(CircleMember).where(
-            CircleMember.user_id == joiner["id"],
+            CircleMember.user_id == joiner_user["id"],
             CircleMember.circle_id == circle["id"],
         )
     ).first()
@@ -199,13 +204,13 @@ def test_circle_member_record_can_be_removed_to_leave_circle(db_session, circle,
 
     remaining_membership = db_session.exec(
         select(CircleMember).where(
-            CircleMember.user_id == joiner["id"],
+            CircleMember.user_id == joiner_user["id"],
             CircleMember.circle_id == circle["id"],
         )
     ).first()
     remaining_tags = db_session.exec(
         select(UserTag).where(
-            UserTag.user_id == joiner["id"],
+            UserTag.user_id == joiner_user["id"],
             UserTag.circle_id == circle["id"],
         )
     ).all()
@@ -285,13 +290,15 @@ def test_join_circle_rejects_duplicate_membership(client, db_session, circle, au
 
 def test_leave_circle_removes_membership_and_circle_tags(client, db_session, circle, creator, authenticated_joiner):
     joiner, headers = authenticated_joiner
+    _, creator_headers = creator
 
     join_response = client.post(f"/circles/{circle['id']}/join", headers=headers)
     assert join_response.status_code == 200
 
-    skill_tag = create_tag_definition(client, circle["id"], creator["id"], "Skill", "string")
+    skill_tag = create_tag_definition(client, circle["id"], creator_headers, "Skill", "string")
     submit_response = client.post(
-        f"/circles/{circle['id']}/tags/submit?current_user_id={joiner['id']}",
+        f"/circles/{circle['id']}/tags/submit",
+        headers=headers,
         json={"tag_definition_id": skill_tag["id"], "value": "Python"},
     )
     assert submit_response.status_code == 200
