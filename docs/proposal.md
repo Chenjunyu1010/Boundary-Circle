@@ -3,56 +3,53 @@
 **Team ID**: EX2-Team-12  
 **Date**: February 10, 2026
 
+> NOTE (2026-04-15): This is a cleaned version of the original proposal for documentation
+> maintenance. It preserves the original project intent, but some implementation details in the
+> repository changed over time. Treat this file as historical design intent, not a strict snapshot
+> of the current codebase.
+
 ---
 
 ## 1. Project Overview
 
-### Project Purpose (Product Description)
+### Project Purpose
 
-This project aims to design and develop a mobile social application named **"Boundary Circle"**. This system is a team formation and recruitment tool, with its core function being to help users efficiently match partners within specific interest or community "circles".
+Boundary Circle is a social and team-formation platform designed for students and community-based
+groups. Its core goal is to help users find suitable teammates inside specific circles such as
+courses, competitions, clubs, or interest groups.
 
-The application introduces a **tag-based user profile mechanism**, allowing users to be represented by a series of descriptive tags within the circles, thereby achieving precise and transparent member screening and team formation.
+The system introduces a **tag-based identity model**. Instead of exposing one global profile to
+everyone, users present circle-specific tags that describe their skills, interests, or background
+within each context.
 
-**Initial target users**: College students  
-**Future expansion**: Enterprise departments, student clubs, and other closed or semi-closed communities
+**Initial target users**: college students  
+**Potential expansion**: enterprise departments, student clubs, and semi-closed communities
 
-The system is dedicated to solving the problems of:
-- Information dispersion
-- Difficulty in verifying identities
-- Low efficiency in team formation and collaboration within campuses and organizations
+### Motivation
 
-Providing a vertical social platform that combines **trust and flexibility**.
+Students often form teams through fragmented chat groups or spreadsheets. These channels have two
+common failures:
+- real-name platforms reduce willingness to discuss sensitive or unfinished work
+- anonymous platforms weaken trust and accountability
 
-### Motivation and Goals (Business Requirements)
+Boundary Circle aims to balance privacy and trust through **authentication plus contextual tags**.
 
-#### Motivation
-
-In reality, when college students are looking for course partners or forming activity teams, their information is often scattered across multiple anonymous chat groups or real-name platforms, resulting in low efficiency and difficulty in verifying identities.
-
-- In a completely **real-name** campus network, students are reluctant to share their life troubles or discuss sensitive topics
-- In a completely **anonymous** platform, the lack of community boundaries can lead to information chaos or inappropriate content
-
-Therefore, we have the opportunity to create a vertical social product with a boundary defined by **"authentication + tags"**.
-
-#### Stakeholders
+### Stakeholders
 
 | Stakeholder | Description |
 |-------------|-------------|
-| **End Users (Students)** | Primary beneficiaries. Two roles: **Recruiters (Team Leaders)** need efficient filtering tools; **Applicants (Team Seekers)** seek to join projects while maintaining privacy |
-| **Circle Creators (Community Admins)** | Establish interest-based communities and define "Tag Schemas" (identity rules) for membership |
-| **Competitors (Existing Solutions)** | WeChat groups, Discord servers, shared spreadsheets - lack structured matching capabilities |
-| **Course Instructors (Client)** | Project sponsors and primary evaluators |
-| **University Administration (Regulator)** | Enforces data privacy and ethical standards |
-| **Development and Operations Team** | Technical stakeholders responsible for architecture, implementation, deployment, and maintenance |
+| **End Users (Students)** | Users who want to recruit teammates or join teams while keeping appropriate privacy boundaries |
+| **Circle Creators** | Community organizers who define circle rules and tag schemas |
+| **Course Instructors** | Project sponsors and evaluators |
+| **University Administration** | Interested in privacy, safety, and appropriate usage |
+| **Development Team** | Responsible for architecture, implementation, testing, and maintenance |
 
-#### Goals
+### Goals
 
-- Gain deep understanding of the balance between technical implementation, community operation and privacy security in social product design
-- Improve communication efficiency in specific scenarios
-- Establish basic trust through a labeled semi-verified mechanism
-- Provide a secure and free anonymous expression environment
-- Promote personalized emotional sharing and mutual assistance among users
-- Cultivate a healthy digital community culture
+- Improve team formation efficiency in course and activity settings
+- Provide contextual identity rather than one global social profile
+- Support trust-building through structured tags and gated access
+- Preserve privacy boundaries across different circles
 
 ---
 
@@ -60,55 +57,66 @@ Therefore, we have the opportunity to create a vertical social product with a bo
 
 ### User Requirements
 
-- **UR-1: Contextual Identity and Isolation** - Users need to join distinct "Circles" (e.g., Course A, Hackathon B) to separate their social contexts. Identity in each Circle is defined solely by Circle-specific "Tags", ensuring global profile remains private.
+- **UR-1: Contextual Identity and Isolation**  
+  Users should participate in different circles with different visible identities.
 
-- **UR-2: Gated Access via Mandatory Tags** - Circle creators require that new members must complete a mandatory "Tag Profile" (e.g., GPA, Tech Stack) **before** gaining access to view internal posts or member lists.
+- **UR-2: Gated Access via Mandatory Tags**  
+  Circle creators should be able to require specific tags before members can fully participate.
 
-- **UR-3: Goal-Oriented Team Formation** - Users enter Circles with the specific goal of forming a "Team". The system should recommend teammates based on Tag compatibility and provide tools to formalize the team structure (invite, accept, lock).
+- **UR-3: Goal-Oriented Team Formation**  
+  Users should be able to discover teammates and form teams inside a circle.
 
 ### Functional Requirements
 
-- **FR-1: Circle Schema Definition** - Interface for Circle Creators to define a "Tag Schema" (mandatory and optional data fields) that enforces the identity standard for that specific context.
+- **FR-1: Circle Schema Definition**  
+  Circle creators define required and optional tag fields.
 
-- **FR-2: Gated Entry Workflow** - Upon joining a Circle, present the mandatory Tag form. Grant access to Circle content (posts/members) **only after** successful submission of valid Tag data.
+- **FR-2: Gated Entry Workflow**  
+  New members fill in required tags before accessing circle content.
 
-- **FR-3: Context-Aware Matching Algorithm** - Implement a matching algorithm that ranks users and teams within a Circle based on similarity score between user's Circle-specific Tags and Team's requirements.
+- **FR-3: Matching Support**  
+  The system ranks users or teams based on circle-specific profile compatibility.
 
-- **FR-4: Team Entity Lifecycle** - Allow users with "Active" status to instantiate a "Team" entity. Manage state transitions: from "Recruiting" (open) to "Locked" (full and finalized).
+- **FR-4: Team Lifecycle**  
+  Teams move through states such as recruiting, inviting, and locking membership.
 
-- **FR-5: Data Visibility Control** - Restrict data visibility such that a user's Tags and Posts within a specific Circle are strictly invisible to non-members of that Circle.
+- **FR-5: Visibility Control**  
+  Circle-specific data should not be visible outside the circle boundary.
 
 ### Non-Functional Requirements
 
-- **NFR-1: Strict Context Isolation (Privacy)** - No data linkage exists between a user's profiles in different Circles on the frontend interface, ensuring complete identity isolation across contexts.
+- **NFR-1: Privacy Isolation**  
+  User data across circles must stay separated.
 
-- **NFR-2: Real-time Matching Performance (Efficiency)** - Recalculate and update the "Recommended Teammates" list within **3 seconds** after a user joins a Circle and completes their Tags.
+- **NFR-2: Usable Matching Performance**  
+  Matching and filtering should respond quickly enough for interactive use.
 
-- **NFR-3: Scalability of Tag Types (Maintainability)** - Support at least **5 distinct customizable Tag data types** (Integers, Booleans, Strings, Enumerated Lists) to accommodate diverse Circle themes.
+- **NFR-3: Flexible Tag Types**  
+  The system should support multiple tag types such as strings, booleans, integers, floats, and enums.
 
 ---
 
-## 3. Use Case: AI-Driven Teammate Matching
+## 3. Example Use Case
 
-### Scenario: Technical Contest Team Formation
+### AI Competition Team Formation
 
-**Preconditions**:
-- Captain Alice has created a circle for the "AI Competition Circle"
-- Candidate Bob has entered the circle and filled out profile with "Good at LLM" tag
-- AI matching engine is indexed and "Context-Aware View" module is active
+**Preconditions**
+- A circle exists for an AI competition.
+- A user has joined the circle and filled in relevant tags.
+- Another user is recruiting teammates with defined requirements.
 
-**Normal Flow**:
-1. Alice posts recruitment: "We need four members familiar with Large Language Model fine-tuning"
-2. Backend extracts keywords [LLM, Fine-tuning] and identifies context as "Technical/AI"
-3. System queries database for this circle, matches against Bob's profile
-4. System generates matching list - Alice views Bob's profile (95% match, ranked #1), clicks "Send Join Invitation"
-5. Bob receives real-time notification, reviews Alice's team goals, clicks "Accept"
+**Normal Flow**
+1. A recruiter posts team requirements.
+2. The system compares those requirements against circle-specific user tags.
+3. The recruiter reviews ranked candidates.
+4. Invitations are sent and accepted inside the platform.
 
-**Exception Flows**:
-- **Insufficient Match Confidence**: If no candidate scores >60%, system suggests broadening search
-- **Privacy Violation Blocking**: Direct URL access without mutual match returns "403 Forbidden"
+**Exception Flows**
+- If no strong matches exist, the system suggests broadening requirements.
+- If a user tries to access restricted content without membership, access is denied.
 
-**End State**: Mutual match established; Bob's WeChat ID revealed to Alice; team recruitment status updated to "Completed"
+**End State**
+- A team is formed with members selected from the circle.
 
 ---
 
@@ -116,11 +124,11 @@ Therefore, we have the opportunity to create a vertical social product with a bo
 
 | Aspect | Assessment |
 |--------|------------|
-| **Skills** | Team has strong Python foundation. Functional skeleton with **FastAPI** (Backend) and **Streamlit** (Frontend). **Docker** containerization and **GitHub Actions** CI pipeline implemented. Will use pre-trained LLM APIs (DeepSeek/OpenAI) for NLP. |
-| **Data** | User profiles and team requirements. Initial phase: 200+ **synthetic student profiles** generated by LLM. Final phase: anonymized peer cohort data. Privacy ensured through "Context-Aware Data Masking". |
-| **Time** | 10 weeks remaining. **Agile Incremental Model**. MVP (core matching + profile management) by Week 7. 3-week buffer for testing and unexpected changes. |
-| **Computing Resources** | No specialized GPUs required. Standard laptops for development. External LLM APIs for AI computation. GitHub Actions for CI. **ChromaDB** for vector storage (low-resource). |
-| **Budget** | **Zero-Cost**. GitHub free-tier, open-source stack (FastAPI, Streamlit, PostgreSQL). Free LLM API credits for students. |
+| **Skills** | The team uses Python, FastAPI, Streamlit, testing, and GitHub-based collaboration |
+| **Data** | User profile data, tag data, and team requirements can be represented in a relational model |
+| **Time** | The project scope fits an incremental course schedule with milestone-based delivery |
+| **Computing Resources** | No specialized hardware is required for the core product |
+| **Budget** | The project is designed around a zero-cost or low-cost student tooling stack |
 
 ---
 
@@ -128,71 +136,82 @@ Therefore, we have the opportunity to create a vertical social product with a bo
 
 ### Architecture Overview
 
-The system adopts a modular, layered architecture:
+The original design followed a modular layered structure:
 
-```
-┌─────────────────────────────────────────┐
-│         User Interface (UI) Layer       │
-│  (Web/Mobile - Streamlit → React?)      │
-├─────────────────────────────────────────┤
-│      Application Service Layer          │
-│  (Business Logic, Tag Management)       │
-├─────────────────────────────────────────┤
-│    Matching & Recommendation Module     │
-│  (Tag Similarity, LLM-based Ranking)    │
-├─────────────────────────────────────────┤
-│  Authentication & Circle Management     │
-│  (User Accounts, Access Control)        │
-├─────────────────────────────────────────┤
-│         Data Storage Layer              │
-│  (PostgreSQL + ChromaDB)                │
-└─────────────────────────────────────────┘
+```text
++--------------------------------------------------+
+|            User Interface (UI) Layer              |
+|        (Web / prototype frontend layer)           |
++--------------------------------------------------+
+|          Application Service Layer                |
+|       (Business logic and workflow rules)         |
++--------------------------------------------------+
+|   Matching & Recommendation Module                |
+|     (Tag similarity and ranking logic)            |
++--------------------------------------------------+
+|   Authentication & Circle Management              |
+|     (Accounts, membership, access control)        |
++--------------------------------------------------+
+|              Data Storage Layer                   |
+|   (Relational storage, optional vector storage)   |
++--------------------------------------------------+
 ```
 
 ### Component Responsibilities
 
 | Component | Responsibility |
 |-----------|----------------|
-| **UI Layer** | Core functionalities: recruitment posts, circle joining, tag management, matched users/teams |
-| **Application Service Layer** | Business logic: posting, tag assignment, visibility rules enforcement |
-| **Matching Module** | Tag analysis, circle context, recruitment requirements filtering and ranking |
-| **Auth & Circle Management** | User accounts, membership, access control |
-| **Data Storage Layer** | Persistent data: profiles, circles, tags, posts, matching records |
+| **UI Layer** | Circle browsing, profile/tag input, team interaction |
+| **Application Layer** | Validation, workflows, and business rules |
+| **Matching Module** | Ranking and compatibility analysis |
+| **Auth & Circle Management** | Accounts, membership, access control |
+| **Data Layer** | Persistent storage for users, circles, tags, and teams |
 
 ---
 
 ## 6. Project Plan
 
-### Timeline (10 Weeks)
+### Timeline
 
 | Week | Milestone | Deliverable |
 |------|-----------|-------------|
-| 5-6 | Requirements refinement & system design | Finalized requirements + architecture diagram |
-| 7-8 | Core backend development | User, circle, tag, recruitment post management |
-| 9-10 | Matching module implementation | Tag-based matching and filtering |
-| 11 | Frontend integration | Integrated UI + backend services |
-| 12 | System testing and refinement | Tested prototype + bug fixes |
-| 13-14 | Final demo and documentation | System demonstration + final report |
+| 5-6 | Requirements and design | Finalized requirements and architecture |
+| 7-8 | Core backend development | Users, circles, tags, and related APIs |
+| 9-10 | Matching implementation | Matching and filtering logic |
+| 11 | Frontend integration | Frontend and backend integration |
+| 12 | Testing and refinement | Test evidence and bug fixing |
+| 13-14 | Final demo and delivery | Demo and documentation package |
 
-### Risk Analysis
+### Risks
 
 | Risk | Impact | Mitigation |
 |------|--------|------------|
-| **Tag-based matching complexity** | Inefficient/inaccurate matching reduces system usefulness | Start with simple rule-based algorithms, incrementally refine |
-| **Ambiguity in user-defined tags** | Poorly defined tags decrease matching accuracy | Provide predefined tag categories and suggestions |
-| **Time constraints & workload imbalance** | Development delays or incomplete features | Clear milestones, regular progress reviews, adjust scope if needed |
+| Matching complexity | Poor recommendations reduce usefulness | Start with simple logic and iterate |
+| Ambiguous tags | Lower quality matching | Use structured tag definitions |
+| Time pressure | Delivery slips or incomplete features | Keep milestones explicit and adjust scope early |
 
 ---
 
 ## 7. Technical Stack
 
+The table below reflects the **proposal-time intended stack**. Some parts changed in the actual
+repository implementation.
+
 | Layer | Technology |
 |-------|------------|
 | **Backend** | FastAPI (Python) |
-| **Frontend** | Streamlit (prototype) → React? |
-| **Database** | PostgreSQL |
-| **Vector Store** | ChromaDB |
-| **AI/LLM** | DeepSeek / OpenAI API |
+| **Frontend** | Streamlit prototype, with possible later React migration |
+| **Database** | PostgreSQL in the original proposal; SQLite + SQLModel in the current repository |
+| **Vector Store** | ChromaDB planned, but not required by the current repository state |
+| **AI/LLM** | DeepSeek / OpenAI API planned for matching assistance |
 | **Containerization** | Docker |
 | **CI/CD** | GitHub Actions |
 | **Version Control** | Git + GitHub |
+
+### Current Repository Note
+
+As of 2026-04-15, the repository implementation is centered on:
+- `src/main.py` as the active FastAPI entry point
+- `src/db/database.py` for SQLite initialization
+- `src/models/core.py` and `src/models/tags.py` for SQLModel-based data models
+- `src/api/auth.py`, `src/api/users.py`, `src/api/circles.py`, and `src/api/tags.py` for the current API surface
