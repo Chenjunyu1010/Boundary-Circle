@@ -1,4 +1,5 @@
 import json
+from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlmodel import Session, select
@@ -12,7 +13,11 @@ from src.models.tags import TagDataType, TagDefinition, TagDefinitionCreate, Use
 router = APIRouter(tags=["Tags"])
 
 
-def validate_tag_value(value: str, data_type: TagDataType, options: str | None = None) -> bool:
+def validate_tag_value(
+    value: str,
+    data_type: TagDataType,
+    options: Optional[str] = None,
+) -> bool:
     """Validate a tag value against its declared type."""
     try:
         if data_type == TagDataType.INTEGER:
