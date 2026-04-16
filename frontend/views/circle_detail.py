@@ -256,7 +256,7 @@ def render_tag_form(tag_definitions: list, circle_id: int):
     tag_data = {}
 
     with st.form(f"tag_form_{circle_id}"):
-        st.markdown("### ?? Fill in Your Information")
+        st.markdown("### 📝 Fill in Your Information")
 
         normalized_tags = [normalize_tag_definition(tag) for tag in tag_definitions]
 
@@ -319,19 +319,19 @@ def main():
 
     if not circle:
         st.error("Circle not found")
-        st.page_link("pages/circles.py", label="<- Back to Circle Hall", icon="??")
+        st.page_link("pages/circles.py", label="<- Back to Circle Hall", icon="⬅️")
         return
 
     # Check join status
     joined = is_circle_joined(circle_id)
 
     # Page header
-    st.title(f"?? {circle.get('name', 'Circle')}")
+    st.title(f"🔵 {circle.get('name', 'Circle')}")
     st.markdown(f"**Category:** {circle.get('category', 'General')}")
     st.markdown(f"**Description:** {circle.get('description', 'No description')}")
 
     # Back link
-    st.page_link("pages/circles.py", label="<- Back to Circle Hall", icon="??")
+    st.page_link("pages/circles.py", label="<- Back to Circle Hall", icon="⬅️")
 
     st.markdown("---")
 
@@ -345,8 +345,8 @@ def main():
     with col1:
         if joined:
             st.success("? You are a member")
-            st.page_link("pages/team_management.py", label="Go to Team Management", icon="??")
-            if st.button("?? Leave Circle", type="secondary"):
+            st.page_link("pages/team_management.py", label="Go to Team Management", icon="⬅️")
+            if st.button("🚪 Leave Circle", type="secondary"):
                 success, message = leave_circle(circle_id)
                 if success:
                     st.success(message)
@@ -383,7 +383,7 @@ def main():
     # Member self-service tag updates
     if joined:
         with col2:
-            with st.expander("?? Update My Tags", expanded=False):
+            with st.expander("🔄 Update My Tags", expanded=False):
                 tag_definitions_for_update = fetch_circle_tags(circle_id)
                 if not tag_definitions_for_update:
                     st.info("No tag definitions available for this circle yet.")
@@ -443,7 +443,7 @@ def main():
     st.markdown("---")
 
     # Members section
-    st.markdown("### ?? Members")
+    st.markdown("### 👥 Members")
 
     members = fetch_circle_members(circle_id)
 
@@ -454,7 +454,7 @@ def main():
                 with col1:
                     # Use st.image with a placeholder avatar or initials
                     initial = member.get("username", "U")[0].upper()
-                    st.markdown(f"<div style='font-size:24px;text-align:center;'>??</div>", unsafe_allow_html=True)
+                    st.markdown(f"<div style='font-size:24px;text-align:center;'>👤</div>", unsafe_allow_html=True)
                     st.caption(f"**{initial}**")
                 with col2:
                     st.markdown(f"**{member.get('username', 'Unknown')}**")
@@ -464,7 +464,7 @@ def main():
 
     # Tags section (informational)
     st.markdown("---")
-    st.markdown("### ??? Circle Tags")
+    st.markdown("### 🏷️ Circle Tags")
 
     tag_definitions = fetch_circle_tags(circle_id)
 
@@ -473,7 +473,7 @@ def main():
             with st.container(border=True):
                 col1, col2 = st.columns([1, 4])
                 with col1:
-                    required = "??" if tag.get("required") else "?"
+                    required = "⭐" if tag.get("required") else "?"
                     st.markdown(f"**{tag.get('name', 'Tag')}** {required}")
                 with col2:
                     st.markdown(f"Type: {tag.get('data_type', 'string')}")
@@ -484,9 +484,9 @@ def main():
 
     if is_creator:
         st.markdown("---")
-        st.markdown("### ?? Admin Tag Management")
+        st.markdown("### 🔐 Admin Tag Management")
         with st.form(f"add_tag_definition_form_{circle_id}"):
-            st.markdown("#### ? Add New Tag Definition")
+            st.markdown("#### ➕ Add New Tag Definition")
             new_tag_name = st.text_input("name", placeholder="e.g. Major")
             new_tag_type = st.selectbox("data_type", ["string", "integer", "float", "boolean", "enum"])
             new_tag_required = st.checkbox("required", value=False)
