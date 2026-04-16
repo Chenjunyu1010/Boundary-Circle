@@ -2,16 +2,18 @@ import base64
 import hashlib
 import hmac
 import json
-import os
 import secrets
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Optional
 
+from src.core.settings import get_settings
 
-SECRET_KEY = os.getenv("SECRET_KEY", "development-secret-change-me")
+
+settings = get_settings()
+SECRET_KEY = settings.resolved_secret_key
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "60"))
-PASSWORD_HASH_ITERATIONS = 100_000
+ACCESS_TOKEN_EXPIRE_MINUTES = settings.access_token_expire_minutes
+PASSWORD_HASH_ITERATIONS = settings.password_hash_iterations
 
 
 def _b64url_encode(data: bytes) -> str:

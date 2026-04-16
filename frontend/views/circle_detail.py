@@ -66,6 +66,7 @@ def create_tag_definition(
     data_type: str,
     required: bool,
     options: Optional[str],
+    max_selections: Optional[int] = None,
 ) -> tuple[bool, str]:
     """Create a tag definition for a circle (creator only)."""
     current_user = get_current_user()
@@ -81,6 +82,7 @@ def create_tag_definition(
                 "data_type": data_type,
                 "required": required,
                 "options": options,
+                "max_selections": max_selections,
                 "description": None,
             },
         )
@@ -138,6 +140,13 @@ def normalize_tag_definition(tag: dict) -> dict:
     tag_data_type = tag.get("data_type")
     legacy_type = tag.get("type")
     normalized_type = tag_data_type or legacy_type or "string"
+    type_aliases = {
+        "text": "string",
+        "select": "single_select",
+        "multiselect": "multi_select",
+        "number": "integer",
+    }
+    normalized_type = type_aliases.get(normalized_type, normalized_type)
     options = tag.get("options")
 
     if isinstance(options, str):
@@ -146,13 +155,29 @@ def normalize_tag_definition(tag: dict) -> dict:
         except json.JSONDecodeError:
             options = None
 
-    return {
+    normalized_tag = {
         "id": tag.get("id"),
         "name": tag.get("name", ""),
         "data_type": normalized_type,
         "required": tag.get("required", False),
         "options": options,
     }
+    if "max_selections" in tag and tag.get("max_selections") is not None:
+        normalized_tag["max_selections"] = tag.get("max_selections")
+    return normalized_tag
+
+
+def validate_tag_input(tag: dict, value) -> tuple[bool, str]:
+    """Validate a frontend tag input before sending it to the backend."""
+    if value in (None, "", []):
+        return True, ""
+
+    if tag.get("data_type") == "multi_select":
+        max_selections = tag.get("max_selections")
+        if max_selections is not None and len(value) > max_selections:
+            return False, f"{tag['name']} allows at most {max_selections} selections."
+
+    return True, ""
 
 
 def resolve_circle_id(query_params=None) -> int:
@@ -256,7 +281,7 @@ def render_tag_form(tag_definitions: list, circle_id: int):
     tag_data = {}
 
     with st.form(f"tag_form_{circle_id}"):
-        st.markdown("### ?? Fill in Your Information")
+        st.markdown("### 📝 Fill in Your Information")
 
         normalized_tags = [normalize_tag_definition(tag) for tag in tag_definitions]
 
@@ -271,10 +296,18 @@ def render_tag_form(tag_definitions: list, circle_id: int):
 
             if tag_type in ("text", "string"):
                 tag_data[tag_name] = st.text_input(label, key=f"tag_{circle_id}_{tag.get('id')}")
-            elif tag_type in ("select", "enum") and tag_options:
+            elif tag_type in ("single_select", "enum") and tag_options:
                 tag_data[tag_name] = st.selectbox(label, tag_options, key=f"tag_{circle_id}_{tag.get('id')}")
-            elif tag_type == "multiselect" and tag_options:
-                tag_data[tag_name] = st.multiselect(label, tag_options, key=f"tag_{circle_id}_{tag.get('id')}")
+            elif tag_type == "multi_select" and tag_options:
+                help_text = None
+                if tag.get("max_selections") is not None:
+                    help_text = f"Select up to {tag['max_selections']} options."
+                tag_data[tag_name] = st.multiselect(
+                    label,
+                    tag_options,
+                    key=f"tag_{circle_id}_{tag.get('id')}",
+                    help=help_text,
+                )
             elif tag_type in ("number", "integer"):
                 tag_data[tag_name] = st.number_input(label, step=1, format="%d", key=f"tag_{circle_id}_{tag.get('id')}")
             elif tag_type == "float":
@@ -301,6 +334,16 @@ def render_tag_form(tag_definitions: list, circle_id: int):
                 st.error(f"Please fill in required fields: {', '.join(missing_fields)}")
                 return None
 
+            validation_errors = []
+            for tag in normalized_tags:
+                is_valid, error_message = validate_tag_input(tag, tag_data.get(tag["name"]))
+                if not is_valid:
+                    validation_errors.append(error_message)
+
+            if validation_errors:
+                st.error(" ".join(validation_errors))
+                return None
+
             return tag_data
 
     return None
@@ -319,19 +362,19 @@ def main():
 
     if not circle:
         st.error("Circle not found")
-        st.page_link("pages/circles.py", label="<- Back to Circle Hall", icon="??")
+        st.page_link("pages/circles.py", label="Back to Circle Hall", icon="⬅️")
         return
 
     # Check join status
     joined = is_circle_joined(circle_id)
 
     # Page header
-    st.title(f"?? {circle.get('name', 'Circle')}")
+    st.title(f"🔵 {circle.get('name', 'Circle')}")
     st.markdown(f"**Category:** {circle.get('category', 'General')}")
     st.markdown(f"**Description:** {circle.get('description', 'No description')}")
 
     # Back link
-    st.page_link("pages/circles.py", label="<- Back to Circle Hall", icon="??")
+    st.page_link("pages/circles.py", label="Back to Circle Hall", icon="⬅️")
 
     st.markdown("---")
 
@@ -344,9 +387,9 @@ def main():
 
     with col1:
         if joined:
-            st.success("? You are a member")
-            st.page_link("pages/team_management.py", label="Go to Team Management", icon="??")
-            if st.button("?? Leave Circle", type="secondary"):
+            st.success("✅ You are a member")
+            st.page_link("pages/team_management.py", label="Go to Team Management", icon="👥")
+            if st.button("🚪 Leave Circle", type="secondary"):
                 success, message = leave_circle(circle_id)
                 if success:
                     st.success(message)
@@ -383,7 +426,7 @@ def main():
     # Member self-service tag updates
     if joined:
         with col2:
-            with st.expander("?? Update My Tags", expanded=False):
+            with st.expander("🔄 Update My Tags", expanded=False):
                 tag_definitions_for_update = fetch_circle_tags(circle_id)
                 if not tag_definitions_for_update:
                     st.info("No tag definitions available for this circle yet.")
@@ -413,11 +456,21 @@ def main():
                                 tag_data[tag_name] = st.number_input(label, key=f"update_tag_{circle_id}_{tag.get('id')}")
                             elif tag_type == "boolean":
                                 tag_data[tag_name] = st.checkbox(label, key=f"update_tag_{circle_id}_{tag.get('id')}")
-                            elif tag_type == "enum" and tag_options:
+                            elif tag_type in ("single_select", "enum") and tag_options:
                                 tag_data[tag_name] = st.selectbox(
                                     label,
                                     tag_options,
                                     key=f"update_tag_{circle_id}_{tag.get('id')}",
+                                )
+                            elif tag_type == "multi_select" and tag_options:
+                                help_text = None
+                                if tag.get("max_selections") is not None:
+                                    help_text = f"Select up to {tag['max_selections']} options."
+                                tag_data[tag_name] = st.multiselect(
+                                    label,
+                                    tag_options,
+                                    key=f"update_tag_{circle_id}_{tag.get('id')}",
+                                    help=help_text,
                                 )
                             else:
                                 tag_data[tag_name] = st.text_input(label, key=f"update_tag_{circle_id}_{tag.get('id')}")
@@ -433,6 +486,14 @@ def main():
                             if missing_fields:
                                 st.error(f"Please fill in required fields: {', '.join(missing_fields)}")
                             else:
+                                validation_errors = []
+                                for tag in normalized_tags:
+                                    is_valid, error_message = validate_tag_input(tag, tag_data.get(tag["name"]))
+                                    if not is_valid:
+                                        validation_errors.append(error_message)
+                                if validation_errors:
+                                    st.error(" ".join(validation_errors))
+                                    return
                                 success, message = submit_member_tags(circle_id, tag_definitions_for_update, tag_data)
                                 if success:
                                     st.success(message)
@@ -443,7 +504,7 @@ def main():
     st.markdown("---")
 
     # Members section
-    st.markdown("### ?? Members")
+    st.markdown("### 👥 Members")
 
     members = fetch_circle_members(circle_id)
 
@@ -454,7 +515,7 @@ def main():
                 with col1:
                     # Use st.image with a placeholder avatar or initials
                     initial = member.get("username", "U")[0].upper()
-                    st.markdown(f"<div style='font-size:24px;text-align:center;'>??</div>", unsafe_allow_html=True)
+                    st.markdown(f"<div style='font-size:24px;text-align:center;'>👤</div>", unsafe_allow_html=True)
                     st.caption(f"**{initial}**")
                 with col2:
                     st.markdown(f"**{member.get('username', 'Unknown')}**")
@@ -464,7 +525,7 @@ def main():
 
     # Tags section (informational)
     st.markdown("---")
-    st.markdown("### ??? Circle Tags")
+    st.markdown("### 🏷️ Circle Tags")
 
     tag_definitions = fetch_circle_tags(circle_id)
 
@@ -473,7 +534,7 @@ def main():
             with st.container(border=True):
                 col1, col2 = st.columns([1, 4])
                 with col1:
-                    required = "??" if tag.get("required") else "?"
+                    required = "⭐" if tag.get("required") else "?"
                     st.markdown(f"**{tag.get('name', 'Tag')}** {required}")
                 with col2:
                     st.markdown(f"Type: {tag.get('data_type', 'string')}")
@@ -484,16 +545,20 @@ def main():
 
     if is_creator:
         st.markdown("---")
-        st.markdown("### ?? Admin Tag Management")
+        st.markdown("### 🔐 Admin Tag Management")
         with st.form(f"add_tag_definition_form_{circle_id}"):
-            st.markdown("#### ? Add New Tag Definition")
+            st.markdown("#### ➕ Add New Tag Definition")
             new_tag_name = st.text_input("name", placeholder="e.g. Major")
-            new_tag_type = st.selectbox("data_type", ["string", "integer", "float", "boolean", "enum"])
+            new_tag_type = st.selectbox(
+                "data_type",
+                ["string", "integer", "float", "boolean", "single_select", "multi_select"],
+            )
             new_tag_required = st.checkbox("required", value=False)
             new_tag_options = st.text_input(
                 "options",
-                placeholder='When data_type is enum, input JSON array like ["A", "B"]',
+                placeholder='When type is selection-based, input JSON array like ["A", "B"]',
             )
+            new_tag_max_selections = st.number_input("max_selections", min_value=1, step=1, value=1)
 
             create_tag_submit = st.form_submit_button("Create Tag Definition", type="primary")
 
@@ -502,9 +567,10 @@ def main():
                     st.error("name is required")
                 else:
                     options_payload: Optional[str] = None
-                    if new_tag_type == "enum":
+                    max_selections_payload: Optional[int] = None
+                    if new_tag_type in {"single_select", "multi_select"}:
                         if not new_tag_options.strip():
-                            st.error("options is required for enum type")
+                            st.error("options is required for selection types")
                             options_payload = None
                         else:
                             try:
@@ -515,16 +581,19 @@ def main():
                             except Exception:
                                 st.error("options must be a valid non-empty JSON array, e.g. [\"A\", \"B\"]")
                                 options_payload = None
+                        if new_tag_type == "multi_select" and options_payload is not None:
+                            max_selections_payload = int(new_tag_max_selections)
                     elif new_tag_options.strip():
                         options_payload = new_tag_options.strip()
 
-                    if new_tag_type != "enum" or options_payload is not None:
+                    if new_tag_type not in {"single_select", "multi_select"} or options_payload is not None:
                         success, message = create_tag_definition(
                             circle_id,
                             new_tag_name.strip(),
                             new_tag_type,
                             new_tag_required,
                             options_payload,
+                            max_selections_payload,
                         )
                         if success:
                             st.success(message)

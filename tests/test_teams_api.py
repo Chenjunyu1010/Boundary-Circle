@@ -2,6 +2,12 @@ from fastapi.testclient import TestClient
 
 from src.main import app
 from src.models.tags import CircleMember, CircleRole
+from src.models.teams import (
+    TeamCreate,
+    TeamRequirementRule,
+    decode_required_tag_rules,
+    encode_required_tag_rules,
+)
 
 
 client = TestClient(app)
@@ -163,3 +169,105 @@ def test_member_can_leave_team(db_session):
     stored_team = teams_response.json()[0]
     assert stored_team["current_members"] == 1
     assert stored_team["member_ids"] == [creator["id"]]
+
+
+def test_team_create_accepts_required_tag_rules_schema():
+    payload = TeamCreate(
+        name="Structured Team",
+        description="Has structured rules",
+        circle_id=1,
+        max_members=4,
+        required_tags=["Major", "Tech Stack"],
+        required_tag_rules=[
+            TeamRequirementRule(tag_name="Major", expected_value="Artificial Intelligence"),
+            TeamRequirementRule(tag_name="Tech Stack", expected_value=["Python", "SQL"]),
+        ],
+    )
+
+    assert payload.required_tag_rules[0].tag_name == "Major"
+    assert payload.required_tag_rules[0].expected_value == "Artificial Intelligence"
+    assert payload.required_tag_rules[1].expected_value == ["Python", "SQL"]
+
+
+def test_required_tag_rules_round_trip_through_json_helpers():
+    rules = [
+        TeamRequirementRule(tag_name="Major", expected_value="Artificial Intelligence"),
+        TeamRequirementRule(tag_name="Tech Stack", expected_value=["Python", "SQL"]),
+    ]
+
+    encoded = encode_required_tag_rules(rules)
+    decoded = decode_required_tag_rules(encoded)
+
+    assert len(decoded) == 2
+    assert decoded[0].tag_name == "Major"
+    assert decoded[0].expected_value == "Artificial Intelligence"
+    assert decoded[1].tag_name == "Tech Stack"
+    assert decoded[1].expected_value == ["Python", "SQL"]
+
+
+def test_decode_required_tag_rules_returns_empty_list_for_malformed_json():
+    assert decode_required_tag_rules("not-json") == []
+    assert decode_required_tag_rules('{"tag_name":"Major"}') == []
+
+
+def test_create_team_persists_required_tag_rules():
+    creator, creator_headers = register_and_login("rulectx", "rulectx@example.com")
+    circle_response = client.post(
+        "/circles/",
+        headers=creator_headers,
+        json={"name": "Rule Circle", "description": "Circle for structured team rules"},
+    )
+    assert circle_response.status_code == 201
+    circle = circle_response.json()
+
+    create_response = client.post(
+        "/teams",
+        headers=creator_headers,
+        json={
+            "name": "Rule Team",
+            "description": "Structured matching team",
+            "circle_id": circle["id"],
+            "max_members": 4,
+            "required_tags": ["Major", "Tech Stack"],
+            "required_tag_rules": [
+                {"tag_name": "Major", "expected_value": "Artificial Intelligence"},
+                {"tag_name": "Tech Stack", "expected_value": ["Python", "SQL"]},
+            ],
+        },
+    )
+
+    assert create_response.status_code == 201
+    payload = create_response.json()
+    assert payload["required_tags"] == ["Major", "Tech Stack"]
+    assert payload["required_tag_rules"] == [
+        {"tag_name": "Major", "expected_value": "Artificial Intelligence"},
+        {"tag_name": "Tech Stack", "expected_value": ["Python", "SQL"]},
+    ]
+
+
+def test_create_team_without_required_tag_rules_stays_compatible():
+    creator, creator_headers = register_and_login("legacyteam", "legacyteam@example.com")
+    circle_response = client.post(
+        "/circles/",
+        headers=creator_headers,
+        json={"name": "Legacy Team Circle", "description": "Compatibility test"},
+    )
+    assert circle_response.status_code == 201
+    circle = circle_response.json()
+
+    create_response = client.post(
+        "/teams",
+        headers=creator_headers,
+        json={
+            "name": "Legacy Team",
+            "description": "No structured rules",
+            "circle_id": circle["id"],
+            "max_members": 4,
+            "required_tags": ["Role"],
+        },
+    )
+
+    assert create_response.status_code == 201
+    payload = create_response.json()
+    assert payload["required_tags"] == ["Role"]
+    assert payload["required_tag_rules"] == []

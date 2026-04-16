@@ -52,6 +52,23 @@ def load_frontend_modules(monkeypatch, mock_mode: str = "true"):
     return fake_streamlit, api_module, auth_module, validation_module
 
 
+def load_circle_detail_module(monkeypatch):
+    fake_streamlit, _, _, _ = load_frontend_modules(monkeypatch)
+    fake_streamlit.query_params = {}
+    frontend_root = ROOT / "frontend"
+    if str(frontend_root) not in sys.path:
+        sys.path.insert(0, str(frontend_root))
+
+    for name in [
+        "frontend.views.circle_detail",
+        "utils.api",
+        "utils.auth",
+    ]:
+        sys.modules.pop(name, None)
+
+    return fake_streamlit, importlib.import_module("frontend.views.circle_detail")
+
+
 def test_api_client_login_mock_mode_response_matches_auth_contract(monkeypatch):
     fake_streamlit, api_module, _, _ = load_frontend_modules(monkeypatch)
     fake_streamlit.session_state.access_token = "token-123"
@@ -175,3 +192,45 @@ def test_login_fails_when_real_mode_cannot_load_user_profile(monkeypatch):
     assert message == "Login failed: unable to load user profile."
     assert fake_streamlit.session_state.logged_in is False
     assert fake_streamlit.session_state.access_token is None
+
+
+def test_circle_detail_normalize_tag_definition_preserves_selection_metadata(monkeypatch):
+    _, circle_detail_module = load_circle_detail_module(monkeypatch)
+
+    normalized = circle_detail_module.normalize_tag_definition(
+        {
+            "id": 7,
+            "name": "Tech Stack",
+            "data_type": "multi_select",
+            "required": True,
+            "options": '["Python", "React", "SQL"]',
+            "max_selections": 2,
+        }
+    )
+
+    assert normalized["data_type"] == "multi_select"
+    assert normalized["options"] == ["Python", "React", "SQL"]
+    assert normalized["max_selections"] == 2
+
+
+def test_circle_detail_validate_tag_input_rejects_multi_select_over_limit(monkeypatch):
+    _, circle_detail_module = load_circle_detail_module(monkeypatch)
+
+    normalized = circle_detail_module.normalize_tag_definition(
+        {
+            "id": 7,
+            "name": "Tech Stack",
+            "data_type": "multi_select",
+            "required": True,
+            "options": '["Python", "React", "SQL"]',
+            "max_selections": 2,
+        }
+    )
+
+    is_valid, error_message = circle_detail_module.validate_tag_input(
+        normalized,
+        ["Python", "React", "SQL"],
+    )
+
+    assert is_valid is False
+    assert error_message == "Tech Stack allows at most 2 selections."

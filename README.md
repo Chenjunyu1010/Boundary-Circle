@@ -8,6 +8,9 @@ Boundary Circle is a FastAPI + Streamlit project for circle-based identity, tag 
 - Circle creation and browsing
 - Per-circle tag definition management
 - Per-user tag submission and update flows
+- Controlled tag schema with `single_select` and `multi_select` definitions
+- Schema-driven team creation that uses real circle tag definitions instead of a fixed frontend tag list
+- Value-aware team matching based on structured team requirement rules
 - Circle join-related tag workflow coverage in automated tests
 - Team creation, invitation, response, and leave flows with backend/API tests
 - Matching recommendations for teams and users (backend APIs and Streamlit "Matching" tab)
@@ -38,6 +41,37 @@ Historical backend files that are no longer active are preserved under `docs/arc
 ## Requirements
 
 - Python 3.9+
+
+## Environment variables
+
+Auth-related configuration is now centralized and should be controlled through environment variables.
+
+Recommended variables:
+
+- `APP_ENV`
+  - Use `development` for local work
+  - Use `test` for test-specific setups
+  - Use `production` for deployment
+- `SECRET_KEY`
+  - Required in production
+  - If omitted in `development` or `test`, the app uses an in-process ephemeral secret
+  - This avoids the old hard-coded shared fallback secret, but also means tokens are not stable across restarts unless you set `SECRET_KEY`
+- `ACCESS_TOKEN_EXPIRE_MINUTES`
+  - Optional
+  - Defaults to `60`
+- `PASSWORD_HASH_ITERATIONS`
+  - Optional
+  - Defaults to `100000`
+  - Controls the PBKDF2 iteration count used for password hashing
+
+Example local setup:
+
+```bash
+APP_ENV=development
+SECRET_KEY=your-local-secret-key
+ACCESS_TOKEN_EXPIRE_MINUTES=60
+PASSWORD_HASH_ITERATIONS=100000
+```
 
 ## Local development
 
@@ -134,6 +168,35 @@ Current backend routes are centered around these areas:
 - `/matching/teams` - recommend suitable teams for the current user in a circle
 
 Interactive docs are available at `http://localhost:8000/docs` once the backend is running.
+
+## Tag schema notes
+
+Circle creators can now define tags using these field types:
+
+- `integer`
+- `float`
+- `boolean`
+- `single_select`
+- `multi_select`
+
+For selection-style tags:
+
+- creators must provide a non-empty options list
+- `multi_select` can also define `max_selections`
+- backend validation remains the source of truth
+
+## Matching semantics
+
+Team creation can now persist structured requirement rules alongside legacy `required_tags`.
+
+Current matching behavior:
+
+- `single_select`: exact equality
+- `multi_select`: any overlap counts as a match
+- `integer`, `float`, `boolean`, `string`: exact equality
+- legacy teams without structured rules still fall back to tag-name-based matching
+
+This keeps existing team data compatible while allowing newer teams to match on actual selected values.
 
 ## Docker
 
