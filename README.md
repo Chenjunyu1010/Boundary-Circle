@@ -56,6 +56,10 @@ Recommended variables:
 - `ACCESS_TOKEN_EXPIRE_MINUTES`
   - Optional
   - Defaults to `60`
+- `PASSWORD_HASH_ITERATIONS`
+  - Optional
+  - Defaults to `100000`
+  - Controls the PBKDF2 iteration count used for password hashing
 
 Example local setup:
 
@@ -63,6 +67,7 @@ Example local setup:
 APP_ENV=development
 SECRET_KEY=your-local-secret-key
 ACCESS_TOKEN_EXPIRE_MINUTES=60
+PASSWORD_HASH_ITERATIONS=100000
 ```
 
 ## Local development
