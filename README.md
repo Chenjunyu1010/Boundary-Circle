@@ -39,6 +39,37 @@ Historical backend files that are no longer active are preserved under `docs/arc
 
 - Python 3.9+
 
+## Environment variables
+
+Auth-related configuration is now centralized and should be controlled through environment variables.
+
+Recommended variables:
+
+- `APP_ENV`
+  - Use `development` for local work
+  - Use `test` for test-specific setups
+  - Use `production` for deployment
+- `SECRET_KEY`
+  - Required in production
+  - If omitted in `development` or `test`, the app uses an in-process ephemeral secret
+  - This avoids the old hard-coded shared fallback secret, but also means tokens are not stable across restarts unless you set `SECRET_KEY`
+- `ACCESS_TOKEN_EXPIRE_MINUTES`
+  - Optional
+  - Defaults to `60`
+- `PASSWORD_HASH_ITERATIONS`
+  - Optional
+  - Defaults to `100000`
+  - Controls the PBKDF2 iteration count used for password hashing
+
+Example local setup:
+
+```bash
+APP_ENV=development
+SECRET_KEY=your-local-secret-key
+ACCESS_TOKEN_EXPIRE_MINUTES=60
+PASSWORD_HASH_ITERATIONS=100000
+```
+
 ## Local development
 
 ```bash
