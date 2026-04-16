@@ -16,7 +16,9 @@ from src.models.teams import (
     TeamMember,
     TeamRead,
     TeamStatus,
+    decode_required_tag_rules,
     decode_required_tags,
+    encode_required_tag_rules,
     encode_required_tags,
 )
 
@@ -47,6 +49,7 @@ def build_team_read(team: Team, session: Session) -> TeamRead:
         current_members=current_members,
         status=status,
         required_tags=decode_required_tags(team.required_tags_json),
+        required_tag_rules=decode_required_tag_rules(team.required_tag_rules_json),
         member_ids=member_ids,
     )
 
@@ -91,6 +94,7 @@ def create_team(
         creator_id=current_user.id,
         max_members=payload.max_members,
         required_tags_json=encode_required_tags(payload.required_tags),
+        required_tag_rules_json=encode_required_tag_rules(payload.required_tag_rules),
     )
     session.add(team)
     session.commit()

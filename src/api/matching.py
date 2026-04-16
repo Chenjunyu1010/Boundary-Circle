@@ -9,12 +9,23 @@ from src.auth.dependencies import get_current_user
 from src.db.database import get_session
 from src.models.core import Circle, User
 from src.models.tags import CircleMember
-from src.models.teams import Team, TeamMember, TeamRead, TeamStatus, decode_required_tags
+from src.models.teams import (
+    Team,
+    TeamMember,
+    TeamRead,
+    TeamStatus,
+    decode_required_tag_rules,
+)
 from src.services.matching import (
     build_team_profile,
     coverage_score,
+    coverage_score_for_rules,
+    describe_matched_rules,
+    describe_missing_rules,
     get_team_member_ids,
+    get_team_required_tag_names,
     get_user_tag_names_for_circle,
+    get_user_tag_values_for_circle,
     jaccard_score,
 )
 
@@ -77,11 +88,7 @@ def match_users_for_team(
     current_user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
 ) -> List[UserMatch]:
-    """Recommend candidate users for a given team based on tag coverage.
-
-    The current user must be a member or creator of the team and a member
-    (or creator) of the associated circle.
-    """
+    """Recommend candidate users for a given team based on tag coverage."""
     team = session.get(Team, team_id)
     if team is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Team not found")
@@ -90,10 +97,8 @@ def match_users_for_team(
     if circle is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Circle not found")
 
-    # Ensure user is in the circle
     _ensure_circle_member_or_creator(session=session, circle=circle, user=current_user)
 
-    # Ensure user is creator or member of the team
     if current_user.id is None:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -112,15 +117,11 @@ def match_users_for_team(
             detail="Only team creator or members can view recommendations",
         )
 
-    required_tags = set(decode_required_tags(team.required_tags_json))
+    required_rules = decode_required_tag_rules(team.required_tag_rules_json)
+    required_tags = get_team_required_tag_names(team)
     team_profile = build_team_profile(session=session, team=team)
-
     team_member_ids = set(get_team_member_ids(session=session, team_id=team.id or 0))
-    if current_user.id in team_member_ids:
-        # already included via TeamMember table, but keep explicit for safety
-        pass
 
-    # Collect all circle members as initial candidates
     memberships = session.exec(
         select(CircleMember).where(CircleMember.circle_id == circle.id)
     ).all()
@@ -128,30 +129,33 @@ def match_users_for_team(
     candidates: List[UserMatch] = []
     for membership in memberships:
         user_id = membership.user_id
-        if user_id in team_member_ids:
-            continue
-        if user_id == current_user.id:
+        if user_id in team_member_ids or user_id == current_user.id:
             continue
 
         user = session.get(User, user_id)
         if user is None:
             continue
 
-        user_tags = get_user_tag_names_for_circle(
+        user_tag_values = get_user_tag_values_for_circle(
             session=session,
             user_id=user_id,
             circle_id=circle.id,
         )
-        cov = coverage_score(required=required_tags, user_tags=user_tags)
+        user_tags = set(user_tag_values.keys())
+
+        if required_rules:
+            cov = coverage_score_for_rules(required_rules, user_tag_values)
+            matched_tags = describe_matched_rules(required_rules, user_tag_values)
+            missing_required = describe_missing_rules(required_rules, user_tag_values)
+        else:
+            cov = coverage_score(required=required_tags, user_tags=user_tags)
+            matched_tags = sorted(required_tags & user_tags)
+            missing_required = sorted(required_tags - user_tags)
+
         if cov == 0.0:
-            # 允许部分覆盖，但至少要满足一个 required 标签
             continue
 
         jac = jaccard_score(team_profile, user_tags)
-
-        matched_tags = sorted(required_tags & user_tags)
-        missing_required = sorted(required_tags - user_tags)
-
         candidates.append(
             UserMatch(
                 user_id=user.id,
@@ -164,7 +168,6 @@ def match_users_for_team(
             )
         )
 
-    # Normalise limit
     if limit <= 0:
         limit = 10
     limit = min(limit, 50)
@@ -180,10 +183,7 @@ def match_teams_for_user(
     current_user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
 ) -> List[TeamMatch]:
-    """Recommend teams in a circle for the current user based on tags.
-
-    The current user must be the circle creator or a member of the circle.
-    """
+    """Recommend teams in a circle for the current user based on tags."""
     circle = session.get(Circle, circle_id)
     if circle is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Circle not found")
@@ -196,11 +196,12 @@ def match_teams_for_user(
             detail="Current user ID missing",
         )
 
-    user_tags = get_user_tag_names_for_circle(
+    user_tag_values = get_user_tag_values_for_circle(
         session=session,
         user_id=current_user.id,
         circle_id=circle_id,
     )
+    user_tags = set(user_tag_values.keys())
 
     from src.api.teams import build_team_read  # local import to avoid circular import at module level
 
@@ -209,24 +210,26 @@ def match_teams_for_user(
     results: List[TeamMatch] = []
     for team in teams:
         team_read = build_team_read(team, session)
-
-        # Skip teams the user already joined
         if current_user.id in team_read.member_ids:
             continue
-
-        # Skip locked or full teams
         if team_read.status == TeamStatus.LOCKED:
             continue
 
-        required_tags = set(decode_required_tags(team.required_tags_json))
-        cov = coverage_score(required=required_tags, user_tags=user_tags)
+        required_rules = decode_required_tag_rules(team.required_tag_rules_json)
+        required_tags = get_team_required_tag_names(team)
+
+        if required_rules:
+            cov = coverage_score_for_rules(required_rules, user_tag_values)
+            missing_required = describe_missing_rules(required_rules, user_tag_values)
+        else:
+            cov = coverage_score(required=required_tags, user_tags=user_tags)
+            missing_required = sorted(required_tags - user_tags)
+
         if cov == 0.0:
             continue
 
         team_profile = build_team_profile(session=session, team=team)
         jac = jaccard_score(team_profile, user_tags)
-        missing_required = sorted(required_tags - user_tags)
-
         results.append(
             TeamMatch(
                 team=team_read,

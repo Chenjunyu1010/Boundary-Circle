@@ -7,6 +7,7 @@ plus matching-based recommendations.
 
 from __future__ import annotations
 
+import json
 import sys
 from pathlib import Path
 from typing import Iterable, Tuple
@@ -51,6 +52,18 @@ def fetch_circle_members(circle_id: int) -> list[dict]:
         st.error(f"Failed to load members: {response.reason}")
     except Exception as exc:  # pragma: no cover - defensive
         st.error(f"Error loading members: {exc}")
+    return []
+
+
+def fetch_circle_tags(circle_id: int) -> list[dict]:
+    """Fetch tag definitions for the current circle."""
+    try:
+        response = api_client.get(f"/circles/{circle_id}/tags")
+        if response.ok:
+            return response.json()
+        st.error(f"Failed to load circle tags: {response.reason}")
+    except Exception as exc:  # pragma: no cover - defensive
+        st.error(f"Error loading circle tags: {exc}")
     return []
 
 
@@ -120,6 +133,7 @@ def create_team(
     description: str,
     max_members: int,
     required_tags: list[str],
+    required_tag_rules: list[dict],
     circle_id: int,
 ) -> tuple[bool, str]:
     """Create a team."""
@@ -136,6 +150,7 @@ def create_team(
                 "description": description,
                 "max_members": max_members,
                 "required_tags": required_tags,
+                "required_tag_rules": required_tag_rules,
                 "circle_id": circle_id,
             },
         )
@@ -144,6 +159,75 @@ def create_team(
         return False, f"Failed to create team: {response.reason}"
     except Exception as exc:  # pragma: no cover - defensive
         return False, f"Error creating team: {exc}"
+
+
+def normalize_team_tag_definition(tag: dict) -> dict:
+    """Normalize backend and mock tag definitions for team creation."""
+    tag_data_type = tag.get("data_type") or tag.get("type") or "string"
+    type_aliases = {
+        "text": "string",
+        "select": "single_select",
+        "multiselect": "multi_select",
+        "number": "integer",
+    }
+    normalized_type = type_aliases.get(tag_data_type, tag_data_type)
+    options = tag.get("options")
+    if isinstance(options, str):
+        try:
+            options = json.loads(options)
+        except json.JSONDecodeError:
+            options = None
+
+    normalized_tag = {
+        "id": tag.get("id"),
+        "name": tag.get("name", ""),
+        "data_type": normalized_type,
+        "required": tag.get("required", False),
+        "options": options,
+    }
+    if "max_selections" in tag and tag.get("max_selections") is not None:
+        normalized_tag["max_selections"] = tag.get("max_selections")
+    return normalized_tag
+
+
+def validate_team_requirement_value(tag: dict, value) -> tuple[bool, str]:
+    """Validate a team requirement value before sending it."""
+    if value in (None, "", []):
+        return True, ""
+
+    if tag.get("data_type") == "multi_select":
+        max_selections = tag.get("max_selections")
+        if max_selections is not None and len(value) > max_selections:
+            return False, f"{tag['name']} allows at most {max_selections} selections."
+
+    return True, ""
+
+
+def build_team_required_tags_payload(tag_definitions: list[dict], tag_data: dict) -> list[str]:
+    """Build backend-compatible required_tags from schema-driven team inputs."""
+    required_tags: list[str] = []
+    for tag in tag_definitions:
+        value = tag_data.get(tag["name"])
+        if value in (None, "", []):
+            continue
+        required_tags.append(tag["name"])
+    return required_tags
+
+
+def build_team_required_tag_rules_payload(tag_definitions: list[dict], tag_data: dict) -> list[dict]:
+    """Build structured team requirement rules from schema-driven inputs."""
+    required_tag_rules: list[dict] = []
+    for tag in tag_definitions:
+        value = tag_data.get(tag["name"])
+        if value in (None, "", []):
+            continue
+        required_tag_rules.append(
+            {
+                "tag_name": tag["name"],
+                "expected_value": value,
+            }
+        )
+    return required_tag_rules
 
 
 def send_invitation(team_id: int, user_id: int, team_name: str) -> tuple[bool, str]:
@@ -258,10 +342,42 @@ def render_create_team() -> None:
             options=[2, 3, 4, 5, 6, 7, 8],
             index=3,
         )
-        required_tags = st.multiselect(
-            "Required Tags (Optional)",
-            options=["skill", "availability", "role", "experience", "interest"],
-        )
+        tag_definitions = [normalize_team_tag_definition(tag) for tag in fetch_circle_tags(circle_id)]
+        team_requirement_values: dict[str, object] = {}
+
+        if tag_definitions:
+            st.caption("Select the circle-defined requirements that this team cares about.")
+            for tag in tag_definitions:
+                label = f"Required {tag['name']}"
+                tag_type = tag["data_type"]
+                tag_options = tag.get("options")
+
+                if tag_type in ("single_select", "enum") and tag_options:
+                    team_requirement_values[tag["name"]] = st.selectbox(
+                        label,
+                        options=[""] + tag_options,
+                        format_func=lambda value: "Not required" if value == "" else value,
+                    )
+                elif tag_type == "multi_select" and tag_options:
+                    help_text = None
+                    if tag.get("max_selections") is not None:
+                        help_text = f"Select up to {tag['max_selections']} options."
+                    team_requirement_values[tag["name"]] = st.multiselect(
+                        label,
+                        options=tag_options,
+                        help=help_text,
+                    )
+                elif tag_type == "boolean":
+                    team_requirement_values[tag["name"]] = st.checkbox(label, value=False)
+                elif tag_type == "integer":
+                    team_requirement_values[tag["name"]] = st.text_input(label, placeholder="Leave blank if not required")
+                elif tag_type == "float":
+                    team_requirement_values[tag["name"]] = st.text_input(label, placeholder="Leave blank if not required")
+                else:
+                    team_requirement_values[tag["name"]] = st.text_input(label, placeholder="Leave blank if not required")
+        else:
+            st.info("No circle tag definitions found. Team requirements will be empty.")
+
         submitted = st.form_submit_button("Create Team", type="primary")
 
         if submitted:
@@ -269,11 +385,31 @@ def render_create_team() -> None:
                 st.error("Team name is required.")
                 return
 
+            validation_errors = []
+            for tag in tag_definitions:
+                is_valid, error_message = validate_team_requirement_value(
+                    tag,
+                    team_requirement_values.get(tag["name"]),
+                )
+                if not is_valid:
+                    validation_errors.append(error_message)
+
+            if validation_errors:
+                st.error(" ".join(validation_errors))
+                return
+
+            required_tags = build_team_required_tags_payload(tag_definitions, team_requirement_values)
+            required_tag_rules = build_team_required_tag_rules_payload(
+                tag_definitions,
+                team_requirement_values,
+            )
+
             success, message = create_team(
                 name=team_name.strip(),
                 description=team_description.strip(),
                 max_members=max_members,
                 required_tags=required_tags,
+                required_tag_rules=required_tag_rules,
                 circle_id=circle_id,
             )
             if success:

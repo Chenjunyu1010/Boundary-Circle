@@ -483,3 +483,239 @@ def test_match_users_with_no_required_tags_returns_candidates(db_session) -> Non
     assert "noreq_u2" in usernames
     for item in data:
         assert item["coverage_score"] == 1.0
+
+
+def test_match_users_for_team_uses_single_select_value_rules(db_session) -> None:
+    creator, creator_headers = register_and_login(
+        "value_creator", "value_creator@example.com"
+    )
+    circle_response = client.post(
+        "/circles/",
+        headers=creator_headers,
+        json={"name": "Value Circle", "description": "Single select matching"},
+    )
+    assert circle_response.status_code == 201
+    circle = circle_response.json()
+
+    matching_user, _ = register_and_login("value_match", "value_match@example.com")
+    mismatching_user, _ = register_and_login("value_miss", "value_miss@example.com")
+
+    for user in (matching_user, mismatching_user):
+        db_session.add(
+            CircleMember(user_id=user["id"], circle_id=circle["id"], role=CircleRole.MEMBER)
+        )
+    db_session.commit()
+
+    major_tag = TagDefinition(
+        circle_id=circle["id"],
+        name="Major",
+        data_type=TagDataType.SINGLE_SELECT,
+        required=False,
+        options='["Artificial Intelligence", "Software Engineering"]',
+    )
+    db_session.add(major_tag)
+    db_session.commit()
+    db_session.refresh(major_tag)
+
+    db_session.add(
+        UserTag(
+            user_id=matching_user["id"],
+            circle_id=circle["id"],
+            tag_definition_id=major_tag.id,
+            value="Artificial Intelligence",
+        )
+    )
+    db_session.add(
+        UserTag(
+            user_id=mismatching_user["id"],
+            circle_id=circle["id"],
+            tag_definition_id=major_tag.id,
+            value="Software Engineering",
+        )
+    )
+    db_session.commit()
+
+    team_response = client.post(
+        "/teams",
+        headers=creator_headers,
+        json={
+            "name": "AI Team",
+            "description": "Needs AI major",
+            "circle_id": circle["id"],
+            "max_members": 4,
+            "required_tags": ["Major"],
+            "required_tag_rules": [
+                {"tag_name": "Major", "expected_value": "Artificial Intelligence"}
+            ],
+        },
+    )
+    assert team_response.status_code == 201
+    team = team_response.json()
+
+    match_response = client.get(
+        f"/matching/users?team_id={team['id']}",
+        headers=creator_headers,
+    )
+    assert match_response.status_code == 200
+    usernames = [item["username"] for item in match_response.json()]
+    assert "value_match" in usernames
+    assert "value_miss" not in usernames
+
+
+def test_match_users_for_team_uses_multi_select_overlap_rules(db_session) -> None:
+    creator, creator_headers = register_and_login(
+        "stack_creator", "stack_creator@example.com"
+    )
+    circle_response = client.post(
+        "/circles/",
+        headers=creator_headers,
+        json={"name": "Stack Circle", "description": "Multi select matching"},
+    )
+    assert circle_response.status_code == 201
+    circle = circle_response.json()
+
+    overlap_user, _ = register_and_login("stack_overlap", "stack_overlap@example.com")
+    miss_user, _ = register_and_login("stack_miss", "stack_miss@example.com")
+
+    for user in (overlap_user, miss_user):
+        db_session.add(
+            CircleMember(user_id=user["id"], circle_id=circle["id"], role=CircleRole.MEMBER)
+        )
+    db_session.commit()
+
+    stack_tag = TagDefinition(
+        circle_id=circle["id"],
+        name="Tech Stack",
+        data_type=TagDataType.MULTI_SELECT,
+        required=False,
+        options='["Python", "React", "SQL"]',
+    )
+    db_session.add(stack_tag)
+    db_session.commit()
+    db_session.refresh(stack_tag)
+
+    db_session.add(
+        UserTag(
+            user_id=overlap_user["id"],
+            circle_id=circle["id"],
+            tag_definition_id=stack_tag.id,
+            value='["Python", "FastAPI"]',
+        )
+    )
+    db_session.add(
+        UserTag(
+            user_id=miss_user["id"],
+            circle_id=circle["id"],
+            tag_definition_id=stack_tag.id,
+            value='["Java"]',
+        )
+    )
+    db_session.commit()
+
+    team_response = client.post(
+        "/teams",
+        headers=creator_headers,
+        json={
+            "name": "Python Team",
+            "description": "Needs overlapping stack",
+            "circle_id": circle["id"],
+            "max_members": 4,
+            "required_tags": ["Tech Stack"],
+            "required_tag_rules": [
+                {"tag_name": "Tech Stack", "expected_value": ["Python", "SQL"]}
+            ],
+        },
+    )
+    assert team_response.status_code == 201
+    team = team_response.json()
+
+    match_response = client.get(
+        f"/matching/users?team_id={team['id']}",
+        headers=creator_headers,
+    )
+    assert match_response.status_code == 200
+    usernames = [item["username"] for item in match_response.json()]
+    assert "stack_overlap" in usernames
+    assert "stack_miss" not in usernames
+
+
+def test_match_teams_for_user_uses_structured_value_rules(db_session) -> None:
+    user, user_headers = register_and_login("team_value_user", "team_value_user@example.com")
+    creator, creator_headers = register_and_login(
+        "team_value_creator", "team_value_creator@example.com"
+    )
+
+    circle_response = client.post(
+        "/circles/",
+        headers=creator_headers,
+        json={"name": "Team Value Circle", "description": "Structured team matching"},
+    )
+    assert circle_response.status_code == 201
+    circle = circle_response.json()
+
+    db_session.add(
+        CircleMember(user_id=user["id"], circle_id=circle["id"], role=CircleRole.MEMBER)
+    )
+    db_session.commit()
+
+    major_tag = TagDefinition(
+        circle_id=circle["id"],
+        name="Major",
+        data_type=TagDataType.SINGLE_SELECT,
+        required=False,
+        options='["Artificial Intelligence", "Software Engineering"]',
+    )
+    db_session.add(major_tag)
+    db_session.commit()
+    db_session.refresh(major_tag)
+
+    db_session.add(
+        UserTag(
+            user_id=user["id"],
+            circle_id=circle["id"],
+            tag_definition_id=major_tag.id,
+            value="Artificial Intelligence",
+        )
+    )
+    db_session.commit()
+
+    matching_team_response = client.post(
+        "/teams",
+        headers=creator_headers,
+        json={
+            "name": "AI Only Team",
+            "description": "Matches user major",
+            "circle_id": circle["id"],
+            "max_members": 4,
+            "required_tags": ["Major"],
+            "required_tag_rules": [
+                {"tag_name": "Major", "expected_value": "Artificial Intelligence"}
+            ],
+        },
+    )
+    assert matching_team_response.status_code == 201
+
+    mismatching_team_response = client.post(
+        "/teams",
+        headers=creator_headers,
+        json={
+            "name": "SE Only Team",
+            "description": "Does not match user major",
+            "circle_id": circle["id"],
+            "max_members": 4,
+            "required_tags": ["Major"],
+            "required_tag_rules": [
+                {"tag_name": "Major", "expected_value": "Software Engineering"}
+            ],
+        },
+    )
+    assert mismatching_team_response.status_code == 201
+
+    match_response = client.get(
+        f"/matching/teams?circle_id={circle['id']}",
+        headers=user_headers,
+    )
+    assert match_response.status_code == 200
+    team_names = [item["team"]["name"] for item in match_response.json()]
+    assert "AI Only Team" in team_names
+    assert "SE Only Team" not in team_names

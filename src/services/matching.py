@@ -1,11 +1,18 @@
 from __future__ import annotations
 
-from typing import List, Set
+import json
+from typing import Any, List, Set
 
 from sqlmodel import Session, select
 
-from src.models.tags import CircleMember, TagDefinition, UserTag
-from src.models.teams import Team, TeamMember, decode_required_tags
+from src.models.tags import TagDataType, TagDefinition, UserTag
+from src.models.teams import (
+    Team,
+    TeamMember,
+    TeamRequirementRule,
+    decode_required_tag_rules,
+    decode_required_tags,
+)
 
 
 def get_user_tag_names_for_circle(session: Session, user_id: int, circle_id: int) -> Set[str]:
@@ -21,6 +28,37 @@ def get_user_tag_names_for_circle(session: Session, user_id: int, circle_id: int
     )
     names: List[str] = session.exec(statement).all()
     return set(names)
+
+
+def parse_user_tag_value(tag_definition: TagDefinition, raw_value: str) -> Any:
+    """Parse a stored user tag value according to its definition type."""
+    if tag_definition.data_type == TagDataType.INTEGER:
+        return int(raw_value)
+    if tag_definition.data_type == TagDataType.FLOAT:
+        return float(raw_value)
+    if tag_definition.data_type == TagDataType.BOOLEAN:
+        return str(raw_value).lower() in {"true", "1"}
+    if tag_definition.data_type == TagDataType.MULTI_SELECT:
+        try:
+            parsed = json.loads(raw_value)
+        except json.JSONDecodeError:
+            return []
+        return parsed if isinstance(parsed, list) else []
+    return raw_value
+
+
+def get_user_tag_values_for_circle(session: Session, user_id: int, circle_id: int) -> dict[str, Any]:
+    """Return parsed user tag values keyed by tag name for a circle."""
+    statement = (
+        select(TagDefinition, UserTag)
+        .join(UserTag, TagDefinition.id == UserTag.tag_definition_id)
+        .where(UserTag.user_id == user_id, UserTag.circle_id == circle_id)
+    )
+    rows = session.exec(statement).all()
+    tag_values: dict[str, Any] = {}
+    for tag_definition, user_tag in rows:
+        tag_values[tag_definition.name] = parse_user_tag_value(tag_definition, user_tag.value)
+    return tag_values
 
 
 def get_team_member_ids(session: Session, team_id: int) -> List[int]:
@@ -50,6 +88,53 @@ def build_team_profile(session: Session, team: Team) -> Set[str]:
         )
 
     return required_tags | member_tag_names
+
+
+def get_team_required_tag_names(team: Team) -> Set[str]:
+    """Return team requirement names, preferring structured rules when present."""
+    structured_rules = decode_required_tag_rules(team.required_tag_rules_json)
+    if structured_rules:
+        return {rule.tag_name for rule in structured_rules}
+    return set(decode_required_tags(team.required_tags_json))
+
+
+def rule_matches_user_value(rule: TeamRequirementRule, user_value: Any) -> bool:
+    """Return whether a parsed user value satisfies a team rule."""
+    expected_value = rule.expected_value
+    if isinstance(expected_value, list):
+        if not isinstance(user_value, list):
+            return False
+        return bool(set(str(item) for item in expected_value) & set(str(item) for item in user_value))
+    return user_value == expected_value
+
+
+def coverage_score_for_rules(required_rules: list[TeamRequirementRule], user_tag_values: dict[str, Any]) -> float:
+    """Compute coverage for structured requirement rules."""
+    if not required_rules:
+        return 1.0
+    matched_count = 0
+    for rule in required_rules:
+        if rule_matches_user_value(rule, user_tag_values.get(rule.tag_name)):
+            matched_count += 1
+    return matched_count / float(len(required_rules))
+
+
+def describe_matched_rules(required_rules: list[TeamRequirementRule], user_tag_values: dict[str, Any]) -> list[str]:
+    """Build matched rule descriptions for API responses."""
+    matched: list[str] = []
+    for rule in required_rules:
+        if rule_matches_user_value(rule, user_tag_values.get(rule.tag_name)):
+            matched.append(f"{rule.tag_name}={rule.expected_value}")
+    return matched
+
+
+def describe_missing_rules(required_rules: list[TeamRequirementRule], user_tag_values: dict[str, Any]) -> list[str]:
+    """Build missing rule descriptions for API responses."""
+    missing: list[str] = []
+    for rule in required_rules:
+        if not rule_matches_user_value(rule, user_tag_values.get(rule.tag_name)):
+            missing.append(f"{rule.tag_name}={rule.expected_value}")
+    return missing
 
 
 def coverage_score(required: Set[str], user_tags: Set[str]) -> float:
