@@ -1,3 +1,5 @@
+from typing import Optional
+
 from fastapi import HTTPException, status
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, select
@@ -6,7 +8,7 @@ from src.auth.security import get_password_hash
 from src.models.core import User, UserCreate
 
 
-def _map_unique_constraint_error(error: IntegrityError) -> HTTPException | None:
+def _map_unique_constraint_error(error: IntegrityError) -> Optional[HTTPException]:
     message = str(error.orig).lower() if error.orig is not None else str(error).lower()
     if "user.email" in message or " email" in message or ".email" in message:
         return HTTPException(
