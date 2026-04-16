@@ -1,6 +1,6 @@
 import json
 from enum import Enum
-from typing import Optional
+from typing import Optional, Union
 
 from sqlmodel import Field, SQLModel
 
@@ -44,7 +44,7 @@ class Invitation(SQLModel, table=True):
 
 class TeamRequirementRule(SQLModel):
     tag_name: str
-    expected_value: str | list[str] | int | float | bool
+    expected_value: Union[str, list[str], int, float, bool]
 
 
 class TeamCreate(SQLModel):
