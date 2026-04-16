@@ -83,6 +83,28 @@ def test_create_user():
     assert "id" in data
 
 
+def test_create_user_can_login_through_auth_flow():
+    password = "password123"
+    user_data = {
+        "username": "legacycreate",
+        "email": "legacycreate@example.com",
+        "full_name": "Legacy Create",
+        "password": password,
+    }
+    create_response = client.post("/users/", json=user_data)
+    assert create_response.status_code == 201
+
+    login_response = client.post(
+        "/auth/login",
+        json={"email": user_data["email"], "password": password},
+    )
+
+    assert login_response.status_code == 200
+    token_payload = login_response.json()
+    assert token_payload["token_type"] == "bearer"
+    assert token_payload["access_token"]
+
+
 def test_create_user_duplicate_email(test_user):
     user_data = {
         "username": "anotheruser",
@@ -92,6 +114,26 @@ def test_create_user_duplicate_email(test_user):
     response = client.post("/users/", json=user_data)
     assert response.status_code == 400
     assert "Email already registered" in response.json()["detail"]
+
+
+def test_create_user_duplicate_username_matches_auth_register_behavior():
+    first_user = {
+        "username": "sharedname",
+        "email": "sharedname@example.com",
+        "password": "password123",
+    }
+    second_user = {
+        "username": "sharedname",
+        "email": "sharedname-2@example.com",
+        "password": "password123",
+    }
+
+    first_response = client.post("/users/", json=first_user)
+    assert first_response.status_code == 201
+
+    duplicate_response = client.post("/users/", json=second_user)
+    assert duplicate_response.status_code == 400
+    assert duplicate_response.json()["detail"] == "Username already taken"
 
 
 def test_get_users(test_user):

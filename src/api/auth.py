@@ -4,9 +4,10 @@ from sqlmodel import Session, select
 from typing import Optional
 
 from src.auth.dependencies import get_current_user
-from src.auth.security import create_access_token, get_password_hash, verify_password
+from src.auth.security import create_access_token, verify_password
 from src.db.database import get_session
-from src.models.core import User
+from src.models.core import User, UserCreate
+from src.services.users import create_user_account
 
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
@@ -44,31 +45,15 @@ def register_user(
     payload: AuthRegisterRequest,
     session: Session = Depends(get_session),
 ):
-    existing_email = session.exec(select(User).where(User.email == payload.email)).first()
-    if existing_email is not None:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Email already registered",
-        )
-
-    existing_username = session.exec(
-        select(User).where(User.username == payload.username)
-    ).first()
-    if existing_username is not None:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Username already taken",
-        )
-
-    user = User(
-        username=payload.username,
-        email=payload.email,
-        full_name=payload.full_name,
-        hashed_password=get_password_hash(payload.password),
+    user = create_user_account(
+        session,
+        UserCreate(
+            username=payload.username,
+            email=payload.email,
+            password=payload.password,
+            full_name=payload.full_name,
+        ),
     )
-    session.add(user)
-    session.commit()
-    session.refresh(user)
     return user
 
 

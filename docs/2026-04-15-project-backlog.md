@@ -4,6 +4,15 @@ Last updated: 2026-04-16
 
 This document lists the main remaining engineering fixes and feature opportunities for the project after the strict auth-boundary cleanup. It is meant to help the team decide what to prioritize next for course delivery and for any post-course hardening.
 
+## Completed recently
+
+### Completed on 2026-04-16: unify user creation and auth registration
+- `POST /users/` and `POST /auth/register` now share the same backend creation logic.
+- Both paths enforce the same duplicate email and duplicate username checks.
+- Users created from the legacy `/users/` path now use the real password hashing flow and can log in through `/auth/login`.
+- Follow-up still recommended:
+  - Decide whether `/users/` should remain as a compatibility path or be formally deprecated later.
+  - Move login/register request and response schemas into a more consistent API schema module if the auth surface keeps growing.
 **Completed items:**
 - #1 Unify user creation - ✅ Completed (PR #75)
 - #2 Remove JWT secret fallback - ✅ Completed (PR #74)
@@ -12,6 +21,8 @@ This document lists the main remaining engineering fixes and feature opportuniti
 ## 1. High-priority fixes
 
 ### 1. Unify user creation into one path
+- Status:
+  - Completed as a compatibility-safe fix on 2026-04-16.
 - Current problem:
   - The repository still has both `/users` and `/auth/register`.
   - `src/api/users.py` stores passwords with a fake hash pattern, while `/auth/login` uses the real password verification flow.
@@ -19,8 +30,9 @@ This document lists the main remaining engineering fixes and feature opportuniti
   - Users created from `/users` are inconsistent with the auth system.
   - This is a correctness and security issue, not just a code-style issue.
 - Recommendation:
-  - Either remove `/users` creation entirely and keep only `/auth/register`, or make `/users` reuse the same password hashing logic as auth.
-  - Add tests that prove both valid creation and valid login for the chosen path.
+  - Short term: keep `/users` for compatibility, but route it through the same shared creation service as `/auth/register`.
+  - Later: decide whether to deprecate `/users` creation and keep only `/auth/register`.
+  - Keep regression tests that prove both valid creation and valid login for the chosen path.
 
 ### 2. Remove hard-coded fallback JWT secret
 - Current problem:
