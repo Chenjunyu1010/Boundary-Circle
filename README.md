@@ -16,6 +16,16 @@ Boundary Circle is a FastAPI + Streamlit project for circle-based identity, tag 
 - Matching recommendations for teams and users (backend APIs and Streamlit "Matching" tab)
 - Streamlit pages for auth, circle browsing, circle detail, and team-management UI scaffolding
 
+## Demo Flow Dependencies
+
+The main demonstratable paths in the Streamlit frontend now **default to the real backend**. Mock mode (`MOCK_MODE=true`) is strictly a fallback for development.
+
+During a demo or report evaluation, the following features depend entirely on a live `uvicorn` backend:
+- Registration and Login: Requires the real SQLite database and token issuance.
+- Circle and Tag Creation: Relies on `src/api/circles.py` and `src/api/tags.py` to persist data.
+- Team Creation and Joining: Drives through `src/api/teams.py`, executing actual business logic rather than session-state dictionary updates.
+- Value-Aware Matching: Calls `src/api/matching.py` to evaluate user-submitted values against team `required_tag_rules_json`.
+
 ## Project structure
 
 ```text

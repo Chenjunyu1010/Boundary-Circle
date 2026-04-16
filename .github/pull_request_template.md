@@ -5,7 +5,8 @@
 
 ## Verification
 
-- [ ] `pytest -q`
+- [ ] `pytest -v` (Full test suite)
+- [ ] `pytest --cov=src --cov=frontend --cov-report=term-missing` (Coverage check against repository)
 - [ ] Additional focused command(s), if any:
 
 ## Report Impact
