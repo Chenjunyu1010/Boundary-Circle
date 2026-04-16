@@ -319,7 +319,7 @@ def main():
 
     if not circle:
         st.error("Circle not found")
-        st.page_link("pages/circles.py", label="<- Back to Circle Hall", icon="⬅️")
+        st.page_link("pages/circles.py", label="Back to Circle Hall", icon="⬅️")
         return
 
     # Check join status
@@ -331,7 +331,7 @@ def main():
     st.markdown(f"**Description:** {circle.get('description', 'No description')}")
 
     # Back link
-    st.page_link("pages/circles.py", label="<- Back to Circle Hall", icon="⬅️")
+    st.page_link("pages/circles.py", label="Back to Circle Hall", icon="⬅️")
 
     st.markdown("---")
 
@@ -344,8 +344,8 @@ def main():
 
     with col1:
         if joined:
-            st.success("? You are a member")
-            st.page_link("pages/team_management.py", label="Go to Team Management", icon="⬅️")
+            st.success("✅ You are a member")
+            st.page_link("pages/team_management.py", label="Go to Team Management", icon="👥")
             if st.button("🚪 Leave Circle", type="secondary"):
                 success, message = leave_circle(circle_id)
                 if success:
