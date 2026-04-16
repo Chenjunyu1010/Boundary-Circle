@@ -1,8 +1,13 @@
 # Boundary Circle Backlog
 
-Last updated: 2026-04-15
+Last updated: 2026-04-16
 
 This document lists the main remaining engineering fixes and feature opportunities for the project after the strict auth-boundary cleanup. It is meant to help the team decide what to prioritize next for course delivery and for any post-course hardening.
+
+**Completed items:**
+- #1 Unify user creation - ✅ Completed (PR #75)
+- #2 Remove JWT secret fallback - ✅ Completed (PR #74)
+- #3 Fix encoding issues - ✅ Completed (PR #73)
 
 ## 1. High-priority fixes
 
@@ -36,14 +41,15 @@ This document lists the main remaining engineering fixes and feature opportuniti
   - Normalize affected files to UTF-8.
   - Replace corrupted comments and UI strings with clean English or clean Chinese consistently.
 
-### 4. Add static quality gates
-- Current problem:
-  - The project has tests and CI, but there is no consistent lint or type-check stage.
-- Risk:
-  - Regressions in typing, formatting, and import hygiene will not be caught early.
-- Recommendation:
-  - Add `ruff` and either `mypy` or `pyright`.
-  - Wire them into GitHub Actions.
+### 4. Add static quality gates (Skipped)
+- ~~Current problem:~~
+  - ~~The project has tests and CI, but there is no consistent lint or type-check stage.~~
+- ~~Risk:~~
+  - ~~Regressions in typing, formatting, and import hygiene will not be caught early.~~
+- ~~Recommendation:~~
+  - ~~Add `ruff` and either `mypy` or `pyright`.~~
+  - ~~Wire them into GitHub Actions.~~
+- **Status**: Skipped - Tests provide sufficient coverage; lint/type-check is optional for this course project.
 
 ### 5. Separate business logic from route handlers further
 - Current problem:
@@ -156,12 +162,12 @@ This document lists the main remaining engineering fixes and feature opportuniti
 
 ## 5. Suggested priority order
 
-If the team wants the best return on effort, the next sequence should be:
+As of 2026-04-16, items #1-#3 are completed and #4 is skipped. Remaining tasks:
 
-1. Unify `/users` and `/auth/register`.
-2. Remove the fallback JWT secret and centralize config.
-3. Fix corrupted encoding in docs and UI strings.
-4. Add lint/type-check gates.
+1. ~~Unify `/users` and `/auth/register`~~ ✅
+2. ~~Remove the fallback JWT secret and centralize config~~ ✅
+3. ~~Fix corrupted encoding in docs and UI strings~~ ✅
+4. ~~Add lint/type-check gates~~ (skipped - not critical for course project)
 5. Make team creation use real circle tag definitions.
 6. Improve the matching explanation UI.
 7. Decide whether to add one standout stretch feature, ideally LLM-generated matching explanations.
