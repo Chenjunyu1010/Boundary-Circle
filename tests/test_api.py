@@ -1,10 +1,15 @@
 import pytest
 from fastapi.testclient import TestClient
+import importlib
+import sys
+from pathlib import Path
+from types import ModuleType
 
 from src.main import app
 
 
 client = TestClient(app)
+ROOT = Path(__file__).resolve().parents[1]
 
 
 def register_and_login(
@@ -207,3 +212,187 @@ def test_get_circle(test_circle):
 def test_get_circle_not_found():
     response = client.get("/circles/999")
     assert response.status_code == 404
+
+
+def load_team_management_module(monkeypatch):
+    for name in [
+        "frontend.pages.team_management",
+        "frontend.utils.api",
+        "frontend.utils.auth",
+        "streamlit",
+        "utils.api",
+        "utils.auth",
+    ]:
+        sys.modules.pop(name, None)
+
+    fake_streamlit = ModuleType("streamlit")
+    fake_streamlit.session_state = {}
+    fake_streamlit.set_page_config = lambda *args, **kwargs: None
+    fake_streamlit.error = lambda *args, **kwargs: None
+    fake_streamlit.warning = lambda *args, **kwargs: None
+    fake_streamlit.info = lambda *args, **kwargs: None
+    fake_streamlit.success = lambda *args, **kwargs: None
+    fake_streamlit.markdown = lambda *args, **kwargs: None
+    fake_streamlit.write = lambda *args, **kwargs: None
+    fake_streamlit.caption = lambda *args, **kwargs: None
+    fake_streamlit.header = lambda *args, **kwargs: None
+    fake_streamlit.subheader = lambda *args, **kwargs: None
+    fake_streamlit.title = lambda *args, **kwargs: None
+    fake_streamlit.button = lambda *args, **kwargs: False
+    fake_streamlit.switch_page = lambda *args, **kwargs: None
+    fake_streamlit.rerun = lambda: None
+
+    monkeypatch.setitem(sys.modules, "streamlit", fake_streamlit)
+    monkeypatch.setenv("MOCK_MODE", "true")
+    monkeypatch.setenv("API_BASE_URL", "http://127.0.0.1:8000")
+
+    if str(ROOT) not in sys.path:
+        sys.path.insert(0, str(ROOT))
+
+    return fake_streamlit, importlib.import_module("frontend.pages.team_management")
+
+
+def test_team_management_normalize_team_tag_definition_preserves_selection_rules(monkeypatch):
+    _, team_management_module = load_team_management_module(monkeypatch)
+
+    normalized = team_management_module.normalize_team_tag_definition(
+        {
+            "id": 5,
+            "name": "Tech Stack",
+            "data_type": "multi_select",
+            "required": False,
+            "options": '["Python", "React", "SQL"]',
+            "max_selections": 2,
+        }
+    )
+
+    assert normalized["data_type"] == "multi_select"
+    assert normalized["options"] == ["Python", "React", "SQL"]
+    assert normalized["max_selections"] == 2
+
+
+def test_team_management_builds_required_tags_from_circle_schema(monkeypatch):
+    _, team_management_module = load_team_management_module(monkeypatch)
+
+    normalized_tags = [
+        team_management_module.normalize_team_tag_definition(
+            {
+                "id": 1,
+                "name": "Major",
+                "data_type": "single_select",
+                "options": '["Artificial Intelligence", "Software Engineering"]',
+            }
+        ),
+        team_management_module.normalize_team_tag_definition(
+            {
+                "id": 2,
+                "name": "Tech Stack",
+                "data_type": "multi_select",
+                "options": '["Python", "React", "SQL"]',
+                "max_selections": 2,
+            }
+        ),
+    ]
+
+    required_tags = team_management_module.build_team_required_tags_payload(
+        normalized_tags,
+        {
+            "Major": "Artificial Intelligence",
+            "Tech Stack": ["Python", "SQL"],
+        },
+    )
+
+    assert required_tags == ["Major", "Tech Stack"]
+
+
+def test_team_management_builds_required_tag_rules_from_circle_schema(monkeypatch):
+    _, team_management_module = load_team_management_module(monkeypatch)
+
+    normalized_tags = [
+        team_management_module.normalize_team_tag_definition(
+            {
+                "id": 1,
+                "name": "Major",
+                "data_type": "single_select",
+                "options": '["Artificial Intelligence", "Software Engineering"]',
+            }
+        ),
+        team_management_module.normalize_team_tag_definition(
+            {
+                "id": 2,
+                "name": "Tech Stack",
+                "data_type": "multi_select",
+                "options": '["Python", "React", "SQL"]',
+                "max_selections": 2,
+            }
+        ),
+    ]
+
+    required_tag_rules = team_management_module.build_team_required_tag_rules_payload(
+        normalized_tags,
+        {
+            "Major": "Artificial Intelligence",
+            "Tech Stack": ["Python", "SQL"],
+        },
+    )
+
+    assert required_tag_rules == [
+        {"tag_name": "Major", "expected_value": "Artificial Intelligence"},
+        {"tag_name": "Tech Stack", "expected_value": ["Python", "SQL"]},
+    ]
+
+
+def test_team_management_validate_requirement_value_rejects_multi_select_over_limit(monkeypatch):
+    _, team_management_module = load_team_management_module(monkeypatch)
+
+    normalized = team_management_module.normalize_team_tag_definition(
+        {
+            "id": 5,
+            "name": "Tech Stack",
+            "data_type": "multi_select",
+            "options": '["Python", "React", "SQL"]',
+            "max_selections": 2,
+        }
+    )
+
+    is_valid, error_message = team_management_module.validate_team_requirement_value(
+        normalized,
+        ["Python", "React", "SQL"],
+    )
+
+    assert is_valid is False
+    assert error_message == "Tech Stack allows at most 2 selections."
+
+
+def test_team_management_builds_numeric_required_tag_rules_with_numeric_types(monkeypatch):
+    _, team_management_module = load_team_management_module(monkeypatch)
+
+    normalized_tags = [
+        team_management_module.normalize_team_tag_definition(
+            {
+                "id": 3,
+                "name": "Weekly Hours",
+                "data_type": "integer",
+            }
+        ),
+        team_management_module.normalize_team_tag_definition(
+            {
+                "id": 4,
+                "name": "GPA",
+                "data_type": "float",
+            }
+        ),
+    ]
+
+    required_tag_rules = team_management_module.build_team_required_tag_rules_payload(
+        normalized_tags,
+        {
+            "Weekly Hours": "12",
+            "GPA": "3.5",
+        },
+    )
+
+    assert required_tag_rules == [
+        {"tag_name": "Weekly Hours", "expected_value": 12},
+        {"tag_name": "GPA", "expected_value": 3.5},
+    ]

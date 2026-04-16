@@ -1,6 +1,6 @@
 import json
 from enum import Enum
-from typing import Optional
+from typing import Optional, Union
 
 from sqlmodel import Field, SQLModel
 
@@ -25,6 +25,7 @@ class Team(SQLModel, table=True):
     max_members: int = Field(default=4, ge=2)
     status: TeamStatus = Field(default=TeamStatus.RECRUITING)
     required_tags_json: str = Field(default="[]")
+    required_tag_rules_json: str = Field(default="[]")
 
 
 class TeamMember(SQLModel, table=True):
@@ -41,12 +42,18 @@ class Invitation(SQLModel, table=True):
     status: InvitationStatus = Field(default=InvitationStatus.PENDING)
 
 
+class TeamRequirementRule(SQLModel):
+    tag_name: str
+    expected_value: Union[str, list[str], int, float, bool]
+
+
 class TeamCreate(SQLModel):
     name: str
     description: str = ""
     circle_id: int
     max_members: int = Field(ge=2)
     required_tags: list[str] = []
+    required_tag_rules: list[TeamRequirementRule] = []
 
 
 class TeamRead(SQLModel):
@@ -59,6 +66,7 @@ class TeamRead(SQLModel):
     current_members: int
     status: TeamStatus
     required_tags: list[str]
+    required_tag_rules: list[TeamRequirementRule] = []
     member_ids: list[int]
 
 
@@ -91,3 +99,27 @@ def decode_required_tags(required_tags_json: str) -> list[str]:
     if not isinstance(payload, list):
         return []
     return [str(item) for item in payload]
+
+
+def encode_required_tag_rules(required_tag_rules: list[TeamRequirementRule]) -> str:
+    return json.dumps([rule.model_dump() for rule in required_tag_rules])
+
+
+def decode_required_tag_rules(required_tag_rules_json: str) -> list[TeamRequirementRule]:
+    try:
+        payload = json.loads(required_tag_rules_json)
+    except json.JSONDecodeError:
+        return []
+
+    if not isinstance(payload, list):
+        return []
+
+    decoded_rules: list[TeamRequirementRule] = []
+    for item in payload:
+        if not isinstance(item, dict):
+            return []
+        try:
+            decoded_rules.append(TeamRequirementRule.model_validate(item))
+        except Exception:
+            return []
+    return decoded_rules

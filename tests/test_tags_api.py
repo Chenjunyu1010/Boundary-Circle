@@ -206,6 +206,153 @@ def test_create_tag_definition_enum_invalid(creator, circle):
     assert invalid_json.status_code == 400
 
 
+def test_create_tag_definition_single_select_valid(creator, circle):
+    _, creator_headers = creator
+
+    response = client.post(
+        f"/circles/{circle['id']}/tags",
+        headers=creator_headers,
+        json={
+            "name": "Major",
+            "data_type": "single_select",
+            "options": '["Artificial Intelligence", "Software Engineering"]',
+        },
+    )
+
+    assert response.status_code == 201
+    assert response.json()["data_type"] == "single_select"
+    assert response.json()["options"] == '["Artificial Intelligence", "Software Engineering"]'
+
+
+def test_create_tag_definition_multi_select_valid(creator, circle):
+    _, creator_headers = creator
+
+    response = client.post(
+        f"/circles/{circle['id']}/tags",
+        headers=creator_headers,
+        json={
+            "name": "Tech Stack",
+            "data_type": "multi_select",
+            "options": '["Python", "React", "SQL"]',
+            "max_selections": 2,
+        },
+    )
+
+    assert response.status_code == 201
+    assert response.json()["data_type"] == "multi_select"
+    assert response.json()["max_selections"] == 2
+
+
+def test_create_tag_definition_selection_type_requires_options(creator, circle):
+    _, creator_headers = creator
+
+    single_select_response = client.post(
+        f"/circles/{circle['id']}/tags",
+        headers=creator_headers,
+        json={"name": "Major", "data_type": "single_select"},
+    )
+    assert single_select_response.status_code == 400
+
+    multi_select_response = client.post(
+        f"/circles/{circle['id']}/tags",
+        headers=creator_headers,
+        json={"name": "Tech Stack", "data_type": "multi_select", "max_selections": 2},
+    )
+    assert multi_select_response.status_code == 400
+
+
+def test_submit_user_tag_single_select_valid(creator, normal_user, circle):
+    _, creator_headers = creator
+    _, normal_headers = normal_user
+    tag_definition = create_tag_definition(
+        circle["id"],
+        creator_headers,
+        {
+            "name": "Major",
+            "data_type": "single_select",
+            "options": '["Artificial Intelligence", "Software Engineering"]',
+        },
+    )
+
+    response = client.post(
+        f"/circles/{circle['id']}/tags/submit",
+        headers=normal_headers,
+        json={"tag_definition_id": tag_definition["id"], "value": "Artificial Intelligence"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["value"] == "Artificial Intelligence"
+
+
+def test_submit_user_tag_single_select_rejects_unknown_option(creator, normal_user, circle):
+    _, creator_headers = creator
+    _, normal_headers = normal_user
+    tag_definition = create_tag_definition(
+        circle["id"],
+        creator_headers,
+        {
+            "name": "Major",
+            "data_type": "single_select",
+            "options": '["Artificial Intelligence", "Software Engineering"]',
+        },
+    )
+
+    response = client.post(
+        f"/circles/{circle['id']}/tags/submit",
+        headers=normal_headers,
+        json={"tag_definition_id": tag_definition["id"], "value": "Mathematics"},
+    )
+
+    assert response.status_code == 400
+
+
+def test_submit_user_tag_multi_select_valid(creator, normal_user, circle):
+    _, creator_headers = creator
+    _, normal_headers = normal_user
+    tag_definition = create_tag_definition(
+        circle["id"],
+        creator_headers,
+        {
+            "name": "Tech Stack",
+            "data_type": "multi_select",
+            "options": '["Python", "React", "SQL"]',
+            "max_selections": 2,
+        },
+    )
+
+    response = client.post(
+        f"/circles/{circle['id']}/tags/submit",
+        headers=normal_headers,
+        json={"tag_definition_id": tag_definition["id"], "value": '["Python", "SQL"]'},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["value"] == '["Python", "SQL"]'
+
+
+def test_submit_user_tag_multi_select_rejects_too_many_values(creator, normal_user, circle):
+    _, creator_headers = creator
+    _, normal_headers = normal_user
+    tag_definition = create_tag_definition(
+        circle["id"],
+        creator_headers,
+        {
+            "name": "Tech Stack",
+            "data_type": "multi_select",
+            "options": '["Python", "React", "SQL"]',
+            "max_selections": 2,
+        },
+    )
+
+    response = client.post(
+        f"/circles/{circle['id']}/tags/submit",
+        headers=normal_headers,
+        json={"tag_definition_id": tag_definition["id"], "value": '["Python", "React", "SQL"]'},
+    )
+
+    assert response.status_code == 400
+
+
 def test_get_my_tags_and_delete(creator, normal_user, circle):
     _, creator_headers = creator
     _, normal_headers = normal_user

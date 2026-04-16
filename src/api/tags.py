@@ -13,10 +13,51 @@ from src.models.tags import TagDataType, TagDefinition, TagDefinitionCreate, Use
 router = APIRouter(tags=["Tags"])
 
 
+def parse_tag_options(options: Optional[str]) -> list[str]:
+    if not options:
+        raise ValueError("Options missing")
+
+    parsed_options = json.loads(options)
+    if not isinstance(parsed_options, list) or not parsed_options:
+        raise ValueError("Options must be a non-empty list")
+    if any(not isinstance(option, str) or not option.strip() for option in parsed_options):
+        raise ValueError("Each option must be a non-empty string")
+    return parsed_options
+
+
+def validate_tag_definition_payload(tag_in: TagDefinitionCreate) -> None:
+    selection_types = {
+        TagDataType.ENUM,
+        TagDataType.SINGLE_SELECT,
+        TagDataType.MULTI_SELECT,
+    }
+    if tag_in.data_type not in selection_types:
+        return
+
+    if not tag_in.options:
+        raise HTTPException(status_code=400, detail="Selection types must provide 'options'")
+
+    try:
+        options = parse_tag_options(tag_in.options)
+    except (json.JSONDecodeError, ValueError):
+        raise HTTPException(
+            status_code=400,
+            detail="'options' must be a valid JSON list of strings",
+        ) from None
+
+    if tag_in.data_type == TagDataType.MULTI_SELECT and tag_in.max_selections is not None:
+        if tag_in.max_selections > len(options):
+            raise HTTPException(
+                status_code=400,
+                detail="'max_selections' cannot exceed the number of options",
+            )
+
+
 def validate_tag_value(
     value: str,
     data_type: TagDataType,
     options: Optional[str] = None,
+    max_selections: Optional[int] = None,
 ) -> bool:
     """Validate a tag value against its declared type."""
     try:
@@ -27,10 +68,19 @@ def validate_tag_value(
         elif data_type == TagDataType.BOOLEAN:
             if value.lower() not in ["true", "false", "1", "0"]:
                 raise ValueError
-        elif data_type == TagDataType.ENUM:
-            if not options:
-                raise ValueError("Enum options missing")
-            if value not in json.loads(options):
+        elif data_type in {TagDataType.ENUM, TagDataType.SINGLE_SELECT}:
+            if value not in parse_tag_options(options):
+                raise ValueError
+        elif data_type == TagDataType.MULTI_SELECT:
+            selected_values = json.loads(value)
+            if not isinstance(selected_values, list) or not selected_values:
+                raise ValueError
+
+            valid_options = parse_tag_options(options)
+            if any(not isinstance(item, str) or item not in valid_options for item in selected_values):
+                raise ValueError
+
+            if max_selections is not None and len(selected_values) > max_selections:
                 raise ValueError
         return True
     except Exception:
@@ -59,18 +109,7 @@ def create_tag_definition(
     if circle.creator_id != current_user_id:
         raise HTTPException(status_code=403, detail="Only circle creator can define tags")
 
-    if tag_in.data_type == TagDataType.ENUM:
-        if not tag_in.options:
-            raise HTTPException(status_code=400, detail="ENUM type must provide 'options'")
-        try:
-            options = json.loads(tag_in.options)
-            if not isinstance(options, list) or not options:
-                raise ValueError
-        except Exception:
-            raise HTTPException(
-                status_code=400,
-                detail="'options' must be a valid JSON list of strings",
-            ) from None
+    validate_tag_definition_payload(tag_in)
 
     db_tag_def = TagDefinition.model_validate(tag_in, update={"circle_id": circle_id})
     session.add(db_tag_def)
@@ -124,7 +163,12 @@ def submit_user_tag(
     if not tag_def or tag_def.circle_id != circle_id:
         raise HTTPException(status_code=404, detail="Tag definition not found in this circle")
 
-    if not validate_tag_value(tag_submit.value, tag_def.data_type, tag_def.options):
+    if not validate_tag_value(
+        tag_submit.value,
+        tag_def.data_type,
+        tag_def.options,
+        tag_def.max_selections,
+    ):
         raise HTTPException(status_code=400, detail=f"Invalid value for type {tag_def.data_type}")
 
     existing_tag = session.exec(
@@ -204,23 +248,13 @@ def update_tag_definition(
     if circle.creator_id != current_user_id:
         raise HTTPException(status_code=403, detail="Only circle creator can update tags")
 
-    if tag_update.data_type == TagDataType.ENUM:
-        if not tag_update.options:
-            raise HTTPException(status_code=400, detail="ENUM type must provide 'options'")
-        try:
-            options = json.loads(tag_update.options)
-            if not isinstance(options, list) or not options:
-                raise ValueError
-        except Exception:
-            raise HTTPException(
-                status_code=400,
-                detail="'options' must be a valid JSON list of strings",
-            ) from None
+    validate_tag_definition_payload(tag_update)
 
     tag_def.name = tag_update.name
     tag_def.data_type = tag_update.data_type
     tag_def.required = tag_update.required
     tag_def.options = tag_update.options
+    tag_def.max_selections = tag_update.max_selections
     tag_def.description = tag_update.description
 
     session.add(tag_def)
