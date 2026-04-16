@@ -1,12 +1,24 @@
 # Boundary Circle Backlog
 
-Last updated: 2026-04-15
+Last updated: 2026-04-16
 
 This document lists the main remaining engineering fixes and feature opportunities for the project after the strict auth-boundary cleanup. It is meant to help the team decide what to prioritize next for course delivery and for any post-course hardening.
+
+## Completed recently
+
+### Completed on 2026-04-16: unify user creation and auth registration
+- `POST /users/` and `POST /auth/register` now share the same backend creation logic.
+- Both paths enforce the same duplicate email and duplicate username checks.
+- Users created from the legacy `/users/` path now use the real password hashing flow and can log in through `/auth/login`.
+- Follow-up still recommended:
+  - Decide whether `/users/` should remain as a compatibility path or be formally deprecated later.
+  - Move login/register request and response schemas into a more consistent API schema module if the auth surface keeps growing.
 
 ## 1. High-priority fixes
 
 ### 1. Unify user creation into one path
+- Status:
+  - Completed as a compatibility-safe fix on 2026-04-16.
 - Current problem:
   - The repository still has both `/users` and `/auth/register`.
   - `src/api/users.py` stores passwords with a fake hash pattern, while `/auth/login` uses the real password verification flow.
@@ -14,8 +26,9 @@ This document lists the main remaining engineering fixes and feature opportuniti
   - Users created from `/users` are inconsistent with the auth system.
   - This is a correctness and security issue, not just a code-style issue.
 - Recommendation:
-  - Either remove `/users` creation entirely and keep only `/auth/register`, or make `/users` reuse the same password hashing logic as auth.
-  - Add tests that prove both valid creation and valid login for the chosen path.
+  - Short term: keep `/users` for compatibility, but route it through the same shared creation service as `/auth/register`.
+  - Later: decide whether to deprecate `/users` creation and keep only `/auth/register`.
+  - Keep regression tests that prove both valid creation and valid login for the chosen path.
 
 ### 2. Remove hard-coded fallback JWT secret
 - Current problem:
@@ -158,10 +171,9 @@ This document lists the main remaining engineering fixes and feature opportuniti
 
 If the team wants the best return on effort, the next sequence should be:
 
-1. Unify `/users` and `/auth/register`.
-2. Remove the fallback JWT secret and centralize config.
-3. Fix corrupted encoding in docs and UI strings.
-4. Add lint/type-check gates.
-5. Make team creation use real circle tag definitions.
-6. Improve the matching explanation UI.
-7. Decide whether to add one standout stretch feature, ideally LLM-generated matching explanations.
+1. Fix corrupted encoding in docs and UI strings.
+2. Add lint/type-check gates.
+3. Make team creation use real circle tag definitions.
+4. Improve the matching explanation UI.
+5. Decide whether to formally deprecate `/users` creation in favor of `/auth/register` only.
+6. Decide whether to add one standout stretch feature, ideally LLM-generated matching explanations.
