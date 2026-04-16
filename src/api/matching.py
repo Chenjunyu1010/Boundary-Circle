@@ -24,7 +24,6 @@ from src.services.matching import (
     describe_missing_rules,
     get_team_member_ids,
     get_team_required_tag_names,
-    get_user_tag_names_for_circle,
     get_user_tag_values_for_circle,
     jaccard_score,
 )

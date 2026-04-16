@@ -33,9 +33,15 @@ def get_user_tag_names_for_circle(session: Session, user_id: int, circle_id: int
 def parse_user_tag_value(tag_definition: TagDefinition, raw_value: str) -> Any:
     """Parse a stored user tag value according to its definition type."""
     if tag_definition.data_type == TagDataType.INTEGER:
-        return int(raw_value)
+        try:
+            return int(raw_value)
+        except (TypeError, ValueError):
+            return raw_value
     if tag_definition.data_type == TagDataType.FLOAT:
-        return float(raw_value)
+        try:
+            return float(raw_value)
+        except (TypeError, ValueError):
+            return raw_value
     if tag_definition.data_type == TagDataType.BOOLEAN:
         return str(raw_value).lower() in {"true", "1"}
     if tag_definition.data_type == TagDataType.MULTI_SELECT:
@@ -76,7 +82,7 @@ def build_team_profile(session: Session, team: Team) -> Set[str]:
     - the team's required tag names, and
     - all tag names of current team members within the same circle.
     """
-    required_tags = set(decode_required_tags(team.required_tags_json))
+    required_tags = get_team_required_tag_names(team)
 
     member_ids = get_team_member_ids(session, team.id or 0)
     member_tag_names: Set[str] = set()

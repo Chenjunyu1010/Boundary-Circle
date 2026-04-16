@@ -362,3 +362,37 @@ def test_team_management_validate_requirement_value_rejects_multi_select_over_li
 
     assert is_valid is False
     assert error_message == "Tech Stack allows at most 2 selections."
+
+
+def test_team_management_builds_numeric_required_tag_rules_with_numeric_types(monkeypatch):
+    _, team_management_module = load_team_management_module(monkeypatch)
+
+    normalized_tags = [
+        team_management_module.normalize_team_tag_definition(
+            {
+                "id": 3,
+                "name": "Weekly Hours",
+                "data_type": "integer",
+            }
+        ),
+        team_management_module.normalize_team_tag_definition(
+            {
+                "id": 4,
+                "name": "GPA",
+                "data_type": "float",
+            }
+        ),
+    ]
+
+    required_tag_rules = team_management_module.build_team_required_tag_rules_payload(
+        normalized_tags,
+        {
+            "Weekly Hours": "12",
+            "GPA": "3.5",
+        },
+    )
+
+    assert required_tag_rules == [
+        {"tag_name": "Weekly Hours", "expected_value": 12},
+        {"tag_name": "GPA", "expected_value": 3.5},
+    ]

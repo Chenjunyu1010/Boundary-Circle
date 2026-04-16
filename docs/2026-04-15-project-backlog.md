@@ -85,6 +85,15 @@ This document tracks the main engineering fixes and feature opportunities after 
   - Centralize config with `pydantic-settings`.
   - Explicitly model database path, JWT secret, token expiry, API base URLs, and mock mode.
 
+### 6a. Add lightweight database upgrade handling for SQLite schema changes
+- Current problem:
+  - The project still relies on `SQLModel.metadata.create_all()` without migrations.
+  - Recent additions such as `TagDefinition.max_selections` and `Team.required_tag_rules_json` will not appear automatically in existing SQLite files.
+- Recommendation:
+  - Add a minimal startup upgrade path for local SQLite databases.
+  - At minimum, detect and add missing columns needed by the current schema.
+  - Longer term, decide whether to introduce a proper migration tool if the schema keeps changing.
+
 ### 7. Improve API consistency and error payloads
 - Current problem:
   - Some endpoints return plain dictionaries, some rely on response models, and error detail style is not fully standardized.

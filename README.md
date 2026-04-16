@@ -185,8 +185,6 @@ For selection-style tags:
 - `multi_select` can also define `max_selections`
 - backend validation remains the source of truth
 
-The current matching backend still treats team requirements as tag-name requirements, so the new schema-driven team creation flow improves correctness and UX without yet adding value-level matching.
-
 ## Matching semantics
 
 Team creation can now persist structured requirement rules alongside legacy `required_tags`.

@@ -200,7 +200,33 @@ def validate_team_requirement_value(tag: dict, value) -> tuple[bool, str]:
         if max_selections is not None and len(value) > max_selections:
             return False, f"{tag['name']} allows at most {max_selections} selections."
 
+    if tag.get("data_type") == "integer":
+        try:
+            int(value)
+        except (TypeError, ValueError):
+            return False, f"{tag['name']} must be a whole number."
+
+    if tag.get("data_type") == "float":
+        try:
+            float(value)
+        except (TypeError, ValueError):
+            return False, f"{tag['name']} must be a number."
+
     return True, ""
+
+
+def normalize_team_requirement_value(tag: dict, value):
+    """Convert team requirement values to backend-compatible typed payloads."""
+    if value in (None, "", []):
+        return value
+
+    if tag.get("data_type") == "integer":
+        return int(value)
+
+    if tag.get("data_type") == "float":
+        return float(value)
+
+    return value
 
 
 def build_team_required_tags_payload(tag_definitions: list[dict], tag_data: dict) -> list[str]:
@@ -221,10 +247,11 @@ def build_team_required_tag_rules_payload(tag_definitions: list[dict], tag_data:
         value = tag_data.get(tag["name"])
         if value in (None, "", []):
             continue
+        normalized_value = normalize_team_requirement_value(tag, value)
         required_tag_rules.append(
             {
                 "tag_name": tag["name"],
-                "expected_value": value,
+                "expected_value": normalized_value,
             }
         )
     return required_tag_rules

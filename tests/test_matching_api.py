@@ -6,7 +6,8 @@ from fastapi.testclient import TestClient
 
 from src.main import app
 from src.models.tags import CircleMember, CircleRole, TagDataType, TagDefinition, UserTag
-from src.models.teams import TeamMember
+from src.models.teams import Team, TeamMember
+from src.services.matching import build_team_profile, parse_user_tag_value
 
 
 client = TestClient(app)
@@ -719,3 +720,48 @@ def test_match_teams_for_user_uses_structured_value_rules(db_session) -> None:
     team_names = [item["team"]["name"] for item in match_response.json()]
     assert "AI Only Team" in team_names
     assert "SE Only Team" not in team_names
+
+
+def test_parse_user_tag_value_handles_malformed_numeric_values_gracefully() -> None:
+    integer_tag = TagDefinition(circle_id=1, name="Years", data_type=TagDataType.INTEGER, required=False)
+    float_tag = TagDefinition(circle_id=1, name="GPA", data_type=TagDataType.FLOAT, required=False)
+
+    assert parse_user_tag_value(integer_tag, "not-an-int") == "not-an-int"
+    assert parse_user_tag_value(float_tag, "not-a-float") == "not-a-float"
+
+
+def test_build_team_profile_prefers_structured_rule_names_when_present(db_session) -> None:
+    creator, creator_headers = register_and_login("profile_creator", "profile_creator@example.com")
+    circle_response = client.post(
+        "/circles/",
+        headers=creator_headers,
+        json={"name": "Profile Circle", "description": "Structured profile names"},
+    )
+    assert circle_response.status_code == 201
+    circle = circle_response.json()
+
+    team_response = client.post(
+        "/teams",
+        headers=creator_headers,
+        json={
+            "name": "Structured Profile Team",
+            "description": "Uses only structured rule names",
+            "circle_id": circle["id"],
+            "max_members": 4,
+            "required_tags": [],
+            "required_tag_rules": [
+                {"tag_name": "Major", "expected_value": "Artificial Intelligence"},
+                {"tag_name": "Tech Stack", "expected_value": ["Python"]},
+            ],
+        },
+    )
+    assert team_response.status_code == 201
+    team_payload = team_response.json()
+
+    team = db_session.get(Team, team_payload["id"])
+    assert team is not None
+
+    profile = build_team_profile(db_session, team)
+
+    assert "Major" in profile
+    assert "Tech Stack" in profile
