@@ -1,14 +1,48 @@
+from typing import Optional
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, select
 
-from src.auth.dependencies import get_current_user
+from src.auth.dependencies import get_current_user, get_optional_current_user
 from src.db.database import get_session
 from src.models.core import Circle, CircleCreate, CircleRead, User
 from src.models.tags import CircleMember, CircleRole, UserTag
 
 
 router = APIRouter(prefix="/circles", tags=["Circles"])
+
+
+def build_circle_read(
+    circle: Circle,
+    session: Session,
+    current_user: Optional[User] = None,
+) -> CircleRead:
+    """Build a circle read payload enriched with creator identity."""
+    creator = session.get(User, circle.creator_id)
+    current_user_id = current_user.id if current_user is not None else None
+    is_creator = current_user_id is not None and circle.creator_id == current_user_id
+    is_member = is_creator
+    if current_user_id is not None and not is_member:
+        membership = session.exec(
+            select(CircleMember).where(
+                CircleMember.circle_id == circle.id,
+                CircleMember.user_id == current_user_id,
+            )
+        ).first()
+        is_member = membership is not None
+
+    return CircleRead(
+        id=circle.id,
+        name=circle.name,
+        description=circle.description,
+        category=circle.category,
+        creator_id=circle.creator_id,
+        creator_username=creator.username if creator is not None else None,
+        creator_full_name=creator.full_name if creator is not None else None,
+        is_member=is_member,
+        is_creator=is_creator,
+    )
 
 
 @router.post("/", response_model=CircleRead, status_code=status.HTTP_201_CREATED)
@@ -46,20 +80,30 @@ def create_circle(
     )
     session.commit()
     session.refresh(db_circle)
-    return db_circle
+    return build_circle_read(db_circle, session, current_user)
 
 
 @router.get("/", response_model=list[CircleRead])
-def read_circles(skip: int = 0, limit: int = 100, session: Session = Depends(get_session)):
-    return session.exec(select(Circle).offset(skip).limit(limit)).all()
+def read_circles(
+    skip: int = 0,
+    limit: int = 100,
+    current_user: Optional[User] = Depends(get_optional_current_user),
+    session: Session = Depends(get_session),
+):
+    circles = session.exec(select(Circle).offset(skip).limit(limit)).all()
+    return [build_circle_read(circle, session, current_user) for circle in circles]
 
 
 @router.get("/{circle_id}", response_model=CircleRead)
-def read_circle(circle_id: int, session: Session = Depends(get_session)):
+def read_circle(
+    circle_id: int,
+    current_user: Optional[User] = Depends(get_optional_current_user),
+    session: Session = Depends(get_session),
+):
     circle = session.get(Circle, circle_id)
     if not circle:
         raise HTTPException(status_code=404, detail="Circle not found")
-    return circle
+    return build_circle_read(circle, session, current_user)
 
 
 @router.post("/{circle_id}/join", status_code=status.HTTP_200_OK)

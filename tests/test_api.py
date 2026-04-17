@@ -193,6 +193,7 @@ def test_create_circle_uses_authenticated_user(authenticated_user):
     data = response.json()
     assert data["name"] == "Authenticated Circle"
     assert data["creator_id"] == user["id"]
+    assert data["creator_username"] == user["username"]
 
 
 def test_get_circles(test_circle):
@@ -207,6 +208,30 @@ def test_get_circle(test_circle):
     assert response.status_code == 200
     data = response.json()
     assert data["name"] == "Test Circle"
+    assert data["creator_username"] == "circleowner"
+
+
+def test_get_circles_marks_creator_and_membership_state(authenticated_user):
+    user, headers = authenticated_user
+    circle_response = client.post(
+        "/circles/",
+        headers=headers,
+        json={
+            "name": "Membership State Circle",
+            "description": "Circle for membership flags",
+            "category": "Course",
+        },
+    )
+    assert circle_response.status_code == 201
+
+    circles_response = client.get("/circles/", headers=headers)
+    assert circles_response.status_code == 200
+    circle = next(
+        item for item in circles_response.json() if item["name"] == "Membership State Circle"
+    )
+    assert circle["creator_id"] == user["id"]
+    assert circle["is_creator"] is True
+    assert circle["is_member"] is True
 
 
 def test_get_circle_not_found():

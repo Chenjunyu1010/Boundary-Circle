@@ -126,9 +126,10 @@ def test_join_submit_tags_create_team_invite_and_accept_flow():
     assert respond_response.status_code == 200
     assert respond_response.json()["team_status"] == "Locked"
 
-    teams_response = client.get(f"/circles/{circle['id']}/teams")
+    teams_response = client.get(f"/circles/{circle['id']}/teams", headers=creator_headers)
     assert teams_response.status_code == 200
     stored_team = teams_response.json()[0]
     assert stored_team["status"] == "Locked"
     assert stored_team["current_members"] == 2
     assert stored_team["member_ids"] == [creator["id"], invitee["id"]]
+    assert stored_team["creator_username"] == creator["username"]

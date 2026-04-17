@@ -85,6 +85,12 @@ def prepare_circle_detail_navigation(circle_id: int) -> None:
     st.session_state.circle_hall_focus_detail = True
 
 
+def view_circle_detail(circle_id: int) -> None:
+    """Open a circle detail view immediately on the current rerun."""
+    prepare_circle_detail_navigation(circle_id)
+    st.rerun()
+
+
 def main() -> None:
     """Main page content with list and detail tabs."""
     st.title("Circle Hall")
@@ -199,13 +205,21 @@ def main() -> None:
                         st.caption(
                             f"Category: {circle.get('category', 'General')}"
                         )
+                        if circle.get("is_creator"):
+                            st.caption("Status: You created this circle")
+                        elif circle.get("is_member"):
+                            st.caption("Status: Joined")
+                        else:
+                            st.caption("Status: Not joined")
+                        creator_label = circle.get("creator_username") or "Unknown"
+                        st.caption(f"Creator: {creator_label}")
                         st.write(circle.get("description", "No description"))
 
                         if st.button(
                             "View Details ->",
                             key=f"view_circle_{circle.get('id')}",
                         ):
-                            open_circle_detail(circle.get("id"))
+                            view_circle_detail(circle.get("id"))
 
                 if i + 1 < len(circles):
                     with col2:
@@ -217,6 +231,14 @@ def main() -> None:
                             st.caption(
                                 f"Category: {circle.get('category', 'General')}"
                             )
+                            if circle.get("is_creator"):
+                                st.caption("Status: You created this circle")
+                            elif circle.get("is_member"):
+                                st.caption("Status: Joined")
+                            else:
+                                st.caption("Status: Not joined")
+                            creator_label = circle.get("creator_username") or "Unknown"
+                            st.caption(f"Creator: {creator_label}")
                             st.write(
                                 circle.get("description", "No description")
                             )
@@ -225,7 +247,7 @@ def main() -> None:
                                 "View Details ->",
                                 key=f"view_circle_{circle.get('id')}",
                             ):
-                                open_circle_detail(circle.get("id"))
+                                view_circle_detail(circle.get("id"))
 
     # --- Detail tab: reuse full circle_detail layout inside the tab ---
     with detail_tab:
