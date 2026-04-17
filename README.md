@@ -95,6 +95,15 @@ streamlit run frontend/Home.py
 
 The backend creates a local SQLite database file automatically under `data/boundary_circle.db` when needed.
 
+On startup, the app also applies a small SQLite-only compatibility upgrade for known
+missing columns in older local database files. This currently covers:
+
+- `tagdefinition.max_selections`
+- `team.required_tag_rules_json`
+
+This is a lightweight local schema patch for developer convenience, not a full
+migration framework.
+
 ## Tests
 
 Run the full suite:
