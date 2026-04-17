@@ -128,7 +128,7 @@ Run:
 Use Nginx to route:
 
 - `/` to Streamlit
-- `/api/` to FastAPI
+- `/api/` to FastAPI, with the `/api` prefix stripped before proxying unless the FastAPI app is explicitly mounted under `/api`
 
 Advantages:
 

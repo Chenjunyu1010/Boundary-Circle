@@ -83,7 +83,7 @@ Recommended rationale:
 
 Recommended storage pattern:
 
-- `User` continues to store account identity fields and current auth-facing user fields such as `username`, `email`, `hashed_password`, and `full_name`
+- `User` continues to store account identity, auth-related, and credential fields such as `username`, `email`, `hashed_password`, and `full_name`
 - `UserProfile` stores profile-only details such as `gender`, `birthday`, and `bio`, plus field-level visibility toggles
 
 Reconciliation with the current codebase:
@@ -93,6 +93,7 @@ Reconciliation with the current codebase:
 - the new dedicated profile APIs should compose profile responses from both tables:
   - identity fields such as `username`, `email`, and `full_name` from `User`
   - profile fields and visibility settings from `UserProfile`
+- among the fields stored on `User`, `username`, `email`, and `full_name` remain user-facing response fields, while `hashed_password` remains stored only for authentication
 - no backfill migration is required for existing `full_name` data in version one
 - if a later refactor wants all profile attributes in one place, that should be a separate migration with explicit auth schema updates
 
