@@ -24,9 +24,9 @@ This document maps progress-report claims to repository evidence that can be che
 
 ## 4. Current Feature Status and Scope Update
 
-- Stable implemented backend areas: `src/api/auth.py`, `src/api/circles.py`, `src/api/tags.py`
-- Frontend team-management scaffolding: `frontend/pages/team_management.py`
-- Mock-heavy frontend API behavior: `frontend/utils/api.py`
+- Stable implemented backend areas: `src/api/auth.py`, `src/api/circles.py`, `src/api/tags.py`, `src/api/teams.py`, `src/api/matching.py`
+- Frontend team-management scaffolding: `frontend/pages/team_management.py`, aligned with the real backend.
+- Frontend API client: `frontend/utils/api.py` with real backend integration replacing mock behaviors.
 
 ## 5. Testing and CI Status
 
@@ -42,18 +42,17 @@ This document maps progress-report claims to repository evidence that can be che
 
 ## 6. Risks, Issues, and Actions Taken
 
-- Incomplete team-management backend relative to frontend expectations: `README.md`, `frontend/pages/team_management.py`, `frontend/utils/api.py`
+- Complex team matching rules implementation and backend transition completed: `README.md`, `src/api/matching.py`, `src/api/teams.py`
 - CI maturity improvements and remaining limitations: `.github/workflows/ci.yml`
 
 ## 7. Next Milestones and Task Assignment
 
 The most defensible next milestones should be grounded in currently visible gaps:
 
-- complete non-mock team and invitation backend support
-- align frontend pages with real backend endpoints
-- continue expanding automated tests around unfinished workflows
+- continue expanding automated tests around edge cases and remaining workflow combinations
+- enhance frontend UI/UX for complex structured tag submission and team requirements
 - use uploaded CI artifacts as recurring evidence for progress tracking
 
 ## Writing Guardrail
 
-Use direct file evidence first. Do not describe mocked frontend behavior as completed backend functionality unless matching server endpoints exist in `src/api/`.
+Use direct file evidence first. Ensure backend API logic in `src/api/` and `src/services/` accurately maps to the features claimed in progress reports.
