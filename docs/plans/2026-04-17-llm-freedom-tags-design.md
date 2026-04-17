@@ -298,9 +298,9 @@ The free-text channel compares the team extracted profile against the user extra
 
 Recommended per-field scoring:
 
-- `keywords_score = overlap(user.keywords, team.keywords) / len(team.keywords)`
-- `traits_score = overlap(user.traits, team.traits) / len(team.traits)`
-- `domains_score = overlap(user.domains, team.domains) / len(team.domains)`
+- `keywords_score = 0.0 if len(team.keywords) == 0 else overlap(user.keywords, team.keywords) / len(team.keywords)`
+- `traits_score = 0.0 if len(team.traits) == 0 else overlap(user.traits, team.traits) / len(team.traits)`
+- `domains_score = 0.0 if len(team.domains) == 0 else overlap(user.domains, team.domains) / len(team.domains)`
 
 Recommended weighted free-text score:
 
@@ -320,6 +320,8 @@ Rationale:
 If the team free-text requirement is empty, `freedom_score` should be `0.0`.
 
 If the user free-text profile is empty or extraction produced no positive signals, `freedom_score` should also be `0.0`.
+
+If the team text exists but extraction yields an empty array for one field, that field's score should still resolve to `0.0` rather than dividing by zero.
 
 ### Combined score
 

@@ -83,8 +83,18 @@ Recommended rationale:
 
 Recommended storage pattern:
 
-- `User` continues to store account identity such as `username`, `email`, and `hashed_password`
-- `UserProfile` stores profile details and visibility toggles
+- `User` continues to store account identity fields and current auth-facing user fields such as `username`, `email`, `hashed_password`, and `full_name`
+- `UserProfile` stores profile-only details such as `gender`, `birthday`, and `bio`, plus field-level visibility toggles
+
+Reconciliation with the current codebase:
+
+- the current code already stores `full_name` on `User`, so version one should keep `full_name` there instead of moving it immediately
+- `/auth/me` and existing auth or user response models should continue to expose `full_name` from `User` to avoid unnecessary breakage
+- the new dedicated profile APIs should compose profile responses from both tables:
+  - identity fields such as `username`, `email`, and `full_name` from `User`
+  - profile fields and visibility settings from `UserProfile`
+- no backfill migration is required for existing `full_name` data in version one
+- if a later refactor wants all profile attributes in one place, that should be a separate migration with explicit auth schema updates
 
 ### One page, two views
 
@@ -116,7 +126,6 @@ Recommended fields:
 
 - `id`
 - `user_id`
-- `full_name`
 - `gender`
 - `birthday`
 - `bio`
@@ -131,10 +140,11 @@ Recommended fields:
 Field storage should follow this split:
 
 - `email` remains on `User`
-- `full_name`, `gender`, `birthday`, and `bio` belong to `UserProfile`
+- `full_name` remains on `User`
+- `gender`, `birthday`, and `bio` belong to `UserProfile`
 - all `show_*` toggles belong to `UserProfile`
 
-This allows the API to decide whether to expose `email` publicly without moving the real account field out of `User`.
+This allows the API to decide whether to expose `email` or `full_name` publicly without moving the real account fields out of `User`.
 
 ### Defaults
 
