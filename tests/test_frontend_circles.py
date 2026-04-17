@@ -85,6 +85,8 @@ def test_create_circle_does_not_send_creator_id_query_param(monkeypatch):
     class Response:
         ok = True
         reason = "OK"
+        def json(self):
+            return {"id": 9}
 
     captured = {}
 
@@ -97,12 +99,23 @@ def test_create_circle_does_not_send_creator_id_query_param(monkeypatch):
     monkeypatch.setattr(circles_module, "get_current_user", lambda: {"id": 42})
     monkeypatch.setattr(circles_module.api_client, "post", fake_post)
 
-    success, message = circles_module.create_circle("AI Circle", "desc", "Course")
+    success, message, circle_id = circles_module.create_circle("AI Circle", "desc", "Course")
 
     assert success is True
     assert message == "Circle created successfully!"
+    assert circle_id == 9
     assert captured["endpoint"] == "/circles"
     assert captured["params"] is None
+
+
+def test_prepare_circle_detail_navigation_sets_detail_focus(monkeypatch):
+    fake_streamlit, circles_module, _ = load_circle_modules(monkeypatch)
+
+    circles_module.prepare_circle_detail_navigation(12)
+
+    assert fake_streamlit.session_state.selected_circle_id == 12
+    assert fake_streamlit.session_state.current_circle_id == 12
+    assert fake_streamlit.session_state.circle_hall_focus_detail is True
 
 
 def test_submit_member_tags_does_not_send_current_user_id_query_param(monkeypatch):
