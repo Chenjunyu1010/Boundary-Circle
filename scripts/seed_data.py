@@ -286,9 +286,10 @@ def build_stress_dataset() -> DatasetSeed:
     circles: List[CircleSeed] = []
     for index, (slug, name, category, members) in enumerate(circle_specs):
         user_tags: Dict[str, Dict[str, Any]] = {}
+        base_user_tags: Dict[str, Dict[str, Any]] = {}
         for offset, member in enumerate(members):
             user_index = user_order.index(member)
-            user_tags[member] = {
+            base_values = {
                 "Major": majors[(user_index + index) % len(majors)],
                 "Preferred Role": roles[(user_index + index) % len(roles)],
                 "Tech Stack": stacks[(user_index + offset) % len(stacks)],
@@ -296,6 +297,19 @@ def build_stress_dataset() -> DatasetSeed:
                 "Open To Lead": (user_index + index) % 2 == 0,
                 "Focus Track": ["AI Infra", "Campus Ops", "Data Viz", "Community"][((user_index // 2) + index) % 4],
             }
+            values = dict(base_values)
+            if (user_index + index) % 3 == 0:
+                values.pop("Open To Lead")
+            if (user_index + index) % 4 == 0:
+                values.pop("Focus Track")
+            if (user_index + index) % 5 == 0:
+                values.pop("Weekly Hours")
+            if (user_index + index) % 6 == 0:
+                values.pop("Tech Stack")
+            if (user_index + index) % 7 == 0:
+                values.pop("Preferred Role")
+            base_user_tags[member] = base_values
+            user_tags[member] = values
 
         teams = [
             TeamSeed(
@@ -307,8 +321,14 @@ def build_stress_dataset() -> DatasetSeed:
                 members=members[: min(3, len(members))],
                 required_tags=["Preferred Role", "Tech Stack"] if index % 2 == 0 else [],
                 required_tag_rules=[] if index % 2 == 0 else [
-                    TeamRequirementRule(tag_name="Focus Track", expected_value=user_tags[members[0]]["Focus Track"]),
-                    TeamRequirementRule(tag_name="Tech Stack", expected_value=user_tags[members[1]]["Tech Stack"]),
+                    TeamRequirementRule(
+                        tag_name="Focus Track",
+                        expected_value=base_user_tags[members[0]]["Focus Track"],
+                    ),
+                    TeamRequirementRule(
+                        tag_name="Tech Stack",
+                        expected_value=base_user_tags[members[1]]["Tech Stack"],
+                    ),
                 ],
             ),
             TeamSeed(
@@ -320,7 +340,10 @@ def build_stress_dataset() -> DatasetSeed:
                 members=members[2:5],
                 required_tags=[],
                 required_tag_rules=[
-                    TeamRequirementRule(tag_name="Major", expected_value=user_tags[members[2]]["Major"]),
+                    TeamRequirementRule(
+                        tag_name="Major",
+                        expected_value=base_user_tags[members[2]]["Major"],
+                    ),
                 ],
             ),
         ]

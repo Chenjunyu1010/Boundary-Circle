@@ -144,6 +144,78 @@ def test_stress_seed_pending_invitation_can_lock_team(db_session):
     assert "[SEED STRESS] Systems Lab Alpha" not in team_names
 
 
+def test_stress_seed_matching_scores_are_not_uniform(db_session):
+    seed_dataset(db_session, "stress")
+
+    amir_headers = login_seed_user("seed_stress_amir")
+
+    circles_response = client.get("/circles/", headers=amir_headers)
+    assert circles_response.status_code == 200
+    systems_lab = find_by_name(circles_response.json(), "[SEED STRESS] Systems Lab")
+
+    teams_response = client.get(
+        f"/circles/{systems_lab['id']}/teams",
+        headers=amir_headers,
+    )
+    assert teams_response.status_code == 200
+    alpha_team = find_by_name(teams_response.json(), "[SEED STRESS] Systems Lab Alpha")
+
+    match_response = client.get(
+        f"/matching/users?team_id={alpha_team['id']}",
+        headers=amir_headers,
+    )
+    assert match_response.status_code == 200
+    matches = match_response.json()
+    assert matches
+    assert any(item["coverage_score"] < 1.0 or item["jaccard_score"] < 1.0 for item in matches)
+
+
+def test_stress_seed_manual_invite_reaches_diana_and_duplicate_is_blocked(db_session):
+    seed_dataset(db_session, "stress")
+
+    amir_headers = login_seed_user("seed_stress_amir")
+    diana_headers = login_seed_user("seed_stress_diana")
+
+    circles_response = client.get("/circles/", headers=amir_headers)
+    assert circles_response.status_code == 200
+    systems_lab = find_by_name(circles_response.json(), "[SEED STRESS] Systems Lab")
+
+    teams_response = client.get(
+        f"/circles/{systems_lab['id']}/teams",
+        headers=amir_headers,
+    )
+    assert teams_response.status_code == 200
+    alpha_team = find_by_name(teams_response.json(), "[SEED STRESS] Systems Lab Alpha")
+
+    members_response = client.get(
+        f"/circles/{systems_lab['id']}/members",
+        headers=amir_headers,
+    )
+    assert members_response.status_code == 200
+    diana = find_by_username(members_response.json(), "seed_stress_diana")
+
+    first_invite_response = client.post(
+        f"/teams/{alpha_team['id']}/invite",
+        headers=amir_headers,
+        json={"user_id": diana["id"], "team_name": alpha_team["name"]},
+    )
+    assert first_invite_response.status_code == 201
+    invitation = first_invite_response.json()
+
+    duplicate_invite_response = client.post(
+        f"/teams/{alpha_team['id']}/invite",
+        headers=amir_headers,
+        json={"user_id": diana["id"], "team_name": alpha_team["name"]},
+    )
+    assert duplicate_invite_response.status_code == 409
+    assert duplicate_invite_response.json()["detail"] == "Invitation already pending"
+
+    inbox_response = client.get("/invitations", headers=diana_headers)
+    assert inbox_response.status_code == 200
+    pending_ids = {item["id"] for item in inbox_response.json() if item["status"] == "pending"}
+    assert invitation["id"] in pending_ids
+
+
 def test_demo_seed_invitation_can_be_rejected_without_joining_team(db_session):
     seed_dataset(db_session, "demo")
 

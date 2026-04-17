@@ -205,6 +205,58 @@ def test_duplicate_pending_invitation_is_rejected(db_session):
     assert second_response.json()["detail"] == "Invitation already pending"
 
 
+def test_duplicate_pending_invitation_does_not_duplicate_invitee_inbox(db_session):
+    creator, creator_headers = register_and_login("captain4b", "captain4b@example.com")
+    invitee, invitee_headers = register_and_login("invitee4b", "invitee4b@example.com")
+    circle_response = client.post(
+        "/circles/",
+        headers=creator_headers,
+        json={"name": "Duplicate Inbox Circle", "description": "Duplicate inbox checks"},
+    )
+    assert circle_response.status_code == 201
+    circle = circle_response.json()
+
+    db_session.add(add_circle_member(circle["id"], invitee["id"]))
+    db_session.commit()
+
+    team_response = client.post(
+        "/teams",
+        headers=creator_headers,
+        json={
+            "name": "Duplicate Inbox Team",
+            "description": "Team for duplicate inbox checks",
+            "circle_id": circle["id"],
+            "max_members": 3,
+            "required_tags": [],
+        },
+    )
+    assert team_response.status_code == 201
+    team = team_response.json()
+
+    first_response = client.post(
+        f"/teams/{team['id']}/invite",
+        headers=creator_headers,
+        json={"user_id": invitee["id"], "team_name": team["name"]},
+    )
+    second_response = client.post(
+        f"/teams/{team['id']}/invite",
+        headers=creator_headers,
+        json={"user_id": invitee["id"], "team_name": team["name"]},
+    )
+
+    assert first_response.status_code == 201
+    assert second_response.status_code == 409
+
+    inbox_response = client.get("/invitations", headers=invitee_headers)
+    assert inbox_response.status_code == 200
+    inbox_items = [
+        item
+        for item in inbox_response.json()
+        if item["team_id"] == team["id"] and item["status"] == "pending"
+    ]
+    assert len(inbox_items) == 1
+
+
 def test_inviting_nonexistent_user_fails(db_session):
     creator, creator_headers = register_and_login("captain5", "captain5@example.com")
     circle_response = client.post(
@@ -372,7 +424,7 @@ def test_accept_invitation_adds_team_member(db_session):
     assert respond_response.status_code == 200
     assert respond_response.json()["success"] is True
 
-    teams_response = client.get(f"/circles/{circle['id']}/teams")
+    teams_response = client.get(f"/circles/{circle['id']}/teams", headers=creator_headers)
     assert teams_response.status_code == 200
     stored_team = teams_response.json()[0]
     assert stored_team["current_members"] == 2
@@ -423,7 +475,7 @@ def test_reject_invitation_keeps_team_recruiting(db_session):
     assert respond_response.status_code == 200
     assert respond_response.json()["success"] is True
 
-    teams_response = client.get(f"/circles/{circle['id']}/teams")
+    teams_response = client.get(f"/circles/{circle['id']}/teams", headers=creator_headers)
     stored_team = teams_response.json()[0]
     assert stored_team["current_members"] == 1
     assert stored_team["status"] == "Recruiting"
@@ -473,7 +525,7 @@ def test_team_auto_locks_when_full(db_session):
     assert respond_response.status_code == 200
     assert respond_response.json()["team_status"] == "Locked"
 
-    teams_response = client.get(f"/circles/{circle['id']}/teams")
+    teams_response = client.get(f"/circles/{circle['id']}/teams", headers=creator_headers)
     stored_team = teams_response.json()[0]
     assert stored_team["status"] == "Locked"
     assert stored_team["current_members"] == 2

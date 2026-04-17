@@ -118,6 +118,22 @@ def test_prepare_circle_detail_navigation_sets_detail_focus(monkeypatch):
     assert fake_streamlit.session_state.circle_hall_focus_detail is True
 
 
+def test_view_circle_detail_triggers_immediate_rerun(monkeypatch):
+    fake_streamlit, circles_module, _ = load_circle_modules(monkeypatch)
+    rerun_called = {"value": False}
+
+    def fake_rerun():
+        rerun_called["value"] = True
+
+    fake_streamlit.rerun = fake_rerun
+
+    circles_module.view_circle_detail(18)
+
+    assert fake_streamlit.session_state.selected_circle_id == 18
+    assert fake_streamlit.session_state.circle_hall_focus_detail is True
+    assert rerun_called["value"] is True
+
+
 def test_submit_member_tags_does_not_send_current_user_id_query_param(monkeypatch):
     _, _, detail_module = load_circle_modules(monkeypatch)
 

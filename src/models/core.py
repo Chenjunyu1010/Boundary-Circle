@@ -38,3 +38,7 @@ class CircleCreate(CircleBase):
 class CircleRead(CircleBase):
     id: int
     creator_id: int
+    creator_username: Optional[str] = None
+    creator_full_name: Optional[str] = None
+    is_member: bool = False
+    is_creator: bool = False

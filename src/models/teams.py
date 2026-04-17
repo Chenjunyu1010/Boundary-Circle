@@ -62,6 +62,8 @@ class TeamRead(SQLModel):
     description: str
     circle_id: int
     creator_id: int
+    creator_username: Optional[str] = None
+    creator_full_name: Optional[str] = None
     max_members: int
     current_members: int
     status: TeamStatus

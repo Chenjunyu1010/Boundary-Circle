@@ -37,6 +37,9 @@ def fetch_teams(circle_id: int) -> list[dict]:
         response = api_client.get(f"/circles/{circle_id}/teams")
         if response.ok:
             return response.json()
+        if response.status_code == 403:
+            st.warning("Join this circle before viewing its teams.")
+            return []
         st.error(f"Failed to load teams: {response.reason}")
     except Exception as exc:  # pragma: no cover - defensive
         st.error(f"Error loading teams: {exc}")
@@ -49,10 +52,50 @@ def fetch_circle_members(circle_id: int) -> list[dict]:
         response = api_client.get(f"/circles/{circle_id}/members")
         if response.ok:
             return response.json()
+        if response.status_code == 403:
+            st.warning("Join this circle before viewing its members.")
+            return []
         st.error(f"Failed to load members: {response.reason}")
     except Exception as exc:  # pragma: no cover - defensive
         st.error(f"Error loading members: {exc}")
     return []
+
+
+def can_access_current_circle(circle_id: int) -> bool:
+    """Return whether the current user can access team features for this circle."""
+    try:
+        response = api_client.get(f"/circles/{circle_id}/members")
+        if response.ok:
+            return True
+        if response.status_code == 403:
+            st.warning("You must join this circle before accessing team management.")
+            return False
+        st.error(f"Failed to verify circle access: {response.reason}")
+        return False
+    except Exception as exc:  # pragma: no cover - defensive
+        st.error(f"Error verifying circle access: {exc}")
+        return False
+
+
+def open_team_detail(team_id: int) -> None:
+    """Persist selected team id and switch to detail mode."""
+    st.session_state.selected_team_id = team_id
+    st.session_state.team_management_focus_detail = True
+    st.rerun()
+
+
+def close_team_detail() -> None:
+    """Return from the team detail view to the tabbed overview."""
+    st.session_state.team_management_focus_detail = False
+    st.rerun()
+
+
+def get_selected_team(teams: list[dict]) -> dict | None:
+    """Return the currently selected team from a fetched team list."""
+    selected_team_id = st.session_state.get("selected_team_id")
+    if selected_team_id is None:
+        return None
+    return next((team for team in teams if team.get("id") == selected_team_id), None)
 
 
 def fetch_circle_tags(circle_id: int) -> list[dict]:
@@ -76,6 +119,18 @@ def fetch_invitations() -> list[dict]:
         st.error(f"Failed to load invitations: {response.reason}")
     except Exception as exc:  # pragma: no cover - defensive
         st.error(f"Error loading invitations: {exc}")
+    return []
+
+
+def fetch_team_invitations(team_id: int) -> list[dict]:
+    """Fetch invitations associated with a specific team."""
+    try:
+        response = api_client.get(f"/teams/{team_id}/invitations")
+        if response.ok:
+            return response.json()
+        st.error(f"Failed to load team invitations: {response.reason}")
+    except Exception as exc:  # pragma: no cover - defensive
+        st.error(f"Error loading team invitations: {exc}")
     return []
 
 
@@ -291,7 +346,12 @@ def send_invitation(team_id: int, user_id: int, team_name: str) -> tuple[bool, s
             # Otherwise, treat the 2xx response as a success.
             return True, payload.get("message", "Invitation sent successfully.")
 
-        return False, f"Failed to send invitation: {response.reason}"
+        detail = ""
+        try:
+            detail = response.json().get("detail", "")
+        except Exception:
+            detail = ""
+        return False, detail or f"Failed to send invitation: {response.reason}"
     except Exception as exc:  # pragma: no cover - defensive
         return False, f"Error sending invitation: {exc}"
 
@@ -311,9 +371,137 @@ def respond_to_invitation(invite_id: int, accept: bool) -> tuple[bool, str]:
         return False, f"Error responding to invitation: {exc}"
 
 
+def render_team_detail() -> None:
+    """Render a detailed view of the selected team."""
+    circle_id = st.session_state.get("current_circle_id")
+    if not circle_id:
+        st.warning("Join a circle first to view team details.")
+        return
+
+    teams = fetch_teams(circle_id)
+    team = get_selected_team(teams)
+    if team is None:
+        st.warning("Selected team was not found.")
+        if st.button("Back to Team Overview", key="back_missing_team_detail"):
+            close_team_detail()
+        return
+
+    circle_members = fetch_circle_members(circle_id)
+    current_user = get_current_user()
+    current_user_id = current_user.get("id")
+    member_lookup = {
+        member.get("id"): member
+        for member in circle_members
+        if member.get("id") is not None
+    }
+    team_invitations = fetch_team_invitations(team["id"])
+    team_members = [
+        member_lookup[user_id]
+        for user_id in team.get("member_ids", []) or []
+        if user_id in member_lookup
+    ]
+
+    if st.button("Back to Team Overview", key=f"back_team_detail_{team.get('id')}"):
+        close_team_detail()
+
+    st.title(team.get("name", "Team Detail"))
+    creator_label = team.get("creator_username") or "Unknown"
+    st.markdown(f"**Creator:** {creator_label}")
+    st.markdown(f"**Description:** {team.get('description', 'No description')}")
+    st.markdown(
+        f"**Status:** {team.get('status', 'Recruiting')} | "
+        f"**Members:** {team.get('current_members', 0)}/{team.get('max_members', 0)}"
+    )
+
+    required_tags = team.get("required_tags", []) or []
+    required_rules = team.get("required_tag_rules", []) or []
+    if required_tags:
+        st.caption(f"Required tags: {', '.join(required_tags)}")
+    if required_rules:
+        formatted_rules = [
+            f"{rule.get('tag_name')}={rule.get('expected_value')}"
+            for rule in required_rules
+        ]
+        st.caption(f"Required rules: {', '.join(formatted_rules)}")
+
+    st.markdown("---")
+    st.subheader("Members")
+    if not team_members:
+        st.info("No members found for this team.")
+    else:
+        for member in team_members:
+            with st.container(border=True):
+                labels: list[str] = []
+                if member.get("id") == team.get("creator_id"):
+                    labels.append("Creator")
+                if member.get("id") == current_user_id:
+                    labels.append("You")
+                suffix = f" ({', '.join(labels)})" if labels else ""
+                st.markdown(f"**{member.get('username', 'Unknown')}**{suffix}")
+                st.caption(member.get("email", ""))
+
+    pending_team_invitations = [
+        invite for invite in team_invitations if invite.get("status") == "pending"
+    ]
+    if pending_team_invitations:
+        st.markdown("---")
+        st.subheader("Pending Invitations")
+        for invite in pending_team_invitations:
+            invitee = member_lookup.get(invite.get("invitee_id"), {})
+            invitee_label = invitee.get("username") or f"User #{invite.get('invitee_id')}"
+            with st.container(border=True):
+                st.markdown(f"**{invitee_label}**")
+                st.caption(invitee.get("email", ""))
+
+    st.markdown("---")
+    st.subheader("Invite Members")
+    st.caption("You can also invite directly from Matching.")
+    member_ids = set(team.get("member_ids", []) or [])
+    pending_lookup = {
+        (invite.get("team_id"), invite.get("invitee_id"))
+        for invite in team_invitations
+        if invite.get("status") == "pending"
+    }
+    candidate_members = [
+        member
+        for member in circle_members
+        if member.get("id") not in member_ids
+        and (team.get("id"), member.get("id")) not in pending_lookup
+    ]
+
+    if not candidate_members:
+        st.info("No eligible circle members available to invite.")
+        return
+
+    options = {
+        f"{member.get('username', 'user')} ({member.get('email', '')})": member.get("id")
+        for member in candidate_members
+    }
+    with st.form(f"team_detail_invite_form_{team.get('id')}"):
+        selected_member = st.selectbox(
+            "Invite a circle member",
+            options=list(options.keys()),
+        )
+        invite_submitted = st.form_submit_button("Send Invitation", type="primary")
+        if invite_submitted:
+            selected_user_id = options[selected_member]
+            success, message = send_invitation(
+                team_id=team["id"],
+                user_id=selected_user_id,
+                team_name=team.get("name", "Team"),
+            )
+            if success:
+                st.success(message)
+                st.rerun()
+            else:
+                st.error(message)
+
+
 def render_team_list() -> None:
     """Render all teams in the current circle."""
     st.header("Teams in This Circle")
+    current_user = get_current_user()
+    current_user_id = current_user.get("id")
 
     circle_id = st.session_state.get("current_circle_id")
     if not circle_id:
@@ -333,6 +521,8 @@ def render_team_list() -> None:
             col_left, col_status, col_action = st.columns([3, 1, 1])
             with col_left:
                 st.markdown(f"**{team.get('name', 'Unnamed Team')}**")
+                creator_label = team.get("creator_username") or "Unknown"
+                st.caption(f"Creator: {creator_label}")
                 st.write(team.get("description", "No description"))
                 required_tags = team.get("required_tags", [])
                 if required_tags:
@@ -347,13 +537,18 @@ def render_team_list() -> None:
                     st.error(status)
                 st.caption(f"Members: {members}/{max_members}")
             with col_action:
+                if st.button("View Details", key=f"team_list_detail_{team.get('id')}"):
+                    open_team_detail(team.get("id"))
+                member_ids = team.get("member_ids", []) or []
                 is_joinable = (
                     team.get("status") == "Recruiting"
                     and team.get("current_members", 0) < team.get("max_members", 0)
                 )
-                if is_joinable:
-                    st.button("Open for invites", key=f"open_{team.get('id')}", disabled=True)
-                    st.caption("Join via invitation")
+                if current_user_id in member_ids:
+                    st.caption("You are already in this team")
+                elif is_joinable:
+                    st.caption("Invitation only")
+                    st.caption("Ask a team creator/member to invite you")
                 else:
                     st.caption("Not accepting members")
 
@@ -470,7 +665,7 @@ def render_create_team() -> None:
 
 
 def render_my_teams() -> None:
-    """Render the current user's teams and invitation sender."""
+    """Render the current user's teams and received invitations."""
     st.header("My Teams")
 
     current_user = get_current_user()
@@ -485,72 +680,23 @@ def render_my_teams() -> None:
         return
 
     teams = fetch_teams(circle_id)
-    invitations = fetch_invitations()
     created_teams, joined_teams = split_user_teams(teams, user_id)
-
-    pending_received = [
-        invite
-        for invite in invitations
-        if invite.get("invitee_id") == user_id and invite.get("status") == "pending"
-    ]
-    pending_lookup = {
-        (invite.get("team_id"), invite.get("invitee_id"))
-        for invite in invitations
-        if invite.get("status") == "pending"
-    }
 
     st.subheader("Teams I Created")
     if not created_teams:
         st.info("You have not created any teams yet.")
     else:
-        circle_members = fetch_circle_members(circle_id)
         for team in created_teams:
             with st.container(border=True):
                 st.markdown(f"**{team.get('name', 'Unnamed Team')}**")
+                creator_label = team.get("creator_username") or "Unknown"
+                st.caption(f"Creator: {creator_label}")
                 st.caption(team.get("description", "No description"))
                 st.write(
                     f"Members: {team.get('current_members', 0)}/{team.get('max_members', 0)}"
                 )
-
-                member_ids = set(team.get("member_ids", []))
-                candidate_members = [
-                    member
-                    for member in circle_members
-                    if member.get("id") != user_id
-                    and member.get("id") not in member_ids
-                    and (team.get("id"), member.get("id")) not in pending_lookup
-                ]
-
-                if not candidate_members:
-                    st.caption("No members available to invite.")
-                    continue
-
-                options = {
-                    f"{member.get('username', 'user')} ({member.get('email', '')})": member.get("id")
-                    for member in candidate_members
-                }
-                with st.form(f"invite_form_{team.get('id')}"):
-                    selected_member = st.selectbox(
-                        "Invite a circle member",
-                        options=list(options.keys()),
-                    )
-                    invite_submitted = st.form_submit_button("Send Invitation")
-                    if invite_submitted:
-                        team_id = team.get("id")
-                        selected_user_id = options[selected_member]
-                        if team_id is None or selected_user_id is None:
-                            st.error("Unable to send invitation because team data is incomplete.")
-                            continue
-                        success, message = send_invitation(
-                            team_id=team_id,
-                            user_id=selected_user_id,
-                            team_name=team.get("name", "Team"),
-                        )
-                        if success:
-                            st.success(message)
-                            st.rerun()
-                        else:
-                            st.error(message)
+                if st.button("View Details", key=f"my_created_team_detail_{team.get('id')}"):
+                    open_team_detail(team.get("id"))
 
     st.markdown("---")
     st.subheader("Teams I Joined")
@@ -560,20 +706,14 @@ def render_my_teams() -> None:
         for team in joined_teams:
             with st.container(border=True):
                 st.markdown(f"**{team.get('name', 'Unnamed Team')}**")
+                creator_label = team.get("creator_username") or "Unknown"
+                st.caption(f"Creator: {creator_label}")
                 st.caption(team.get("description", "No description"))
                 st.write(
                     f"Members: {team.get('current_members', 0)}/{team.get('max_members', 0)}"
                 )
-
-    st.markdown("---")
-    st.subheader("Pending Invitations")
-    if not pending_received:
-        st.info("No pending invitations.")
-    else:
-        for invite in pending_received:
-            with st.container(border=True):
-                st.markdown(f"**{invite.get('team_name', 'Unknown Team')}**")
-                st.caption(f"Invited by user {invite.get('inviter_id')}")
+                if st.button("View Details", key=f"my_joined_team_detail_{team.get('id')}"):
+                    open_team_detail(team.get("id"))
 
 
 def render_invitation_management() -> None:
@@ -707,9 +847,7 @@ def render_matching_section() -> None:
                         )
                         cov = match.get("coverage_score", 0.0)
                         jac = match.get("jaccard_score", 0.0)
-                        st.caption(
-                            f"Coverage: {cov:.2f} · Similarity: {jac:.2f}"
-                        )
+                        st.caption(f"Coverage: {cov:.2f} | Similarity: {jac:.2f}")
                         matched = ", ".join(match.get("matched_tags", [])) or "-"
                         missing = ", ".join(match.get("missing_required_tags", [])) or "-"
                         st.write(f"Matched tags: {matched}")
@@ -731,6 +869,7 @@ def render_matching_section() -> None:
 
     st.markdown("---")
     st.subheader("Recommend teams for me")
+    st.caption("Recommended teams still require an invitation from a current member or creator.")
 
     if st.button("Find teams for me", key="find_matching_teams", type="primary"):
         matches = fetch_matching_teams(circle_id)
@@ -741,6 +880,8 @@ def render_matching_section() -> None:
                 team = item.get("team", {})
                 with st.container(border=True):
                     st.markdown(f"**{team.get('name', 'Unnamed Team')}**")
+                    creator_label = team.get("creator_username") or "Unknown"
+                    st.caption(f"Creator: {creator_label}")
                     st.caption(team.get("description", "No description"))
                     st.write(
                         f"Members: {team.get('current_members', 0)}/"
@@ -748,9 +889,7 @@ def render_matching_section() -> None:
                     )
                     cov = item.get("coverage_score", 0.0)
                     jac = item.get("jaccard_score", 0.0)
-                    st.caption(
-                        f"Coverage: {cov:.2f} · Similarity: {jac:.2f}"
-                    )
+                    st.caption(f"Coverage: {cov:.2f} | Similarity: {jac:.2f}")
                     missing = ", ".join(item.get("missing_required_tags", [])) or "-"
                     st.write(f"Missing required tags: {missing}")
 
@@ -766,6 +905,15 @@ def main() -> None:
         st.warning("Join a circle first to access team management.")
         if st.button("Go to Circle Hall", key="go_circle_hall_main"):
             st.switch_page("pages/circles.py")
+        return
+
+    if not can_access_current_circle(st.session_state["current_circle_id"]):
+        if st.button("Go to Circle Hall", key="go_circle_hall_forbidden"):
+            st.switch_page("pages/circles.py")
+        return
+
+    if st.session_state.get("team_management_focus_detail"):
+        render_team_detail()
         return
 
     team_tab, create_tab, my_tab, invitation_tab, matching_tab = st.tabs(

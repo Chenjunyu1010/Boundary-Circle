@@ -1,7 +1,7 @@
 """
-Circle Detail Page - View circle details and join/leave circles
+Circle Detail Page - View circle details and join/leave circles.
 
-Displays circle information, members, and allows joining/leaving.
+Displays circle information, members, tags, and allows joining/leaving.
 """
 
 import json
@@ -9,16 +9,16 @@ import sys
 from pathlib import Path
 from typing import Optional
 
-# Add parent directory to path for imports
 parent_dir = str(Path(__file__).parent.parent)
 if parent_dir not in sys.path:
     sys.path.insert(0, parent_dir)
 
 import streamlit as st
-from utils.auth import get_current_user, init_session_state, require_auth
-from utils.api import api_client
 
-# Initialize session state
+from utils.api import api_client
+from utils.auth import get_current_user, init_session_state, require_auth
+
+
 init_session_state()
 
 
@@ -28,11 +28,10 @@ def fetch_circle_detail(circle_id: int):
         response = api_client.get(f"/circles/{circle_id}")
         if response.ok:
             return response.json()
-        else:
-            st.error(f"Failed to load circle: {response.reason}")
-            return None
-    except Exception as e:
-        st.error(f"Error: {str(e)}")
+        st.error(f"Failed to load circle: {response.reason}")
+        return None
+    except Exception as exc:
+        st.error(f"Error: {str(exc)}")
         return None
 
 
@@ -42,8 +41,7 @@ def fetch_circle_members(circle_id: int):
         response = api_client.get(f"/circles/{circle_id}/members")
         if response.ok:
             return response.json()
-        else:
-            return []
+        return []
     except Exception:
         return []
 
@@ -54,8 +52,7 @@ def fetch_circle_tags(circle_id: int):
         response = api_client.get(f"/circles/{circle_id}/tags")
         if response.ok:
             return response.json()
-        else:
-            return []
+        return []
     except Exception:
         return []
 
@@ -68,7 +65,7 @@ def create_tag_definition(
     options: Optional[str],
     max_selections: Optional[int] = None,
 ) -> tuple[bool, str]:
-    """Create a tag definition for a circle (creator only)."""
+    """Create a tag definition for a circle."""
     current_user = get_current_user()
     user_id = current_user.get("id") if current_user else None
     if user_id is None:
@@ -95,12 +92,12 @@ def create_tag_definition(
         except Exception:
             detail = ""
         return False, detail or f"Failed to create tag definition: {response.reason}"
-    except Exception as e:
-        return False, f"Error: {str(e)}"
+    except Exception as exc:
+        return False, f"Error: {str(exc)}"
 
 
 def delete_tag_definition(tag_definition_id: int) -> tuple[bool, str]:
-    """Delete a tag definition for a circle (creator only)."""
+    """Delete a tag definition for a circle."""
     try:
         response = api_client.delete(f"/tags/definitions/{tag_definition_id}")
         if response.ok:
@@ -112,8 +109,8 @@ def delete_tag_definition(tag_definition_id: int) -> tuple[bool, str]:
         except Exception:
             detail = ""
         return False, detail or f"Failed to delete tag definition: {response.reason}"
-    except Exception as e:
-        return False, f"Error: {str(e)}"
+    except Exception as exc:
+        return False, f"Error: {str(exc)}"
 
 
 def submit_member_tags(circle_id: int, tag_definitions: list, tag_data: dict) -> tuple[bool, str]:
@@ -148,15 +145,13 @@ def submit_member_tags(circle_id: int, tag_definitions: list, tag_data: dict) ->
                 return False, detail or f"Failed to submit tag values: {response.reason}"
 
         return True, "Your tags have been updated."
-    except Exception as e:
-        return False, f"Error: {str(e)}"
+    except Exception as exc:
+        return False, f"Error: {str(exc)}"
 
 
 def normalize_tag_definition(tag: dict) -> dict:
     """Normalize mock and backend tag definitions to a single format."""
-    tag_data_type = tag.get("data_type")
-    legacy_type = tag.get("type")
-    normalized_type = tag_data_type or legacy_type or "string"
+    normalized_type = tag.get("data_type") or tag.get("type") or "string"
     type_aliases = {
         "text": "string",
         "select": "single_select",
@@ -198,6 +193,7 @@ def validate_tag_input(tag: dict, value) -> tuple[bool, str]:
 
 
 def _admin_tag_form_key(circle_id: int, field_name: str) -> str:
+    """Build a stable widget key for admin tag inputs."""
     return f"admin_tag_{field_name}_{circle_id}"
 
 
@@ -225,12 +221,9 @@ def resolve_circle_id(query_params=None) -> int:
 
 
 def join_circle(circle_id: int, tag_definitions: list, tag_data: dict) -> tuple[bool, str]:
-    """Join a circle with tag data."""
+    """Join a circle and submit initial tag data."""
     current_user = get_current_user()
-    if not current_user:
-        return False, "Please login again before joining a circle."
-    user_id = current_user.get("id")
-    if user_id is None:
+    if not current_user or current_user.get("id") is None:
         return False, "Please login again before joining a circle."
 
     try:
@@ -256,10 +249,7 @@ def join_circle(circle_id: int, tag_definitions: list, tag_data: dict) -> tuple[
 
             response = api_client.post(
                 f"/circles/{circle_id}/tags/submit",
-                data={
-                    "tag_definition_id": tag["id"],
-                    "value": value,
-                },
+                data={"tag_definition_id": tag["id"], "value": value},
             )
             if not response.ok:
                 detail = ""
@@ -269,8 +259,8 @@ def join_circle(circle_id: int, tag_definitions: list, tag_data: dict) -> tuple[
                     detail = ""
                 return False, detail or f"Failed to submit tags: {response.reason}"
         return True, "Successfully joined the circle!"
-    except Exception as e:
-        return False, f"Error: {str(e)}"
+    except Exception as exc:
+        return False, f"Error: {str(exc)}"
 
 
 def leave_circle(circle_id: int) -> tuple[bool, str]:
@@ -282,81 +272,67 @@ def leave_circle(circle_id: int) -> tuple[bool, str]:
         leave_resp = api_client.delete(f"/circles/{circle_id}/leave")
         if not leave_resp.ok:
             return False, f"Failed to leave: {leave_resp.reason}"
-
         return True, "Successfully left the circle"
-    except Exception as e:
-        return False, f"Error: {str(e)}"
+    except Exception as exc:
+        return False, f"Error: {str(exc)}"
 
 
 def is_circle_joined(circle_id: int) -> bool:
-    """Check if user has joined the circle via real Backend API."""
+    """Check if the current user has joined the circle."""
     current_user = get_current_user()
     if not current_user:
         return False
     user_id = current_user.get("id")
     members = fetch_circle_members(circle_id)
-    return any((m.get("id") or m.get("user_id")) == user_id for m in members)
+    return any((member.get("id") or member.get("user_id")) == user_id for member in members)
 
 
 def render_tag_form(tag_definitions: list, circle_id: int):
     """Render dynamic tag form based on tag definitions."""
     if not tag_definitions:
         st.info("This circle has no required tags")
-        # No form submission when there are no tags; signal this with None
         return None
 
     tag_data = {}
 
     with st.form(f"tag_form_{circle_id}"):
-        st.markdown("### 📝 Fill in Your Information")
+        st.markdown("### Fill in Your Information")
 
         normalized_tags = [normalize_tag_definition(tag) for tag in tag_definitions]
-
         for tag in normalized_tags:
             tag_name = tag["name"]
             tag_type = tag["data_type"]
-            tag_required = tag["required"]
             tag_options = tag["options"]
-
-            # Required tag marker
-            label = f"{tag_name} *" if tag_required else tag_name
+            label = f"{tag_name} *" if tag["required"] else tag_name
+            widget_key = f"tag_{circle_id}_{tag.get('id')}"
 
             if tag_type in ("text", "string"):
-                tag_data[tag_name] = st.text_input(label, key=f"tag_{circle_id}_{tag.get('id')}")
+                tag_data[tag_name] = st.text_input(label, key=widget_key)
             elif tag_type in ("single_select", "enum") and tag_options:
-                tag_data[tag_name] = st.selectbox(label, tag_options, key=f"tag_{circle_id}_{tag.get('id')}")
+                tag_data[tag_name] = st.selectbox(label, tag_options, key=widget_key)
             elif tag_type == "multi_select" and tag_options:
                 help_text = None
                 if tag.get("max_selections") is not None:
                     help_text = f"Select up to {tag['max_selections']} options."
-                tag_data[tag_name] = st.multiselect(
-                    label,
-                    tag_options,
-                    key=f"tag_{circle_id}_{tag.get('id')}",
-                    help=help_text,
-                )
+                tag_data[tag_name] = st.multiselect(label, tag_options, key=widget_key, help=help_text)
             elif tag_type in ("number", "integer"):
-                tag_data[tag_name] = st.number_input(label, step=1, format="%d", key=f"tag_{circle_id}_{tag.get('id')}")
+                tag_data[tag_name] = st.number_input(label, step=1, format="%d", key=widget_key)
             elif tag_type == "float":
-                tag_data[tag_name] = st.number_input(label, key=f"tag_{circle_id}_{tag.get('id')}")
+                tag_data[tag_name] = st.number_input(label, key=widget_key)
             elif tag_type == "boolean":
-                tag_data[tag_name] = st.checkbox(label, key=f"tag_{circle_id}_{tag.get('id')}")
+                tag_data[tag_name] = st.checkbox(label, key=widget_key)
             elif tag_type == "textarea":
-                tag_data[tag_name] = st.text_area(label, key=f"tag_{circle_id}_{tag.get('id')}")
+                tag_data[tag_name] = st.text_area(label, key=widget_key)
             else:
-                tag_data[tag_name] = st.text_input(label, key=f"tag_{circle_id}_{tag.get('id')}")
+                tag_data[tag_name] = st.text_input(label, key=widget_key)
 
-        # Validation for required tags
         submitted = st.form_submit_button("Submit", type="primary")
-
         if submitted:
-            # Check required fields
-            missing_fields = []
-            for tag in normalized_tags:
-                value = tag_data.get(tag["name"])
-                if tag["required"] and value in (None, "", []):
-                    missing_fields.append(tag["name"])
-
+            missing_fields = [
+                tag["name"]
+                for tag in normalized_tags
+                if tag["required"] and tag_data.get(tag["name"]) in (None, "", [])
+            ]
             if missing_fields:
                 st.error(f"Please fill in required fields: {', '.join(missing_fields)}")
                 return None
@@ -377,84 +353,69 @@ def render_tag_form(tag_definitions: list, circle_id: int):
 
 
 def main():
-    """Main page content."""
+    """Render the circle detail page."""
     circle_id = resolve_circle_id()
     st.session_state.current_circle_id = circle_id
 
-    # Require authentication
     require_auth()
 
-    # Fetch circle data
     circle = fetch_circle_detail(circle_id)
-
     if not circle:
         st.error("Circle not found")
-        st.page_link("pages/circles.py", label="Back to Circle Hall", icon="⬅️")
+        st.page_link("pages/circles.py", label="Back to Circle Hall")
         return
 
-    # Check join status
     joined = is_circle_joined(circle_id)
-
-    # Page header
-    st.title(f"🔵 {circle.get('name', 'Circle')}")
-    st.markdown(f"**Category:** {circle.get('category', 'General')}")
-    st.markdown(f"**Description:** {circle.get('description', 'No description')}")
-
-    # Back link
-    if not st.session_state.get("circle_hall_focus_detail"):
-        st.page_link("pages/circles.py", label="Back to Circle Hall", icon="⬅️")
-
-    st.markdown("---")
-
     current_user = get_current_user()
     current_user_id = current_user.get("id") if current_user else None
     is_creator = current_user_id is not None and current_user_id == circle.get("creator_id")
 
-    # Join/Leave section
+    st.title(circle.get("name", "Circle"))
+    st.markdown(f"**Category:** {circle.get('category', 'General')}")
+    creator_label = circle.get("creator_username") or "Unknown"
+    st.markdown(f"**Creator:** {creator_label}")
+    st.markdown(f"**Description:** {circle.get('description', 'No description')}")
+
+    if not st.session_state.get("circle_hall_focus_detail"):
+        st.page_link("pages/circles.py", label="Back to Circle Hall")
+
+    st.markdown("---")
     col1, col2 = st.columns([1, 2])
 
     with col1:
         if joined:
-            st.success("✅ You are a member")
-            st.page_link("pages/team_management.py", label="Go to Team Management", icon="👥")
-            if st.button("🚪 Leave Circle", type="secondary"):
+            st.success("You are a member")
+            st.page_link("pages/team_management.py", label="Go to Team Management")
+            if st.button("Leave Circle", type="secondary"):
                 success, message = leave_circle(circle_id)
                 if success:
                     st.success(message)
                     st.rerun()
-                else:
-                    st.error(message)
+                st.error(message)
         else:
             st.warning("You haven't joined this circle yet")
-            if st.button("? Join Circle", type="primary"):
+            if st.button("Join Circle", type="primary"):
                 st.session_state.show_join_form = True
 
-    # Show join form if requested
     if not joined and st.session_state.get("show_join_form", False):
         with col2:
             tag_definitions = fetch_circle_tags(circle_id)
-
             tag_data = render_tag_form(tag_definitions, circle_id)
-
             if tag_data is not None:
-                # Submit join request
                 success, message = join_circle(circle_id, tag_definitions, tag_data)
                 if success:
                     st.success(message)
                     st.session_state.show_join_form = False
                     st.rerun()
-                else:
-                    st.error(message)
+                st.error(message)
 
-            # Cancel button
             if st.button("Cancel", key="cancel_join"):
                 st.session_state.show_join_form = False
                 st.rerun()
 
-    # Member self-service tag updates
     if joined:
         with col2:
-            with st.expander("🔄 Update My Tags", expanded=False):
+            with st.expander("Update My Tags", expanded=False):
                 tag_definitions_for_update = fetch_circle_tags(circle_id)
                 if not tag_definitions_for_update:
                     st.info("No tag definitions available for this circle yet.")
@@ -467,29 +428,20 @@ def main():
                         for tag in normalized_tags:
                             tag_name = tag["name"]
                             tag_type = tag["data_type"]
-                            tag_required = tag["required"]
                             tag_options = tag["options"]
-                            label = f"{tag_name} *" if tag_required else tag_name
+                            label = f"{tag_name} *" if tag["required"] else tag_name
+                            widget_key = f"update_tag_{circle_id}_{tag.get('id')}"
 
                             if tag_type in ("string", "text"):
-                                tag_data[tag_name] = st.text_input(label, key=f"update_tag_{circle_id}_{tag.get('id')}")
+                                tag_data[tag_name] = st.text_input(label, key=widget_key)
                             elif tag_type == "integer":
-                                tag_data[tag_name] = st.number_input(
-                                    label,
-                                    step=1,
-                                    format="%d",
-                                    key=f"update_tag_{circle_id}_{tag.get('id')}",
-                                )
+                                tag_data[tag_name] = st.number_input(label, step=1, format="%d", key=widget_key)
                             elif tag_type == "float":
-                                tag_data[tag_name] = st.number_input(label, key=f"update_tag_{circle_id}_{tag.get('id')}")
+                                tag_data[tag_name] = st.number_input(label, key=widget_key)
                             elif tag_type == "boolean":
-                                tag_data[tag_name] = st.checkbox(label, key=f"update_tag_{circle_id}_{tag.get('id')}")
+                                tag_data[tag_name] = st.checkbox(label, key=widget_key)
                             elif tag_type in ("single_select", "enum") and tag_options:
-                                tag_data[tag_name] = st.selectbox(
-                                    label,
-                                    tag_options,
-                                    key=f"update_tag_{circle_id}_{tag.get('id')}",
-                                )
+                                tag_data[tag_name] = st.selectbox(label, tag_options, key=widget_key)
                             elif tag_type == "multi_select" and tag_options:
                                 help_text = None
                                 if tag.get("max_selections") is not None:
@@ -497,43 +449,45 @@ def main():
                                 tag_data[tag_name] = st.multiselect(
                                     label,
                                     tag_options,
-                                    key=f"update_tag_{circle_id}_{tag.get('id')}",
+                                    key=widget_key,
                                     help=help_text,
                                 )
                             else:
-                                tag_data[tag_name] = st.text_input(label, key=f"update_tag_{circle_id}_{tag.get('id')}")
+                                tag_data[tag_name] = st.text_input(label, key=widget_key)
 
                         save_my_tags = st.form_submit_button("Save My Tags", type="primary")
-
                         if save_my_tags:
-                            missing_fields = []
-                            for tag in normalized_tags:
-                                value = tag_data.get(tag["name"])
-                                if tag["required"] and value in (None, "", []):
-                                    missing_fields.append(tag["name"])
+                            missing_fields = [
+                                tag["name"]
+                                for tag in normalized_tags
+                                if tag["required"] and tag_data.get(tag["name"]) in (None, "", [])
+                            ]
                             if missing_fields:
                                 st.error(f"Please fill in required fields: {', '.join(missing_fields)}")
                             else:
                                 validation_errors = []
                                 for tag in normalized_tags:
-                                    is_valid, error_message = validate_tag_input(tag, tag_data.get(tag["name"]))
+                                    is_valid, error_message = validate_tag_input(
+                                        tag,
+                                        tag_data.get(tag["name"]),
+                                    )
                                     if not is_valid:
                                         validation_errors.append(error_message)
                                 if validation_errors:
                                     st.error(" ".join(validation_errors))
                                     return
-                                success, message = submit_member_tags(circle_id, tag_definitions_for_update, tag_data)
+                                success, message = submit_member_tags(
+                                    circle_id,
+                                    tag_definitions_for_update,
+                                    tag_data,
+                                )
                                 if success:
                                     st.success(message)
                                     st.rerun()
-                                else:
-                                    st.error(message)
+                                st.error(message)
 
     st.markdown("---")
-
-    # Members section
-    st.markdown("### 👥 Members")
-
+    st.markdown("### Members")
     members = fetch_circle_members(circle_id)
 
     if members:
@@ -541,20 +495,18 @@ def main():
             with st.container(border=True):
                 col1, col2 = st.columns([1, 4])
                 with col1:
-                    # Use st.image with a placeholder avatar or initials
-                    initial = member.get("username", "U")[0].upper()
-                    st.markdown(f"<div style='font-size:24px;text-align:center;'>👤</div>", unsafe_allow_html=True)
-                    st.caption(f"**{initial}**")
+                    st.markdown(
+                        "<div style='font-size:24px;text-align:center;'>User</div>",
+                        unsafe_allow_html=True,
+                    )
                 with col2:
                     st.markdown(f"**{member.get('username', 'Unknown')}**")
                     st.caption(member.get("email", ""))
     else:
         st.info("No members yet. Be the first to join!")
 
-    # Tags section (informational)
     st.markdown("---")
-    st.markdown("### 🏷️ Circle Tags")
-
+    st.markdown("### Circle Tags")
     tag_definitions = fetch_circle_tags(circle_id)
 
     if tag_definitions:
@@ -562,8 +514,8 @@ def main():
             with st.container(border=True):
                 col1, col2, col3 = st.columns([1, 4, 1])
                 with col1:
-                    required = "⭐" if tag.get("required") else "?"
-                    st.markdown(f"**{tag.get('name', 'Tag')}** {required}")
+                    st.markdown(f"**{tag.get('name', 'Tag')}**")
+                    st.caption("Required" if tag.get("required") else "Optional")
                 with col2:
                     st.markdown(f"Type: {tag.get('data_type', 'string')}")
                     if tag.get("options"):
@@ -578,16 +530,15 @@ def main():
                             if success:
                                 st.success(message)
                                 st.rerun()
-                            else:
-                                st.error(message)
+                            st.error(message)
     else:
         st.info("No tags defined for this circle")
 
     if is_creator:
         st.markdown("---")
-        st.markdown("### 🔐 Admin Tag Management")
+        st.markdown("### Admin Tag Management")
         with st.form(f"add_tag_definition_form_{circle_id}"):
-            st.markdown("#### ➕ Add New Tag Definition")
+            st.markdown("#### Add New Tag Definition")
             new_tag_name = st.text_input(
                 "name",
                 placeholder="e.g. Major",
@@ -617,7 +568,6 @@ def main():
             )
 
             create_tag_submit = st.form_submit_button("Create Tag Definition", type="primary")
-
             if create_tag_submit:
                 if not new_tag_name.strip():
                     st.error("name is required")
@@ -635,7 +585,9 @@ def main():
                                     raise ValueError
                                 options_payload = json.dumps(parsed_options, ensure_ascii=False)
                             except Exception:
-                                st.error("options must be a valid non-empty JSON array, e.g. [\"A\", \"B\"]")
+                                st.error(
+                                    'options must be a valid non-empty JSON array, e.g. ["A", "B"]'
+                                )
                                 options_payload = None
                         if new_tag_type == "multi_select" and options_payload is not None:
                             max_selections_payload = int(new_tag_max_selections)
@@ -654,8 +606,7 @@ def main():
                         if success:
                             clear_admin_tag_form_state(circle_id)
                             st.rerun()
-                        else:
-                            st.error(message)
+                        st.error(message)
 
 
 if __name__ == "__main__":

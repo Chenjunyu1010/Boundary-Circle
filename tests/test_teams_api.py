@@ -61,6 +61,7 @@ def test_create_team_requires_authenticated_circle_member():
     payload = create_response.json()
     assert payload["name"] == "Alpha Team"
     assert payload["creator_id"] == creator["id"]
+    assert payload["creator_username"] == creator["username"]
     assert payload["current_members"] == 1
     assert payload["status"] == "Recruiting"
     assert payload["member_ids"] == [creator["id"]]
@@ -164,11 +165,31 @@ def test_member_can_leave_team(db_session):
     leave_response = client.delete(f"/teams/{team['id']}/leave", headers=invitee_headers)
     assert leave_response.status_code == 204
 
-    teams_response = client.get(f"/circles/{circle['id']}/teams")
+    teams_response = client.get(f"/circles/{circle['id']}/teams", headers=creator_headers)
     assert teams_response.status_code == 200
     stored_team = teams_response.json()[0]
     assert stored_team["current_members"] == 1
     assert stored_team["member_ids"] == [creator["id"]]
+
+
+def test_non_circle_member_cannot_list_teams_or_members():
+    creator, creator_headers = register_and_login("teamguard", "teamguard@example.com")
+    outsider, outsider_headers = register_and_login("teamoutsider", "teamoutsider@example.com")
+    circle_response = client.post(
+        "/circles/",
+        headers=creator_headers,
+        json={"name": "Team Guard Circle", "description": "Circle for access checks"},
+    )
+    assert circle_response.status_code == 201
+    circle = circle_response.json()
+
+    teams_response = client.get(f"/circles/{circle['id']}/teams", headers=outsider_headers)
+    assert teams_response.status_code == 403
+    assert teams_response.json()["detail"] == "User must join the circle first"
+
+    members_response = client.get(f"/circles/{circle['id']}/members", headers=outsider_headers)
+    assert members_response.status_code == 403
+    assert members_response.json()["detail"] == "User must join the circle first"
 
 
 def test_team_create_accepts_required_tag_rules_schema():

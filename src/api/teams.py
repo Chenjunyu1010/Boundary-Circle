@@ -39,12 +39,16 @@ def build_team_read(team: Team, session: Session) -> TeamRead:
         session.commit()
         session.refresh(team)
 
+    creator = session.get(User, team.creator_id)
+
     return TeamRead(
         id=team.id,
         name=team.name,
         description=team.description,
         circle_id=team.circle_id,
         creator_id=team.creator_id,
+        creator_username=creator.username if creator is not None else None,
+        creator_full_name=creator.full_name if creator is not None else None,
         max_members=team.max_members,
         current_members=current_members,
         status=status,
@@ -110,13 +114,27 @@ def create_team(
 
 
 @router.get("/circles/{circle_id}/teams", response_model=list[TeamRead])
-def list_teams(circle_id: int, session: Session = Depends(get_session)):
+def list_teams(
+    circle_id: int,
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+):
+    if current_user.id is None:
+        raise HTTPException(status_code=500, detail="Current user ID missing")
+    require_circle_member(circle_id, current_user.id, session, allow_creator=True)
     teams = session.exec(select(Team).where(Team.circle_id == circle_id)).all()
     return [build_team_read(team, session) for team in teams]
 
 
 @router.get("/circles/{circle_id}/members")
-def list_circle_members(circle_id: int, session: Session = Depends(get_session)):
+def list_circle_members(
+    circle_id: int,
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+):
+    if current_user.id is None:
+        raise HTTPException(status_code=500, detail="Current user ID missing")
+    require_circle_member(circle_id, current_user.id, session, allow_creator=True)
     memberships = session.exec(select(CircleMember).where(CircleMember.circle_id == circle_id)).all()
     users = []
     for membership in memberships:
@@ -176,6 +194,34 @@ def send_invitation(
     session.commit()
     session.refresh(invitation)
     return invitation
+
+
+@router.get("/teams/{team_id}/invitations", response_model=list[InvitationRead])
+def list_team_invitations(
+    team_id: int,
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+):
+    if current_user.id is None:
+        raise HTTPException(status_code=500, detail="Current user ID missing")
+
+    team = session.get(Team, team_id)
+    if team is None:
+        raise HTTPException(status_code=404, detail="Team not found")
+
+    team_membership = session.exec(
+        select(TeamMember).where(
+            TeamMember.team_id == team_id,
+            TeamMember.user_id == current_user.id,
+        )
+    ).first()
+    if team.creator_id != current_user.id and team_membership is None:
+        raise HTTPException(
+            status_code=403,
+            detail="Only team creator or members can view team invitations",
+        )
+
+    return session.exec(select(Invitation).where(Invitation.team_id == team_id)).all()
 
 
 @router.get("/invitations", response_model=list[InvitationRead])

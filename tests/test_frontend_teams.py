@@ -160,3 +160,19 @@ def test_team_requirement_widget_keys_use_circle_and_tag_ids(monkeypatch):
     assert key_a == "team_requirement_3_11"
     assert key_b == "team_requirement_3_12"
     assert key_a != key_b
+
+
+def test_open_team_detail_sets_focus_and_selected_team(monkeypatch):
+    fake_streamlit, _, _, team_module = load_team_modules(monkeypatch)
+    rerun_called = {"value": False}
+
+    def fake_rerun():
+        rerun_called["value"] = True
+
+    fake_streamlit.rerun = fake_rerun
+
+    team_module.open_team_detail(22)
+
+    assert fake_streamlit.session_state.selected_team_id == 22
+    assert fake_streamlit.session_state.team_management_focus_detail is True
+    assert rerun_called["value"] is True
