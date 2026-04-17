@@ -69,6 +69,13 @@ If Nginx is added, the URL structure can be cleaner:
 - `http://<server-ip>/` -> Streamlit frontend
 - `http://<server-ip>/api/...` -> FastAPI backend
 
+Important routing note:
+
+- the current FastAPI app serves routes at the root, for example `/docs`, `/auth/*`, `/circles/*`, and `/teams/*`
+- if Nginx exposes the backend under `/api/...`, it should strip the `/api` prefix before proxying to FastAPI
+- alternatively, `/api/...` should only be used if the FastAPI app is explicitly mounted with an `/api` root path
+- for example, `/api/docs` should map cleanly to FastAPI's `/docs`
+
 This is acceptable for:
 
 - course demonstration
