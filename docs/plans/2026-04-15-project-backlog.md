@@ -86,13 +86,15 @@ This document tracks the main engineering fixes and feature opportunities after 
   - Explicitly model database path, JWT secret, token expiry, API base URLs, and mock mode.
 
 ### 6a. Add lightweight database upgrade handling for SQLite schema changes
-- Current problem:
-  - The project still relies on `SQLModel.metadata.create_all()` without migrations.
-  - Recent additions such as `TagDefinition.max_selections` and `Team.required_tag_rules_json` will not appear automatically in existing SQLite files.
-- Recommendation:
-  - Add a minimal startup upgrade path for local SQLite databases.
-  - At minimum, detect and add missing columns needed by the current schema.
-  - Longer term, decide whether to introduce a proper migration tool if the schema keeps changing.
+- Status:
+  - Completed on 2026-04-17.
+- Delivered:
+  - Startup now applies a lightweight SQLite-only schema upgrade step after table creation.
+  - Older local database files are patched for missing `TagDefinition.max_selections` and `Team.required_tag_rules_json` columns.
+  - Automated tests now cover old-schema upgrade behavior instead of relying only on fresh-database setup.
+- Follow-up still recommended:
+  - Keep the lightweight upgrade path limited to simple additive column changes.
+  - Revisit a proper migration tool if future schema changes require data backfills, renames, or type changes.
 
 ### 7. Improve API consistency and error payloads
 - Current problem:
