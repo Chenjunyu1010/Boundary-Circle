@@ -465,7 +465,8 @@ def render_team_detail() -> None:
     candidate_members = [
         member
         for member in circle_members
-        if member.get("id") not in member_ids
+        if member.get("id") is not None
+        and member.get("id") not in member_ids
         and (team.get("id"), member.get("id")) not in pending_lookup
     ]
 

@@ -391,7 +391,8 @@ def main():
                 if success:
                     st.success(message)
                     st.rerun()
-                st.error(message)
+                else:
+                    st.error(message)
         else:
             st.warning("You haven't joined this circle yet")
             if st.button("Join Circle", type="primary"):
@@ -407,7 +408,8 @@ def main():
                     st.success(message)
                     st.session_state.show_join_form = False
                     st.rerun()
-                st.error(message)
+                else:
+                    st.error(message)
 
             if st.button("Cancel", key="cancel_join"):
                 st.session_state.show_join_form = False
@@ -484,7 +486,8 @@ def main():
                                 if success:
                                     st.success(message)
                                     st.rerun()
-                                st.error(message)
+                                else:
+                                    st.error(message)
 
     st.markdown("---")
     st.markdown("### Members")
@@ -530,7 +533,8 @@ def main():
                             if success:
                                 st.success(message)
                                 st.rerun()
-                            st.error(message)
+                            else:
+                                st.error(message)
     else:
         st.info("No tags defined for this circle")
 
@@ -606,7 +610,8 @@ def main():
                         if success:
                             clear_admin_tag_form_state(circle_id)
                             st.rerun()
-                        st.error(message)
+                        else:
+                            st.error(message)
 
 
 if __name__ == "__main__":
