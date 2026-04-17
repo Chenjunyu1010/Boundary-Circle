@@ -149,3 +149,14 @@ def test_split_user_teams_uses_member_ids_instead_of_other_peoples_teams(monkeyp
 
     assert [team["id"] for team in created] == [1]
     assert [team["id"] for team in joined] == [2]
+
+
+def test_team_requirement_widget_keys_use_circle_and_tag_ids(monkeypatch):
+    _, _, _, team_module = load_team_modules(monkeypatch)
+
+    key_a = team_module.build_team_requirement_widget_key(3, {"id": 11, "name": "Major"})
+    key_b = team_module.build_team_requirement_widget_key(3, {"id": 12, "name": "Major"})
+
+    assert key_a == "team_requirement_3_11"
+    assert key_b == "team_requirement_3_12"
+    assert key_a != key_b

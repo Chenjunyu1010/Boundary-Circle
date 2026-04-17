@@ -99,6 +99,23 @@ def create_tag_definition(
         return False, f"Error: {str(e)}"
 
 
+def delete_tag_definition(tag_definition_id: int) -> tuple[bool, str]:
+    """Delete a tag definition for a circle (creator only)."""
+    try:
+        response = api_client.delete(f"/tags/definitions/{tag_definition_id}")
+        if response.ok:
+            return True, "Tag definition deleted successfully."
+
+        detail = ""
+        try:
+            detail = response.json().get("detail", "")
+        except Exception:
+            detail = ""
+        return False, detail or f"Failed to delete tag definition: {response.reason}"
+    except Exception as e:
+        return False, f"Error: {str(e)}"
+
+
 def submit_member_tags(circle_id: int, tag_definitions: list, tag_data: dict) -> tuple[bool, str]:
     """Submit or update current member tags for a circle."""
     current_user = get_current_user()
@@ -178,6 +195,16 @@ def validate_tag_input(tag: dict, value) -> tuple[bool, str]:
             return False, f"{tag['name']} allows at most {max_selections} selections."
 
     return True, ""
+
+
+def _admin_tag_form_key(circle_id: int, field_name: str) -> str:
+    return f"admin_tag_{field_name}_{circle_id}"
+
+
+def clear_admin_tag_form_state(circle_id: int) -> None:
+    """Clear admin tag form widget state after a successful create."""
+    for field_name in ["name", "type", "required", "options", "max_selections"]:
+        st.session_state.pop(_admin_tag_form_key(circle_id, field_name), None)
 
 
 def resolve_circle_id(query_params=None) -> int:
@@ -374,7 +401,8 @@ def main():
     st.markdown(f"**Description:** {circle.get('description', 'No description')}")
 
     # Back link
-    st.page_link("pages/circles.py", label="Back to Circle Hall", icon="⬅️")
+    if not st.session_state.get("circle_hall_focus_detail"):
+        st.page_link("pages/circles.py", label="Back to Circle Hall", icon="⬅️")
 
     st.markdown("---")
 
@@ -532,7 +560,7 @@ def main():
     if tag_definitions:
         for tag in [normalize_tag_definition(tag) for tag in tag_definitions]:
             with st.container(border=True):
-                col1, col2 = st.columns([1, 4])
+                col1, col2, col3 = st.columns([1, 4, 1])
                 with col1:
                     required = "⭐" if tag.get("required") else "?"
                     st.markdown(f"**{tag.get('name', 'Tag')}** {required}")
@@ -540,6 +568,18 @@ def main():
                     st.markdown(f"Type: {tag.get('data_type', 'string')}")
                     if tag.get("options"):
                         st.caption(f"Options: {', '.join(tag.get('options', []))}")
+                with col3:
+                    if is_creator and tag.get("id") is not None:
+                        if st.button(
+                            "Delete Tag",
+                            key=f"delete_tag_definition_{circle_id}_{tag.get('id')}",
+                        ):
+                            success, message = delete_tag_definition(tag["id"])
+                            if success:
+                                st.success(message)
+                                st.rerun()
+                            else:
+                                st.error(message)
     else:
         st.info("No tags defined for this circle")
 
@@ -548,17 +588,33 @@ def main():
         st.markdown("### 🔐 Admin Tag Management")
         with st.form(f"add_tag_definition_form_{circle_id}"):
             st.markdown("#### ➕ Add New Tag Definition")
-            new_tag_name = st.text_input("name", placeholder="e.g. Major")
+            new_tag_name = st.text_input(
+                "name",
+                placeholder="e.g. Major",
+                key=_admin_tag_form_key(circle_id, "name"),
+            )
             new_tag_type = st.selectbox(
                 "data_type",
                 ["string", "integer", "float", "boolean", "single_select", "multi_select"],
+                key=_admin_tag_form_key(circle_id, "type"),
             )
-            new_tag_required = st.checkbox("required", value=False)
+            new_tag_required = st.checkbox(
+                "required",
+                value=False,
+                key=_admin_tag_form_key(circle_id, "required"),
+            )
             new_tag_options = st.text_input(
                 "options",
                 placeholder='When type is selection-based, input JSON array like ["A", "B"]',
+                key=_admin_tag_form_key(circle_id, "options"),
             )
-            new_tag_max_selections = st.number_input("max_selections", min_value=1, step=1, value=1)
+            new_tag_max_selections = st.number_input(
+                "max_selections",
+                min_value=1,
+                step=1,
+                value=1,
+                key=_admin_tag_form_key(circle_id, "max_selections"),
+            )
 
             create_tag_submit = st.form_submit_button("Create Tag Definition", type="primary")
 
@@ -596,7 +652,7 @@ def main():
                             max_selections_payload,
                         )
                         if success:
-                            st.success(message)
+                            clear_admin_tag_form_state(circle_id)
                             st.rerun()
                         else:
                             st.error(message)
