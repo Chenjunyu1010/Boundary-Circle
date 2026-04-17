@@ -114,6 +114,28 @@ missing columns in older local database files. This currently covers:
 This is a lightweight local schema patch for developer convenience, not a full
 migration framework.
 
+## Seed data
+
+For local demos and exploratory testing, you can populate the SQLite database with
+deterministic sample data:
+
+```bash
+python scripts/seed_data.py demo
+python scripts/seed_data.py stress
+```
+
+Reset one dataset without touching the other seed set or unrelated local records:
+
+```bash
+python scripts/seed_data.py demo --reset
+python scripts/seed_data.py stress --reset
+```
+
+Recommended usage:
+
+- `demo`: smaller, presentation-friendly data for report walkthroughs
+- `stress`: larger, more varied data for matching, invitation, leave-team, and lock/unlock testing
+
 ## Tests
 
 Run the full suite:
@@ -128,6 +150,14 @@ Run focused workflow tests:
 pytest -v tests/test_circles_join.py
 pytest -v tests/test_teams_api.py
 pytest -v tests/test_integration.py
+```
+
+Run seed-data specific checks:
+
+```bash
+pytest -v tests/test_seed_data.py
+pytest -v tests/test_seed_integration.py
+pytest -v tests/test_seed_consistency.py
 ```
 
 Generate a coverage report for backend code:

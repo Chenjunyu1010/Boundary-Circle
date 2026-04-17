@@ -2,6 +2,7 @@ from sqlmodel import select
 
 from scripts.seed_data import (
     dataset_circle_prefix,
+    dataset_team_prefix,
     dataset_user_prefix,
     reset_dataset,
     seed_dataset,
@@ -37,7 +38,7 @@ def count_teams_for_dataset(db_session, dataset: str) -> int:
         [
             team
             for team in db_session.exec(select(Team)).all()
-            if team.name.startswith(dataset_circle_prefix(dataset))
+            if team.name.startswith(dataset_team_prefix(dataset))
         ]
     )
 

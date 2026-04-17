@@ -3,7 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 from dataclasses import dataclass
-from typing import Any, Iterable
+from typing import Any, Callable, Dict, Iterable, List, Optional, Set, Tuple
 
 from sqlmodel import Session, select
 
@@ -31,9 +31,9 @@ class TagSeed:
     name: str
     data_type: TagDataType
     required: bool = False
-    options: list[str] | None = None
-    max_selections: int | None = None
-    description: str | None = None
+    options: Optional[List[str]] = None
+    max_selections: Optional[int] = None
+    description: Optional[str] = None
 
 
 @dataclass(frozen=True)
@@ -43,9 +43,9 @@ class TeamSeed:
     description: str
     creator: str
     max_members: int
-    members: list[str]
-    required_tags: list[str]
-    required_tag_rules: list[TeamRequirementRule]
+    members: List[str]
+    required_tags: List[str]
+    required_tag_rules: List[TeamRequirementRule]
 
 
 @dataclass(frozen=True)
@@ -63,17 +63,17 @@ class CircleSeed:
     description: str
     category: str
     creator: str
-    members: list[str]
-    tags: list[TagSeed]
-    user_tags: dict[str, dict[str, Any]]
-    teams: list[TeamSeed]
-    invitations: list[InvitationSeed]
+    members: List[str]
+    tags: List[TagSeed]
+    user_tags: Dict[str, Dict[str, Any]]
+    teams: List[TeamSeed]
+    invitations: List[InvitationSeed]
 
 
 @dataclass(frozen=True)
 class DatasetSeed:
-    users: dict[str, str]
-    circles: list[CircleSeed]
+    users: Dict[str, str]
+    circles: List[CircleSeed]
 
 
 @dataclass
@@ -115,7 +115,7 @@ def seed_team_name(dataset: str, name: str) -> str:
     return f"{dataset_team_prefix(dataset)}{name}"
 
 
-def _options(options: list[str] | None) -> str | None:
+def _options(options: Optional[List[str]]) -> Optional[str]:
     if options is None:
         return None
     return json.dumps(options)
@@ -283,9 +283,9 @@ def build_stress_dataset() -> DatasetSeed:
         ("research_exchange", "Research Exchange", "Interest", user_order[8:16]),
         ("community_build", "Community Build", "Event", user_order[2:18:2]),
     ]
-    circles: list[CircleSeed] = []
+    circles: List[CircleSeed] = []
     for index, (slug, name, category, members) in enumerate(circle_specs):
-        user_tags: dict[str, dict[str, Any]] = {}
+        user_tags: Dict[str, Dict[str, Any]] = {}
         for offset, member in enumerate(members):
             user_index = user_order.index(member)
             user_tags[member] = {
@@ -388,21 +388,21 @@ def _team_matches_dataset(team: Team, dataset: str) -> bool:
     return team.name.startswith(dataset_team_prefix(dataset))
 
 
-def _filter_by_dataset(items: Iterable[Any], predicate) -> list[Any]:
+def _filter_by_dataset(items: Iterable[Any], predicate: Callable[[Any], bool]) -> List[Any]:
     return [item for item in items if predicate(item)]
 
 
 def reset_dataset(session: Session, dataset: str) -> SeedSummary:
     users = _filter_by_dataset(session.exec(select(User)).all(), lambda item: _user_matches_dataset(item, dataset))
     circles = _filter_by_dataset(session.exec(select(Circle)).all(), lambda item: _circle_matches_dataset(item, dataset))
-    user_ids = {user.id for user in users if user.id is not None}
-    circle_ids = {circle.id for circle in circles if circle.id is not None}
+    user_ids: Set[int] = {user.id for user in users if user.id is not None}
+    circle_ids: Set[int] = {circle.id for circle in circles if circle.id is not None}
 
     teams = _filter_by_dataset(
         session.exec(select(Team)).all(),
         lambda item: _team_matches_dataset(item, dataset) or item.circle_id in circle_ids,
     )
-    team_ids = {team.id for team in teams if team.id is not None}
+    team_ids: Set[int] = {team.id for team in teams if team.id is not None}
 
     invitations = [
         invitation
@@ -474,7 +474,7 @@ def seed_dataset(session: Session, dataset: str) -> SeedSummary:
     reset_dataset(session, dataset)
 
     summary = SeedSummary()
-    usernames: dict[str, str] = {}
+    usernames: Dict[str, str] = {}
     for slug, full_name in blueprint.users.items():
         username = seed_username(dataset, slug)
         create_user_account(
@@ -489,9 +489,9 @@ def seed_dataset(session: Session, dataset: str) -> SeedSummary:
         usernames[slug] = username
         summary.users += 1
 
-    circle_ids: dict[str, int] = {}
-    tag_ids: dict[tuple[str, str], int] = {}
-    team_ids: dict[str, int] = {}
+    circle_ids: Dict[str, int] = {}
+    tag_ids: Dict[Tuple[str, str], int] = {}
+    team_ids: Dict[str, int] = {}
 
     for circle_seed in blueprint.circles:
         creator_id = _get_user_id(session, usernames[circle_seed.creator])

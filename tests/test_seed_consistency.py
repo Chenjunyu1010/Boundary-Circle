@@ -49,7 +49,8 @@ def _seed_datasets_have_internal_consistency(db_session) -> None:
             assert pending_count == 0
 
     for invitation in invitations:
-        team = circles and next(team for team in teams if team.id == invitation.team_id)
+        team = next((candidate for candidate in teams if candidate.id == invitation.team_id), None)
+        assert team is not None
         assert (team.circle_id, invitation.inviter_id) in circle_member_pairs
         assert (team.circle_id, invitation.invitee_id) in circle_member_pairs
 

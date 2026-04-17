@@ -163,6 +163,13 @@ def test_demo_seed_invitation_can_be_rejected_without_joining_team(db_session):
     assert vision_builders["current_members"] == 2
     assert vision_builders["status"] == "Recruiting"
 
+    members_response = client.get(
+        f"/circles/{ai_circle['id']}/members",
+        headers=alice_headers,
+    )
+    assert members_response.status_code == 200
+    derek = find_by_username(members_response.json(), "seed_demo_derek")
+
     inbox_response = client.get("/invitations", headers=derek_headers)
     assert inbox_response.status_code == 200
     pending = next(
@@ -200,7 +207,7 @@ def test_demo_seed_invitation_can_be_rejected_without_joining_team(db_session):
     )
     assert refreshed_team["current_members"] == 2
     assert refreshed_team["status"] == "Recruiting"
-    assert 4 not in refreshed_team["member_ids"]
+    assert derek["id"] not in refreshed_team["member_ids"]
 
 
 def test_demo_seed_member_can_leave_team_and_become_candidate_again(db_session):
