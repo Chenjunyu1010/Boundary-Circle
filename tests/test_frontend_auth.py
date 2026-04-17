@@ -234,3 +234,47 @@ def test_circle_detail_validate_tag_input_rejects_multi_select_over_limit(monkey
 
     assert is_valid is False
     assert error_message == "Tech Stack allows at most 2 selections."
+
+
+def test_circle_detail_clear_admin_tag_form_state_removes_widget_values(monkeypatch):
+    fake_streamlit, circle_detail_module = load_circle_detail_module(monkeypatch)
+
+    fake_streamlit.session_state["admin_tag_name_5"] = "Major"
+    fake_streamlit.session_state["admin_tag_type_5"] = "single_select"
+    fake_streamlit.session_state["admin_tag_required_5"] = True
+    fake_streamlit.session_state["admin_tag_options_5"] = '["AI", "SE"]'
+    fake_streamlit.session_state["admin_tag_max_selections_5"] = 2
+
+    circle_detail_module.clear_admin_tag_form_state(5)
+
+    assert "admin_tag_name_5" not in fake_streamlit.session_state
+    assert "admin_tag_type_5" not in fake_streamlit.session_state
+    assert "admin_tag_required_5" not in fake_streamlit.session_state
+    assert "admin_tag_options_5" not in fake_streamlit.session_state
+    assert "admin_tag_max_selections_5" not in fake_streamlit.session_state
+
+
+def test_circle_detail_delete_tag_definition_uses_expected_endpoint(monkeypatch):
+    _, circle_detail_module = load_circle_detail_module(monkeypatch)
+
+    class Response:
+        ok = True
+        reason = "OK"
+
+    captured = {}
+
+    def fake_delete(endpoint, params=None):
+        captured["endpoint"] = endpoint
+        captured["params"] = params
+        return Response()
+
+    monkeypatch.setattr(circle_detail_module.api_client, "delete", fake_delete)
+
+    success, message = circle_detail_module.delete_tag_definition(17)
+
+    assert success is True
+    assert message == "Tag definition deleted successfully."
+    assert captured == {
+        "endpoint": "/tags/definitions/17",
+        "params": None,
+    }

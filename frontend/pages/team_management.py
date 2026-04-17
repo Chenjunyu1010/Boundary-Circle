@@ -257,6 +257,14 @@ def build_team_required_tag_rules_payload(tag_definitions: list[dict], tag_data:
     return required_tag_rules
 
 
+def build_team_requirement_widget_key(circle_id: int, tag: dict) -> str:
+    """Build a stable unique widget key for a team requirement input."""
+    tag_id = tag.get("id")
+    if tag_id is not None:
+        return f"team_requirement_{circle_id}_{tag_id}"
+    return f"team_requirement_{circle_id}_{tag.get('name', 'unknown')}"
+
+
 def send_invitation(team_id: int, user_id: int, team_name: str) -> tuple[bool, str]:
     """Send an invitation to a circle member."""
     try:
@@ -378,12 +386,14 @@ def render_create_team() -> None:
                 label = f"Required {tag['name']}"
                 tag_type = tag["data_type"]
                 tag_options = tag.get("options")
+                widget_key = build_team_requirement_widget_key(circle_id, tag)
 
                 if tag_type in ("single_select", "enum") and tag_options:
                     team_requirement_values[tag["name"]] = st.selectbox(
                         label,
                         options=[""] + tag_options,
                         format_func=lambda value: "Not required" if value == "" else value,
+                        key=widget_key,
                     )
                 elif tag_type == "multi_select" and tag_options:
                     help_text = None
@@ -393,15 +403,28 @@ def render_create_team() -> None:
                         label,
                         options=tag_options,
                         help=help_text,
+                        key=widget_key,
                     )
                 elif tag_type == "boolean":
-                    team_requirement_values[tag["name"]] = st.checkbox(label, value=False)
+                    team_requirement_values[tag["name"]] = st.checkbox(label, value=False, key=widget_key)
                 elif tag_type == "integer":
-                    team_requirement_values[tag["name"]] = st.text_input(label, placeholder="Leave blank if not required")
+                    team_requirement_values[tag["name"]] = st.text_input(
+                        label,
+                        placeholder="Leave blank if not required",
+                        key=widget_key,
+                    )
                 elif tag_type == "float":
-                    team_requirement_values[tag["name"]] = st.text_input(label, placeholder="Leave blank if not required")
+                    team_requirement_values[tag["name"]] = st.text_input(
+                        label,
+                        placeholder="Leave blank if not required",
+                        key=widget_key,
+                    )
                 else:
-                    team_requirement_values[tag["name"]] = st.text_input(label, placeholder="Leave blank if not required")
+                    team_requirement_values[tag["name"]] = st.text_input(
+                        label,
+                        placeholder="Leave blank if not required",
+                        key=widget_key,
+                    )
         else:
             st.info("No circle tag definitions found. Team requirements will be empty.")
 

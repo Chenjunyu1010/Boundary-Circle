@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
-from typing import Tuple
+from typing import Optional, Tuple
 
 # Add parent directory to path for imports
 parent_dir = str(Path(__file__).parent.parent)
@@ -43,11 +43,15 @@ def fetch_circles() -> list[dict]:
         return []
 
 
-def create_circle(name: str, description: str, category: str = "General") -> Tuple[bool, str]:
+def create_circle(
+    name: str,
+    description: str,
+    category: str = "General",
+) -> Tuple[bool, str, Optional[int]]:
     """Create a new circle."""
     current_user = get_current_user()
     if current_user.get("id") is None:
-        return False, "Please login again before creating a circle."
+        return False, "Please login again before creating a circle.", None
 
     try:
         response = api_client.post(
@@ -59,16 +63,26 @@ def create_circle(name: str, description: str, category: str = "General") -> Tup
             },
         )
         if response.ok:
-            return True, "Circle created successfully!"
-        return False, f"Failed to create circle: {response.reason}"
+            try:
+                payload = response.json()
+            except Exception:  # pragma: no cover - defensive
+                payload = {}
+            return True, "Circle created successfully!", payload.get("id")
+        return False, f"Failed to create circle: {response.reason}", None
     except Exception as exc:  # pragma: no cover - defensive
-        return False, f"Error: {exc}"
+        return False, f"Error: {exc}", None
 
 
 def open_circle_detail(circle_id: int) -> None:
     """Persist selected circle id for inline detail view."""
     st.session_state.selected_circle_id = circle_id
     st.session_state.current_circle_id = circle_id
+
+
+def prepare_circle_detail_navigation(circle_id: int) -> None:
+    """Focus the newly created circle detail flow."""
+    open_circle_detail(circle_id)
+    st.session_state.circle_hall_focus_detail = True
 
 
 def main() -> None:
@@ -78,6 +92,16 @@ def main() -> None:
 
     # Require authentication
     require_auth()
+
+    if (
+        st.session_state.get("circle_hall_focus_detail")
+        and st.session_state.get("selected_circle_id") is not None
+    ):
+        if st.button("Back to Circle List", key="back_to_circle_list"):
+            st.session_state.circle_hall_focus_detail = False
+            st.rerun()
+        circle_detail_page.main()
+        return
 
     list_tab, detail_tab = st.tabs(["Circle List", "Circle Detail"])
 
@@ -142,14 +166,15 @@ def main() -> None:
                     if not circle_name:
                         st.error("Please enter a circle name")
                     else:
-                        success, message = create_circle(
+                        success, message, circle_id = create_circle(
                             circle_name,
                             circle_description,
                             circle_category,
                         )
                         if success:
-                            st.success(message)
                             st.session_state.show_create_form = False
+                            if circle_id is not None:
+                                prepare_circle_detail_navigation(circle_id)
                             st.rerun()
                         else:
                             st.error(message)
