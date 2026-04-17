@@ -10,7 +10,7 @@ from __future__ import annotations
 import json
 import sys
 from pathlib import Path
-from typing import Iterable, Tuple
+from typing import Iterable, Optional, Tuple
 
 import streamlit as st
 
@@ -90,7 +90,7 @@ def close_team_detail() -> None:
     st.rerun()
 
 
-def get_selected_team(teams: list[dict]) -> dict | None:
+def get_selected_team(teams: list[dict]) -> Optional[dict]:
     """Return the currently selected team from a fetched team list."""
     selected_team_id = st.session_state.get("selected_team_id")
     if selected_team_id is None:

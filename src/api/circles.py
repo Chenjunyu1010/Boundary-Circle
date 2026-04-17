@@ -1,3 +1,5 @@
+from typing import Optional
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, select
@@ -14,7 +16,7 @@ router = APIRouter(prefix="/circles", tags=["Circles"])
 def build_circle_read(
     circle: Circle,
     session: Session,
-    current_user: User | None = None,
+    current_user: Optional[User] = None,
 ) -> CircleRead:
     """Build a circle read payload enriched with creator identity."""
     creator = session.get(User, circle.creator_id)
@@ -85,7 +87,7 @@ def create_circle(
 def read_circles(
     skip: int = 0,
     limit: int = 100,
-    current_user: User | None = Depends(get_optional_current_user),
+    current_user: Optional[User] = Depends(get_optional_current_user),
     session: Session = Depends(get_session),
 ):
     circles = session.exec(select(Circle).offset(skip).limit(limit)).all()
@@ -95,7 +97,7 @@ def read_circles(
 @router.get("/{circle_id}", response_model=CircleRead)
 def read_circle(
     circle_id: int,
-    current_user: User | None = Depends(get_optional_current_user),
+    current_user: Optional[User] = Depends(get_optional_current_user),
     session: Session = Depends(get_session),
 ):
     circle = session.get(Circle, circle_id)
