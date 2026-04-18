@@ -352,3 +352,46 @@ def test_split_invitations_for_management_keeps_join_request_buckets_separate(mo
     assert [item["id"] for item in pending_requests] == [2]
     assert [item["id"] for item in outgoing_requests] == [3]
     assert [item["id"] for item in processed] == [4]
+
+
+def test_mock_forbidden_join_request_response_maps_to_403(monkeypatch):
+    fake_streamlit, api_module, _, _ = load_team_modules(monkeypatch)
+    fake_streamlit.session_state.logged_in = True
+    fake_streamlit.session_state.user_id = 4
+    fake_streamlit.session_state.mock_teams = {
+        1: [
+            {
+                "id": 8,
+                "name": "Systems Team",
+                "description": "Need another member",
+                "max_members": 3,
+                "current_members": 1,
+                "status": "Recruiting",
+                "creator_id": 1,
+                "circle_id": 1,
+                "member_ids": [1],
+            }
+        ]
+    }
+    fake_streamlit.session_state.mock_invitations = [
+        {
+            "id": 40,
+            "team_id": 8,
+            "circle_id": 1,
+            "team_name": "Systems Team",
+            "inviter_id": 4,
+            "inviter_username": "dave",
+            "invitee_id": 1,
+            "invitee_username": "alice",
+            "kind": "join_request",
+            "status": "pending",
+        }
+    ]
+
+    response = api_module.api_client.post(
+        "/invitations/40/respond",
+        data={"accept": True},
+    )
+
+    assert response.status_code == 403
+    assert response.json()["message"] == "Only the team creator can respond"

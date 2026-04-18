@@ -1,3 +1,5 @@
+from typing import Optional
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlmodel import Session, select
 
@@ -74,6 +76,60 @@ def build_invitation_read(invitation: Invitation, session: Session) -> Invitatio
         kind=invitation.kind,
         status=invitation.status,
     )
+
+
+def build_invitation_reads(
+    invitations: list[Invitation],
+    session: Session,
+    teams_by_id: Optional[dict[int, Team]] = None,
+    users_by_id: Optional[dict[int, User]] = None,
+) -> list[InvitationRead]:
+    if teams_by_id is None:
+        team_ids = {invitation.team_id for invitation in invitations}
+        teams_by_id = (
+            {
+                team.id: team
+                for team in session.exec(select(Team).where(Team.id.in_(team_ids))).all()
+                if team.id is not None
+            }
+            if team_ids
+            else {}
+        )
+    if users_by_id is None:
+        user_ids = {
+            user_id
+            for invitation in invitations
+            for user_id in (invitation.inviter_id, invitation.invitee_id)
+        }
+        users_by_id = (
+            {
+                user.id: user
+                for user in session.exec(select(User).where(User.id.in_(user_ids))).all()
+                if user.id is not None
+            }
+            if user_ids
+            else {}
+        )
+
+    result: list[InvitationRead] = []
+    for invitation in invitations:
+        team = teams_by_id.get(invitation.team_id)
+        inviter = users_by_id.get(invitation.inviter_id)
+        invitee = users_by_id.get(invitation.invitee_id)
+        result.append(
+            InvitationRead(
+                id=invitation.id,
+                team_id=invitation.team_id,
+                team_name=team.name if team is not None else None,
+                inviter_id=invitation.inviter_id,
+                inviter_username=inviter.username if inviter is not None else None,
+                invitee_id=invitation.invitee_id,
+                invitee_username=invitee.username if invitee is not None else None,
+                kind=invitation.kind,
+                status=invitation.status,
+            )
+        )
+    return result
 
 
 def require_circle_member(
@@ -309,7 +365,7 @@ def list_team_invitations(
             Invitation.kind == InvitationKind.INVITE,
         )
     ).all()
-    return [build_invitation_read(invitation, session) for invitation in invitations]
+    return build_invitation_reads(invitations, session)
 
 
 @router.get("/invitations", response_model=list[InvitationRead])
@@ -326,7 +382,7 @@ def list_invitations(
             | (Invitation.kind == InvitationKind.JOIN_REQUEST) & (Invitation.inviter_id == current_user.id)
         )
     ).all()
-    return [build_invitation_read(invitation, session) for invitation in invitations]
+    return build_invitation_reads(invitations, session)
 
 
 @router.post("/invitations/{invite_id}/respond")

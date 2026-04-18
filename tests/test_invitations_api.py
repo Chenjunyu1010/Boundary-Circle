@@ -1,8 +1,10 @@
 from fastapi.testclient import TestClient
 
+from src.api.teams import build_invitation_reads
 from src.main import app
+from src.models.core import User
 from src.models.tags import CircleMember, CircleRole
-from src.models.teams import TeamMember
+from src.models.teams import Invitation, InvitationKind, InvitationStatus, Team, TeamMember
 
 
 client = TestClient(app)
@@ -938,3 +940,49 @@ def test_team_creator_can_reject_join_request_without_adding_member(db_session):
     stored_team = teams_response.json()[0]
     assert requester["id"] not in stored_team["member_ids"]
     assert stored_team["current_members"] == 1
+
+
+def test_build_invitation_reads_can_use_preloaded_related_records(db_session):
+    creator, _ = register_and_login("batchcaptain", "batchcaptain@example.com")
+    invitee, _ = register_and_login("batchinvitee", "batchinvitee@example.com")
+    team = Team(name="Batch Team", description="Batch read team", circle_id=1, creator_id=creator["id"], max_members=4)
+    db_session.add(team)
+    db_session.commit()
+    db_session.refresh(team)
+
+    invitation = Invitation(
+        team_id=team.id,
+        inviter_id=creator["id"],
+        invitee_id=invitee["id"],
+        kind=InvitationKind.INVITE,
+        status=InvitationStatus.PENDING,
+    )
+    db_session.add(invitation)
+    db_session.commit()
+    db_session.refresh(invitation)
+
+    original_get = db_session.get
+
+    def fail_related_get(model, identity, *args, **kwargs):
+        if model in {Team, User}:
+            raise AssertionError("session.get should not be used for preloaded Team/User records")
+        return original_get(model, identity, *args, **kwargs)
+
+    db_session.get = fail_related_get
+    try:
+        payload = build_invitation_reads(
+            [invitation],
+            db_session,
+            teams_by_id={team.id: team},
+            users_by_id={
+                creator["id"]: original_get(User, creator["id"]),
+                invitee["id"]: original_get(User, invitee["id"]),
+            },
+        )
+    finally:
+        db_session.get = original_get
+
+    assert len(payload) == 1
+    assert payload[0].team_name == "Batch Team"
+    assert payload[0].inviter_username == "batchcaptain"
+    assert payload[0].invitee_username == "batchinvitee"

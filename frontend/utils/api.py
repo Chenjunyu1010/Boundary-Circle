@@ -208,6 +208,9 @@ class APIClient:
             if "not found" in message:
                 status_code = 404
                 reason = "Not Found"
+            elif "only" in message and "respond" in message:
+                status_code = 403
+                reason = "Forbidden"
             elif "already" in message or "duplicate" in message or "exists" in message:
                 status_code = 409
                 reason = "Conflict"
