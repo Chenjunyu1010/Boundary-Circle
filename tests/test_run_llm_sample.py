@@ -3,6 +3,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import httpx
+
 import scripts.run_llm_sample as run_llm_sample
 
 
@@ -122,3 +124,60 @@ def test_run_sample_writes_single_result_file(monkeypatch) -> None:
     ]
     assert payload["actual"] == ["Python", "FastAPI"]
     assert payload["metrics"] == {"precision": 1.0, "recall": 0.4}
+
+
+def test_run_sample_writes_timeout_result_file(monkeypatch) -> None:
+    captured: dict[str, object] = {}
+
+    class _TimeoutExtractor:
+        def extract_keywords(self, text: str) -> dict[str, list[str]]:
+            raise httpx.ReadTimeout("timed out")
+
+    monkeypatch.setattr(
+        run_llm_sample,
+        "load_corpus",
+        lambda corpus_path: {
+            "S002": {
+                "id": "S002",
+                "name": "en_negation_short",
+                "language": "en",
+                "input": "I know Python and SQL, but I do not like frontend.",
+                "expected": ["Python", "SQL"],
+                "notes": "",
+            }
+        },
+    )
+    monkeypatch.setattr(run_llm_sample, "build_freedom_profile_extractor", lambda: _TimeoutExtractor())
+    monkeypatch.setattr(run_llm_sample, "next_result_path", lambda results_dir: Path("R999.json"))
+    monkeypatch.setattr(
+        run_llm_sample,
+        "get_settings",
+        lambda: type(
+            "Settings",
+            (),
+            {
+                "llm_provider": "openai_compatible",
+                "llm_model": "test-model",
+                "llm_base_url": "https://example.test/v1",
+            },
+        )(),
+    )
+
+    def fake_write_text(self: Path, content: str, encoding: str = "utf-8") -> int:
+        captured["payload"] = json.loads(content)
+        return len(content)
+
+    monkeypatch.setattr(Path, "write_text", fake_write_text)
+
+    output_path = run_llm_sample.run_sample(
+        sample_id="S002",
+        corpus_path=Path("virtual-corpus.json"),
+        results_dir=Path("virtual-results"),
+    )
+
+    assert output_path.name == "R999.json"
+    payload = captured["payload"]
+    assert payload["status"] == "TIMEOUT"
+    assert payload["actual"] == []
+    assert payload["metrics"] == {"precision": 0.0, "recall": 0.0}
+    assert payload["error_type"] == "ReadTimeout"

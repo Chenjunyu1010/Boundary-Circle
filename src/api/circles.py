@@ -2,7 +2,7 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.exc import IntegrityError
-from sqlmodel import SQLModel, Session, select
+from sqlmodel import Field, SQLModel, Session, select
 
 from src.auth.dependencies import get_current_user, get_optional_current_user
 from src.db.database import get_session
@@ -17,7 +17,7 @@ router = APIRouter(prefix="/circles", tags=["Circles"])
 
 class CircleProfileUpdate(SQLModel):
     """Request model for updating a user's freedom tag in a circle."""
-    freedom_tag_text: str = ""
+    freedom_tag_text: str = Field(default="", max_length=2000)
 
 
 class CircleProfileRead(SQLModel):

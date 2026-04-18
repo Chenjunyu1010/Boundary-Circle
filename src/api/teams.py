@@ -98,21 +98,36 @@ def build_invitation_reads(
     users_by_id: Optional[dict[int, Optional[User]]] = None,
 ) -> list[InvitationRead]:
     if teams_by_id is None:
-        teams_by_id = {}
+        team_ids = {invitation.team_id for invitation in invitations}
+        teams_by_id = (
+            {
+                team.id: team
+                for team in session.exec(select(Team).where(Team.id.in_(team_ids))).all()
+                if team.id is not None
+            }
+            if team_ids
+            else {}
+        )
     if users_by_id is None:
-        users_by_id = {}
+        user_ids = {
+            user_id
+            for invitation in invitations
+            for user_id in (invitation.inviter_id, invitation.invitee_id)
+        }
+        users_by_id = (
+            {
+                user.id: user
+                for user in session.exec(select(User).where(User.id.in_(user_ids))).all()
+                if user.id is not None
+            }
+            if user_ids
+            else {}
+        )
 
     result: list[InvitationRead] = []
     for invitation in invitations:
         if invitation.id is None:
             continue
-        if invitation.team_id not in teams_by_id:
-            teams_by_id[invitation.team_id] = session.get(Team, invitation.team_id)
-        if invitation.inviter_id not in users_by_id:
-            users_by_id[invitation.inviter_id] = session.get(User, invitation.inviter_id)
-        if invitation.invitee_id not in users_by_id:
-            users_by_id[invitation.invitee_id] = session.get(User, invitation.invitee_id)
-
         team = teams_by_id.get(invitation.team_id)
         inviter = users_by_id.get(invitation.inviter_id)
         invitee = users_by_id.get(invitation.invitee_id)

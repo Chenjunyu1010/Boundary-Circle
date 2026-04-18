@@ -62,7 +62,7 @@ class TeamCreate(SQLModel):
     max_members: int = Field(ge=2)
     required_tags: list[str] = []
     required_tag_rules: list[TeamRequirementRule] = []
-    freedom_requirement_text: str = ""
+    freedom_requirement_text: str = Field(default="", max_length=2000)
 
 
 class TeamRead(SQLModel):

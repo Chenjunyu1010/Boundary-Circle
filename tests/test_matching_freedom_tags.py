@@ -6,6 +6,7 @@ from fastapi.testclient import TestClient
 from sqlmodel import select
 
 from src.main import app
+from src.services import matching as matching_service
 from src.models.tags import CircleMember, CircleRole, TagDataType, TagDefinition, UserTag
 from src.models.teams import Team
 
@@ -635,3 +636,94 @@ def test_match_teams_for_user_includes_freedom_score(db_session) -> None:
     assert isinstance(item["matched_freedom_keywords"], list)
     assert "python" in item["matched_freedom_keywords"]
     assert "fastapi" in item["matched_freedom_keywords"]
+
+
+def test_matching_helpers_do_not_call_session_get_for_user_tag_name_lookup(db_session, monkeypatch) -> None:
+    """Tag-name lookup should use joined queries instead of per-row session.get calls."""
+    user, headers = register_and_login("lookup_user", "lookup_user@example.com")
+    circle_response = client.post(
+        "/circles/",
+        headers=headers,
+        json={"name": "Lookup Circle", "description": "Circle for helper lookup test"},
+    )
+    assert circle_response.status_code == 201
+    circle = circle_response.json()
+
+    role_tag = TagDefinition(
+        circle_id=circle["id"],
+        name="role",
+        data_type=TagDataType.STRING,
+        required=False,
+    )
+    db_session.add(role_tag)
+    db_session.commit()
+    db_session.refresh(role_tag)
+    db_session.add(
+        UserTag(
+            user_id=user["id"],
+            circle_id=circle["id"],
+            tag_definition_id=role_tag.id,
+            value="backend",
+        )
+    )
+    db_session.commit()
+
+    monkeypatch.setattr(
+        db_session,
+        "get",
+        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("session.get should not be used")),
+    )
+
+    names = matching_service.get_user_tag_names_for_circle(db_session, user["id"], circle["id"])
+
+    assert names == {"role"}
+
+
+def test_matching_helpers_do_not_call_session_get_for_user_tag_value_lookup(db_session, monkeypatch) -> None:
+    """Tag-value lookup should use joined queries instead of per-row session.get calls."""
+    user, headers = register_and_login("value_user", "value_user@example.com")
+    circle_response = client.post(
+        "/circles/",
+        headers=headers,
+        json={"name": "Value Lookup Circle", "description": "Circle for helper value lookup"},
+    )
+    assert circle_response.status_code == 201
+    circle = circle_response.json()
+
+    role_tag = TagDefinition(
+        circle_id=circle["id"],
+        name="role",
+        data_type=TagDataType.STRING,
+        required=False,
+    )
+    db_session.add(role_tag)
+    db_session.commit()
+    db_session.refresh(role_tag)
+    db_session.add(
+        UserTag(
+            user_id=user["id"],
+            circle_id=circle["id"],
+            tag_definition_id=role_tag.id,
+            value="backend",
+        )
+    )
+    db_session.commit()
+
+    monkeypatch.setattr(
+        db_session,
+        "get",
+        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("session.get should not be used")),
+    )
+
+    values = matching_service.get_user_tag_values_for_circle(db_session, user["id"], circle["id"])
+
+    assert values == {"role": "backend"}
+
+
+def test_decode_freedom_keywords_matches_model_normalization() -> None:
+    """Matching helper should reuse model-level freedom profile normalization."""
+    keywords = matching_service.decode_freedom_keywords(
+        '{"keywords": ["Python", "Python", " fastapi ", "ai", "ml", "ops"]}'
+    )
+
+    assert keywords == ["Python", "fastapi", "ai", "ml", "ops"]

@@ -216,3 +216,50 @@ def test_create_team_uses_configured_extractor_keywords(monkeypatch):
 
     payload = create_response.json()
     assert payload["freedom_requirement_profile_keywords"] == ["privacy", "security"]
+
+
+def test_circle_profile_rejects_overlong_freedom_tag_text():
+    """Circle freedom profile input should reject oversized payloads before LLM extraction."""
+    user, user_headers = register_and_login("longprofile", "longprofile@example.com")
+    circle_response = client.post(
+        "/circles/",
+        headers=user_headers,
+        json={"name": "Long Freedom Circle", "description": "Circle for length validation"},
+    )
+    assert circle_response.status_code == 201
+    circle = circle_response.json()
+
+    profile_response = client.put(
+        f"/circles/{circle['id']}/profile",
+        headers=user_headers,
+        json={"freedom_tag_text": "x" * 2001},
+    )
+
+    assert profile_response.status_code == 422
+
+
+def test_create_team_rejects_overlong_freedom_requirement_text():
+    """Team freedom requirement input should reject oversized payloads before LLM extraction."""
+    creator, creator_headers = register_and_login("longteamcreator", "longteamcreator@example.com")
+    circle_response = client.post(
+        "/circles/",
+        headers=creator_headers,
+        json={"name": "Long Team Circle", "description": "Circle for team length validation"},
+    )
+    assert circle_response.status_code == 201
+    circle = circle_response.json()
+
+    create_response = client.post(
+        "/teams",
+        headers=creator_headers,
+        json={
+            "name": "Long Freedom Team",
+            "description": "Team with oversized freedom requirement",
+            "circle_id": circle["id"],
+            "max_members": 3,
+            "required_tags": [],
+            "freedom_requirement_text": "x" * 2001,
+        },
+    )
+
+    assert create_response.status_code == 422
