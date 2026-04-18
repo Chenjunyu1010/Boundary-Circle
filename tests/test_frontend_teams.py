@@ -176,3 +176,67 @@ def test_open_team_detail_sets_focus_and_selected_team(monkeypatch):
     assert fake_streamlit.session_state.selected_team_id == 22
     assert fake_streamlit.session_state.team_management_focus_detail is True
     assert rerun_called["value"] is True
+
+
+def test_go_to_circle_detail_preserves_current_circle_and_switches_page(monkeypatch):
+    fake_streamlit, _, _, team_module = load_team_modules(monkeypatch)
+    switched = {}
+
+    fake_streamlit.session_state.current_circle_id = 6
+    fake_streamlit.session_state.circle_hall_focus_detail = False
+    fake_streamlit.switch_page = lambda target: switched.setdefault("target", target)
+
+    team_module.go_to_circle_detail()
+
+    assert fake_streamlit.session_state.selected_circle_id == 6
+    assert fake_streamlit.session_state.circle_hall_focus_detail is True
+    assert switched["target"] == "pages/circles.py"
+
+
+def test_go_to_circle_hall_clears_selected_circle_and_switches_page(monkeypatch):
+    fake_streamlit, _, _, team_module = load_team_modules(monkeypatch)
+    switched = {}
+
+    fake_streamlit.session_state.current_circle_id = 6
+    fake_streamlit.session_state.selected_circle_id = 6
+    fake_streamlit.session_state.circle_hall_focus_detail = True
+    fake_streamlit.switch_page = lambda target: switched.setdefault("target", target)
+
+    team_module.go_to_circle_hall()
+
+    assert fake_streamlit.session_state.circle_hall_focus_detail is False
+    assert "selected_circle_id" not in fake_streamlit.session_state
+    assert fake_streamlit.session_state.current_circle_id == 6
+    assert switched["target"] == "pages/circles.py"
+
+
+def test_open_public_profile_sets_return_context_and_switches_page(monkeypatch):
+    fake_streamlit, _, _, team_module = load_team_modules(monkeypatch)
+    switched = {}
+
+    fake_streamlit.session_state.current_circle_id = 3
+    fake_streamlit.session_state.selected_team_id = 31
+    fake_streamlit.session_state.team_management_focus_detail = True
+    fake_streamlit.switch_page = lambda target: switched.setdefault("target", target)
+
+    team_module.open_public_profile(31)
+
+    assert fake_streamlit.session_state.public_profile_return_page == "pages/team_management.py"
+    assert fake_streamlit.session_state.public_profile_return_label == "Back to Team Management"
+    assert fake_streamlit.session_state.public_profile_target_user_id == 31
+    assert fake_streamlit.session_state.public_profile_return_context == {
+        "current_circle_id": 3,
+        "selected_team_id": 31,
+        "team_management_focus_detail": True,
+    }
+    assert fake_streamlit.query_params["user_id"] == "31"
+    assert switched["target"] == "pages/public_profile.py"
+
+
+def test_get_stored_user_matches_only_returns_results_for_selected_team(monkeypatch):
+    fake_streamlit, _, _, team_module = load_team_modules(monkeypatch)
+    fake_streamlit.session_state.matching_selected_team_id = 9
+    fake_streamlit.session_state.matching_user_results = [{"user_id": 3, "username": "carol"}]
+
+    assert team_module.get_stored_user_matches(9) == [{"user_id": 3, "username": "carol"}]
+    assert team_module.get_stored_user_matches(8) == []

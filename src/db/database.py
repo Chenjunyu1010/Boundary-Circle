@@ -49,6 +49,12 @@ def run_sqlite_schema_upgrades(db_engine: Engine) -> None:
         "required_tag_rules_json",
         "required_tag_rules_json VARCHAR NOT NULL DEFAULT '[]'",
     )
+    _add_column_if_missing(
+        db_engine,
+        "userprofile",
+        "profile_prompt_dismissed",
+        "profile_prompt_dismissed BOOLEAN NOT NULL DEFAULT 0",
+    )
 
 
 def create_db_and_tables():

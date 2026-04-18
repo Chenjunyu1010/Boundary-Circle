@@ -43,7 +43,7 @@ def handle_login(email: str, password: str):
     if success:
         st.balloons()
         st.success(message)
-        st.rerun()
+        st.switch_page("Home.py")
     else:
         st.error(message)
 

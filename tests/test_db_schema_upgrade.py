@@ -33,6 +33,20 @@ def _create_old_schema(engine) -> None:
             required_tags_json VARCHAR NOT NULL
         )
         """,
+        """
+        CREATE TABLE userprofile (
+            id INTEGER NOT NULL PRIMARY KEY,
+            user_id INTEGER NOT NULL,
+            gender VARCHAR,
+            birthday DATE,
+            bio VARCHAR,
+            show_full_name BOOLEAN NOT NULL,
+            show_gender BOOLEAN NOT NULL,
+            show_birthday BOOLEAN NOT NULL,
+            show_email BOOLEAN NOT NULL,
+            show_bio BOOLEAN NOT NULL
+        )
+        """,
     ]
 
     with engine.begin() as connection:
@@ -64,6 +78,16 @@ def test_upgrade_adds_missing_team_required_tag_rules_json_column(tmp_path: Path
     run_sqlite_schema_upgrades(engine)
 
     assert "required_tag_rules_json" in _column_names(engine, "team")
+
+
+def test_upgrade_adds_missing_userprofile_prompt_column(tmp_path: Path):
+    db_path = tmp_path / "old-schema.db"
+    engine = create_engine(f"sqlite:///{db_path}")
+    _create_old_schema(engine)
+
+    run_sqlite_schema_upgrades(engine)
+
+    assert "profile_prompt_dismissed" in _column_names(engine, "userprofile")
 
 
 def test_upgrade_backfills_required_tag_rules_json_for_existing_team_rows(tmp_path: Path):

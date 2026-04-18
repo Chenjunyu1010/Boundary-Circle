@@ -244,7 +244,70 @@ class APIClient:
                 "id": st.session_state.get("user_id", 1),
                 "username": st.session_state.get("username", "user"),
                 "email": st.session_state.get("email", "user@example.com"),
+                "full_name": st.session_state.get("full_name"),
             }
+
+        if endpoint == "/profile/me" and method == "GET":
+            if "mock_profile" not in st.session_state:
+                st.session_state.mock_profile = {
+                    "id": st.session_state.get("user_id", 1),
+                    "username": st.session_state.get("username", "user"),
+                    "email": st.session_state.get("email", "user@example.com"),
+                    "full_name": st.session_state.get("full_name"),
+                    "gender": None,
+                    "birthday": None,
+                    "bio": None,
+                    "profile_prompt_dismissed": False,
+                    "show_full_name": True,
+                    "show_gender": True,
+                    "show_birthday": True,
+                    "show_email": True,
+                    "show_bio": True,
+                }
+            return st.session_state.mock_profile
+
+        if endpoint == "/profile/me" and method == "PUT":
+            profile = dict(self._mock_response("/profile/me", "GET"))
+            if data:
+                profile.update(data)
+                if "full_name" in data:
+                    st.session_state.full_name = data.get("full_name")
+            st.session_state.mock_profile = profile
+            return profile
+
+        if endpoint == "/profile/me/dismiss-prompt" and method == "POST":
+            profile = dict(self._mock_response("/profile/me", "GET"))
+            profile["profile_prompt_dismissed"] = True
+            st.session_state.mock_profile = profile
+            return profile
+
+        if endpoint.startswith("/users/") and endpoint.endswith("/profile") and method == "GET":
+            import re
+
+            match = re.match(r"/users/(\d+)/profile", endpoint)
+            if match:
+                user_id = int(match.group(1))
+                mock_members = self._get_mock_members(circle_id=1)
+                member = next(
+                    (item for item in mock_members if item.get("id") == user_id),
+                    None,
+                )
+                if member is None:
+                    return {
+                        "success": False,
+                        "message": "User not found",
+                        "detail": "User not found",
+                    }
+
+                return {
+                    "id": user_id,
+                    "username": member.get("username", f"user{user_id}"),
+                    "email": member.get("email"),
+                    "full_name": f"{member.get('username', 'User').title()} Example",
+                    "gender": None,
+                    "birthday": None,
+                    "bio": f"Public bio for {member.get('username', 'this user')}.",
+                }
 
         if endpoint == "/circles" and method == "GET":
             return self._ensure_mock_circles()

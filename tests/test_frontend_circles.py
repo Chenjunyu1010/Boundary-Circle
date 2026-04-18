@@ -196,3 +196,43 @@ def test_normalize_tag_definition_supports_backend_payload(monkeypatch):
         "required": True,
         "options": ["Freshman", "Sophomore"],
     }
+
+
+def test_open_public_profile_sets_return_context_and_switches_page(monkeypatch):
+    fake_streamlit, _, detail_module = load_circle_modules(monkeypatch)
+    switched = {}
+
+    fake_streamlit.session_state.selected_circle_id = 8
+    fake_streamlit.session_state.current_circle_id = 8
+    fake_streamlit.session_state.circle_hall_focus_detail = True
+    fake_streamlit.switch_page = lambda target: switched.setdefault("target", target)
+
+    detail_module.open_public_profile(23)
+
+    assert fake_streamlit.session_state.public_profile_return_page == "pages/circles.py"
+    assert fake_streamlit.session_state.public_profile_return_label == "Back to Circle Detail"
+    assert fake_streamlit.session_state.public_profile_target_user_id == 23
+    assert fake_streamlit.session_state.public_profile_return_context == {
+        "selected_circle_id": 8,
+        "current_circle_id": 8,
+        "circle_hall_focus_detail": True,
+    }
+    assert fake_streamlit.query_params["user_id"] == "23"
+    assert switched["target"] == "pages/public_profile.py"
+
+
+def test_go_to_circle_hall_clears_detail_state_and_switches_page(monkeypatch):
+    fake_streamlit, _, detail_module = load_circle_modules(monkeypatch)
+    switched = {}
+
+    fake_streamlit.session_state.circle_hall_focus_detail = True
+    fake_streamlit.session_state.selected_circle_id = 8
+    fake_streamlit.session_state.current_circle_id = 8
+    fake_streamlit.switch_page = lambda target: switched.setdefault("target", target)
+
+    detail_module.go_to_circle_hall()
+
+    assert fake_streamlit.session_state.circle_hall_focus_detail is False
+    assert "selected_circle_id" not in fake_streamlit.session_state
+    assert "current_circle_id" not in fake_streamlit.session_state
+    assert switched["target"] == "pages/circles.py"

@@ -90,6 +90,36 @@ def close_team_detail() -> None:
     st.rerun()
 
 
+def go_to_circle_detail() -> None:
+    """Return to the current circle detail page."""
+    circle_id = st.session_state.get("current_circle_id")
+    if circle_id is not None:
+        st.session_state.selected_circle_id = circle_id
+    st.session_state.circle_hall_focus_detail = True
+    st.switch_page("pages/circles.py")
+
+
+def go_to_circle_hall() -> None:
+    """Return to the circle hall list view."""
+    st.session_state.circle_hall_focus_detail = False
+    st.session_state.pop("selected_circle_id", None)
+    st.switch_page("pages/circles.py")
+
+
+def open_public_profile(user_id: int) -> None:
+    """Open the public profile page for a team-related user."""
+    st.session_state.public_profile_return_page = "pages/team_management.py"
+    st.session_state.public_profile_return_label = "Back to Team Management"
+    st.session_state.public_profile_target_user_id = int(user_id)
+    st.session_state.public_profile_return_context = {
+        "current_circle_id": st.session_state.get("current_circle_id"),
+        "selected_team_id": st.session_state.get("selected_team_id"),
+        "team_management_focus_detail": st.session_state.get("team_management_focus_detail", False),
+    }
+    st.query_params["user_id"] = str(user_id)
+    st.switch_page("pages/public_profile.py")
+
+
 def get_selected_team(teams: list[dict]) -> Optional[dict]:
     """Return the currently selected team from a fetched team list."""
     selected_team_id = st.session_state.get("selected_team_id")
@@ -159,6 +189,13 @@ def fetch_matching_teams(circle_id: int) -> list[dict]:
     except Exception as exc:  # pragma: no cover - defensive
         st.error(f"Error loading matching teams: {exc}")
     return []
+
+
+def get_stored_user_matches(selected_team_id: int) -> list[dict]:
+    """Return persisted matching users for the currently selected team."""
+    if st.session_state.get("matching_selected_team_id") != selected_team_id:
+        return []
+    return st.session_state.get("matching_user_results", []) or []
 
 
 def split_user_teams(teams: Iterable[dict], user_id: int) -> Tuple[list[dict], list[dict]]:
@@ -431,14 +468,23 @@ def render_team_detail() -> None:
     else:
         for member in team_members:
             with st.container(border=True):
+                member_id = member.get("id")
                 labels: list[str] = []
-                if member.get("id") == team.get("creator_id"):
+                if member_id == team.get("creator_id"):
                     labels.append("Creator")
-                if member.get("id") == current_user_id:
+                if member_id == current_user_id:
                     labels.append("You")
                 suffix = f" ({', '.join(labels)})" if labels else ""
-                st.markdown(f"**{member.get('username', 'Unknown')}**{suffix}")
-                st.caption(member.get("email", ""))
+                info_col, action_col = st.columns([4, 1])
+                with info_col:
+                    st.markdown(f"**{member.get('username', 'Unknown')}**{suffix}")
+                    st.caption(member.get("email", ""))
+                with action_col:
+                    if member_id is not None and st.button(
+                        "View Profile",
+                        key=f"team_member_profile_{team.get('id')}_{member_id}",
+                    ):
+                        open_public_profile(int(member_id))
 
     pending_team_invitations = [
         invite for invite in team_invitations if invite.get("status") == "pending"
@@ -450,8 +496,17 @@ def render_team_detail() -> None:
             invitee = member_lookup.get(invite.get("invitee_id"), {})
             invitee_label = invitee.get("username") or f"User #{invite.get('invitee_id')}"
             with st.container(border=True):
-                st.markdown(f"**{invitee_label}**")
-                st.caption(invitee.get("email", ""))
+                info_col, action_col = st.columns([4, 1])
+                with info_col:
+                    st.markdown(f"**{invitee_label}**")
+                    st.caption(invitee.get("email", ""))
+                with action_col:
+                    invitee_id = invite.get("invitee_id")
+                    if invitee_id is not None and st.button(
+                        "View Profile",
+                        key=f"pending_invitee_profile_{team.get('id')}_{invitee_id}",
+                    ):
+                        open_public_profile(int(invitee_id))
 
     st.markdown("---")
     st.subheader("Invite Members")
@@ -834,14 +889,25 @@ def render_matching_section() -> None:
             options=team_labels,
         )
         selected_team = my_teams[team_labels.index(selected_label)]
+        matches = get_stored_user_matches(selected_team["id"])
+        has_requested_matches = st.session_state.get("matching_requested", False)
 
         if st.button("Get user recommendations", type="primary"):
             matches = fetch_matching_users(selected_team["id"])
-            if not matches:
-                st.info("No matching users found yet.")
-            else:
-                for match in matches:
-                    with st.container(border=True):
+            has_requested_matches = True
+            st.session_state.matching_requested = True
+            st.session_state.matching_selected_team_id = selected_team["id"]
+            st.session_state.matching_user_results = matches
+
+        if not has_requested_matches:
+            st.caption("Choose a team and request recommendations to view candidate members.")
+        elif not matches:
+            st.info("No matching users found yet.")
+        else:
+            for match in matches:
+                with st.container(border=True):
+                    info_col, profile_col, invite_col = st.columns([4, 1, 1])
+                    with info_col:
                         st.markdown(
                             f"**{match.get('username', 'Unknown user')}** "
                             f"({match.get('email', 'N/A')})"
@@ -853,7 +919,13 @@ def render_matching_section() -> None:
                         missing = ", ".join(match.get("missing_required_tags", [])) or "-"
                         st.write(f"Matched tags: {matched}")
                         st.write(f"Missing required tags: {missing}")
-
+                    with profile_col:
+                        if st.button(
+                            "View Profile",
+                            key=f"matching_profile_{selected_team['id']}_{match['user_id']}",
+                        ):
+                            open_public_profile(int(match["user_id"]))
+                    with invite_col:
                         if st.button(
                             "Invite to team",
                             key=f"invite_match_{selected_team['id']}_{match['user_id']}",
@@ -905,13 +977,21 @@ def main() -> None:
     if not st.session_state.get("current_circle_id"):
         st.warning("Join a circle first to access team management.")
         if st.button("Go to Circle Hall", key="go_circle_hall_main"):
-            st.switch_page("pages/circles.py")
+            go_to_circle_hall()
         return
 
     if not can_access_current_circle(st.session_state["current_circle_id"]):
         if st.button("Go to Circle Hall", key="go_circle_hall_forbidden"):
-            st.switch_page("pages/circles.py")
+            go_to_circle_hall()
         return
+
+    nav_col1, nav_col2 = st.columns(2)
+    with nav_col1:
+        if st.button("Back to Circle Detail", key="back_to_circle_detail_from_team"):
+            go_to_circle_detail()
+    with nav_col2:
+        if st.button("Back to Circle Hall", key="back_to_circle_hall_from_team"):
+            go_to_circle_hall()
 
     if st.session_state.get("team_management_focus_detail"):
         render_team_detail()

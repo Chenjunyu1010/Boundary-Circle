@@ -92,7 +92,7 @@ def view_circle_detail(circle_id: int) -> None:
 
 
 def main() -> None:
-    """Main page content with list and detail tabs."""
+    """Main page content for browsing circles and opening detail views."""
     st.title("Circle Hall")
     st.markdown("Discover and join circles that match your interests")
 
@@ -109,160 +109,142 @@ def main() -> None:
         circle_detail_page.main()
         return
 
-    list_tab, detail_tab = st.tabs(["Circle List", "Circle Detail"])
+    col1, col2 = st.columns([3, 1])
 
-    # --- List tab: search, create, and browse circles ---
-    with list_tab:
-        col1, col2 = st.columns([3, 1])
+    with col1:
+        search_query = st.text_input(
+            "Search circles",
+            placeholder="Enter circle name...",
+        )
 
-        with col1:
-            search_query = st.text_input(
-                "Search circles",
-                placeholder="Enter circle name...",
+    with col2:
+        category_filter = st.selectbox(
+            "Category",
+            ["All", "Course", "Interest", "Event", "Community", "General"],
+        )
+
+    circles = fetch_circles()
+
+    if search_query:
+        circles = [
+            c
+            for c in circles
+            if search_query.lower() in c.get("name", "").lower()
+            or search_query.lower() in c.get("description", "").lower()
+        ]
+
+    if category_filter != "All":
+        circles = [c for c in circles if c.get("category") == category_filter]
+
+    st.markdown("---")
+    col1, col2 = st.columns([1, 9])
+    with col1:
+        if st.button("Create Circle", type="primary"):
+            st.session_state.show_create_form = True
+
+    if st.session_state.get("show_create_form", False):
+        with st.form("create_circle_form"):
+            st.markdown("### Create New Circle")
+            circle_name = st.text_input(
+                "Circle Name",
+                placeholder="Enter circle name",
             )
-
-        with col2:
-            category_filter = st.selectbox(
+            circle_description = st.text_area(
+                "Description",
+                placeholder="Describe your circle",
+            )
+            circle_category = st.selectbox(
                 "Category",
-                ["All", "Course", "Interest", "Event", "Community", "General"],
+                ["General", "Course", "Interest", "Event", "Community"],
             )
 
-        circles = fetch_circles()
+            col_submit, col_cancel = st.columns(2)
+            with col_submit:
+                submit_btn = st.form_submit_button("Create", type="primary")
+            with col_cancel:
+                cancel_btn = st.form_submit_button("Cancel")
 
-        if search_query:
-            circles = [
-                c
-                for c in circles
-                if search_query.lower() in c.get("name", "").lower()
-                or search_query.lower() in c.get("description", "").lower()
-            ]
-
-        if category_filter != "All":
-            circles = [c for c in circles if c.get("category") == category_filter]
-
-        st.markdown("---")
-        col1, col2 = st.columns([1, 9])
-        with col1:
-            if st.button("Create Circle", type="primary"):
-                st.session_state.show_create_form = True
-
-        if st.session_state.get("show_create_form", False):
-            with st.form("create_circle_form"):
-                st.markdown("### Create New Circle")
-                circle_name = st.text_input(
-                    "Circle Name",
-                    placeholder="Enter circle name",
-                )
-                circle_description = st.text_area(
-                    "Description",
-                    placeholder="Describe your circle",
-                )
-                circle_category = st.selectbox(
-                    "Category",
-                    ["General", "Course", "Interest", "Event", "Community"],
-                )
-
-                col_submit, col_cancel = st.columns(2)
-                with col_submit:
-                    submit_btn = st.form_submit_button("Create", type="primary")
-                with col_cancel:
-                    cancel_btn = st.form_submit_button("Cancel")
-
-                if submit_btn:
-                    if not circle_name:
-                        st.error("Please enter a circle name")
+            if submit_btn:
+                if not circle_name:
+                    st.error("Please enter a circle name")
+                else:
+                    success, message, circle_id = create_circle(
+                        circle_name,
+                        circle_description,
+                        circle_category,
+                    )
+                    if success:
+                        st.session_state.show_create_form = False
+                        if circle_id is not None:
+                            prepare_circle_detail_navigation(circle_id)
+                        st.rerun()
                     else:
-                        success, message, circle_id = create_circle(
-                            circle_name,
-                            circle_description,
-                            circle_category,
-                        )
-                        if success:
-                            st.session_state.show_create_form = False
-                            if circle_id is not None:
-                                prepare_circle_detail_navigation(circle_id)
-                            st.rerun()
-                        else:
-                            st.error(message)
+                        st.error(message)
 
-                if cancel_btn:
-                    st.session_state.show_create_form = False
-                    st.rerun()
+            if cancel_btn:
+                st.session_state.show_create_form = False
+                st.rerun()
 
-        st.markdown("---")
-        if not circles:
-            st.info("No circles found. Be the first to create one!")
-        else:
-            st.markdown(f"### Available Circles ({len(circles)})")
+    st.markdown("---")
+    if not circles:
+        st.info("No circles found. Be the first to create one!")
+        return
 
-            for i in range(0, len(circles), 2):
-                col1, col2 = st.columns(2)
+    st.markdown(f"### Available Circles ({len(circles)})")
 
-                with col1:
-                    circle = circles[i]
-                    with st.container(border=True):
-                        st.markdown(f"**{circle.get('name', 'Unnamed')}**")
-                        st.caption(
-                            f"Category: {circle.get('category', 'General')}"
-                        )
-                        if circle.get("is_creator"):
-                            st.caption("Status: You created this circle")
-                        elif circle.get("is_member"):
-                            st.caption("Status: Joined")
-                        else:
-                            st.caption("Status: Not joined")
-                        creator_label = circle.get("creator_username") or "Unknown"
-                        st.caption(f"Creator: {creator_label}")
-                        st.write(circle.get("description", "No description"))
+    for i in range(0, len(circles), 2):
+        col1, col2 = st.columns(2)
 
-                        if st.button(
-                            "View Details ->",
-                            key=f"view_circle_{circle.get('id')}",
-                        ):
-                            view_circle_detail(circle.get("id"))
+        with col1:
+            circle = circles[i]
+            with st.container(border=True):
+                st.markdown(f"**{circle.get('name', 'Unnamed')}**")
+                st.caption(
+                    f"Category: {circle.get('category', 'General')}"
+                )
+                if circle.get("is_creator"):
+                    st.caption("Status: You created this circle")
+                elif circle.get("is_member"):
+                    st.caption("Status: Joined")
+                else:
+                    st.caption("Status: Not joined")
+                creator_label = circle.get("creator_username") or "Unknown"
+                st.caption(f"Creator: {creator_label}")
+                st.write(circle.get("description", "No description"))
 
-                if i + 1 < len(circles):
-                    with col2:
-                        circle = circles[i + 1]
-                        with st.container(border=True):
-                            st.markdown(
-                                f"**{circle.get('name', 'Unnamed')}**"
-                            )
-                            st.caption(
-                                f"Category: {circle.get('category', 'General')}"
-                            )
-                            if circle.get("is_creator"):
-                                st.caption("Status: You created this circle")
-                            elif circle.get("is_member"):
-                                st.caption("Status: Joined")
-                            else:
-                                st.caption("Status: Not joined")
-                            creator_label = circle.get("creator_username") or "Unknown"
-                            st.caption(f"Creator: {creator_label}")
-                            st.write(
-                                circle.get("description", "No description")
-                            )
+                if st.button(
+                    "View Details ->",
+                    key=f"view_circle_{circle.get('id')}",
+                ):
+                    view_circle_detail(circle.get("id"))
 
-                            if st.button(
-                                "View Details ->",
-                                key=f"view_circle_{circle.get('id')}",
-                            ):
-                                view_circle_detail(circle.get("id"))
+        if i + 1 < len(circles):
+            with col2:
+                circle = circles[i + 1]
+                with st.container(border=True):
+                    st.markdown(
+                        f"**{circle.get('name', 'Unnamed')}**"
+                    )
+                    st.caption(
+                        f"Category: {circle.get('category', 'General')}"
+                    )
+                    if circle.get("is_creator"):
+                        st.caption("Status: You created this circle")
+                    elif circle.get("is_member"):
+                        st.caption("Status: Joined")
+                    else:
+                        st.caption("Status: Not joined")
+                    creator_label = circle.get("creator_username") or "Unknown"
+                    st.caption(f"Creator: {creator_label}")
+                    st.write(
+                        circle.get("description", "No description")
+                    )
 
-    # --- Detail tab: reuse full circle_detail layout inside the tab ---
-    with detail_tab:
-        circle_id = st.session_state.get("selected_circle_id")
-        if circle_id is None:
-            st.info(
-                "Select a circle from the list tab to view its details.",
-            )
-            return
-
-        # Ensure circle_detail resolves the same id
-        st.session_state.current_circle_id = circle_id
-
-        # Delegate rendering to the original circle_detail main function
-        circle_detail_page.main()
+                    if st.button(
+                        "View Details ->",
+                        key=f"view_circle_{circle.get('id')}",
+                    ):
+                        view_circle_detail(circle.get("id"))
 
 
 if __name__ == "__main__":
