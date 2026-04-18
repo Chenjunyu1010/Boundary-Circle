@@ -4,6 +4,7 @@ Home Page - Main navigation page for Boundary Circle
 
 import sys
 from pathlib import Path
+from typing import Optional
 
 import streamlit as st
 
@@ -31,8 +32,8 @@ def load_profile_summary() -> dict:
     return response.json()
 
 
-def build_account_summary(user: dict, profile: dict) -> list[tuple[str, str, str | None]]:
-    rows: list[tuple[str, str, str | None]] = [
+def build_account_summary(user: dict, profile: dict) -> list[tuple[str, str, Optional[str]]]:
+    rows: list[tuple[str, str, Optional[str]]] = [
         ("Username", user.get("username", "User"), None),
     ]
 
@@ -65,7 +66,7 @@ def build_account_summary(user: dict, profile: dict) -> list[tuple[str, str, str
     return rows
 
 
-def format_account_summary_row(label: str, value: str, visibility: str | None) -> str:
+def format_account_summary_row(label: str, value: str, visibility: Optional[str]) -> str:
     if visibility is None:
         return f"<strong>{label}:</strong> {value}"
 

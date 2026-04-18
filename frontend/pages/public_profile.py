@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
+from typing import Optional
 
 import streamlit as st
 
@@ -17,7 +18,7 @@ from utils.api import api_client
 from utils.auth import require_auth
 
 
-def build_avatar_text(username: str | None) -> str:
+def build_avatar_text(username: Optional[str]) -> str:
     if not username:
         return "U"
     compact = "".join(ch for ch in username.strip() if not ch.isspace())
@@ -26,7 +27,7 @@ def build_avatar_text(username: str | None) -> str:
     return compact[:2].upper()
 
 
-def parse_user_id(raw_value) -> int | None:
+def parse_user_id(raw_value) -> Optional[int]:
     if isinstance(raw_value, list):
         raw_value = raw_value[0] if raw_value else None
     if raw_value in (None, ""):
@@ -37,14 +38,14 @@ def parse_user_id(raw_value) -> int | None:
         return None
 
 
-def get_target_user_id() -> int | None:
+def get_target_user_id() -> Optional[int]:
     session_user_id = parse_user_id(st.session_state.get("public_profile_target_user_id"))
     if session_user_id is not None:
         return session_user_id
     return parse_user_id(st.query_params.get("user_id"))
 
 
-def load_public_profile(user_id: int) -> dict | None:
+def load_public_profile(user_id: int) -> Optional[dict]:
     response = api_client.get(f"/users/{user_id}/profile")
     if not response.ok:
         detail = getattr(response, "reason", "Unknown error")
@@ -70,7 +71,7 @@ def build_public_profile_rows(profile: dict) -> list[tuple[str, str]]:
     return rows
 
 
-def render_avatar_placeholder(username: str | None) -> None:
+def render_avatar_placeholder(username: Optional[str]) -> None:
     avatar_text = build_avatar_text(username)
     st.markdown(
         f"""

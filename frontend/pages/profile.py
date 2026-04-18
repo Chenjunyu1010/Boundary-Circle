@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
+from typing import Optional
 
 import streamlit as st
 
@@ -20,7 +21,7 @@ from utils.auth import require_auth
 GENDER_OPTIONS = ["Male", "Female", "Other", "Prefer not to say"]
 
 
-def normalize_gender_value(value: str | None) -> str:
+def normalize_gender_value(value: Optional[str]) -> str:
     if not value:
         return "Prefer not to say"
     if value not in GENDER_OPTIONS:
@@ -28,7 +29,7 @@ def normalize_gender_value(value: str | None) -> str:
     return value
 
 
-def split_birthday_parts(value: str | None) -> tuple[int | None, int | None, int | None]:
+def split_birthday_parts(value: Optional[str]) -> tuple[Optional[int], Optional[int], Optional[int]]:
     if not value:
         return None, None, None
     try:
@@ -38,13 +39,15 @@ def split_birthday_parts(value: str | None) -> tuple[int | None, int | None, int
         return None, None, None
 
 
-def compose_birthday(year: int | None, month: int | None, day: int | None) -> str | None:
+def compose_birthday(
+    year: Optional[int], month: Optional[int], day: Optional[int]
+) -> Optional[str]:
     if year is None or month is None or day is None:
         return None
     return f"{year:04d}-{month:02d}-{day:02d}"
 
 
-def load_profile() -> dict | None:
+def load_profile() -> Optional[dict]:
     response = api_client.get("/profile/me")
     if not response.ok:
         st.error(f"Failed to load profile: {getattr(response, 'reason', 'Unknown error')}")
