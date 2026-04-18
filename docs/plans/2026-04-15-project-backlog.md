@@ -1,6 +1,6 @@
 # Boundary Circle Backlog
 
-Last updated: 2026-04-16
+Last updated: 2026-04-18
 
 This document tracks the main engineering fixes and feature opportunities after the auth-boundary cleanup and recent schema-driven tag work.
 
@@ -29,12 +29,28 @@ This document tracks the main engineering fixes and feature opportunities after 
 - Legacy teams without structured rules continue to use tag-name-based matching.
 - Team creation in the frontend now sends structured rules so the real UI path uses the new backend behavior.
 
+### Completed on 2026-04-18: dedicated user profile and public profile flow
+- Users now have a dedicated profile page instead of relying on the home page as the main profile surface.
+- The backend exposes self-profile read/update APIs and filtered public profile reads.
+- Public profile navigation is now wired into circle detail and team management flows.
+- New-user onboarding now includes a first-login profile completion prompt.
+- Seed data and regression tests now include profile coverage.
+
+### Completed on 2026-04-18: team join-request workflow
+- Users can now submit join requests to teams instead of relying on invitation-only intake.
+- Only the team creator can approve or reject join requests.
+- Repeated pending join requests from the same user overwrite the previous pending request.
+- The existing `Invitations` area now manages incoming invites, creator review of join requests, and outgoing join requests together.
+- Join-request review now includes requester profile access and current-circle tag visibility.
+
 **Completed items:**
 - #1 Unify user creation - completed (PR #75)
 - #2 Remove JWT secret fallback - completed (PR #74)
 - #3 Fix encoding issues - completed (PR #73)
 - #11 Tag-aware team creation experience - completed on 2026-04-16
 - #10 Matching explanation and correctness improvements - partially completed on 2026-04-16
+- #12 Team join workflow improvements - completed on 2026-04-18
+- #14 Better account management - partially completed on 2026-04-18
 
 ## 1. High-priority fixes
 
@@ -138,11 +154,15 @@ This document tracks the main engineering fixes and feature opportunities after 
   - Extend numeric fields from exact equality to richer range-based matching if needed later.
 
 ### 12. Team join workflow improvements
-- Why it matters:
-  - Team membership currently depends on invitation flow only.
-- Suggested addition:
-  - Add optional request-to-join flow.
-  - Add invitation withdrawal and team-owner review actions.
+- Status:
+  - Core request-to-join flow completed on 2026-04-18.
+- Delivered:
+  - Optional request-to-join flow.
+  - Creator-only review actions in the existing invitations area.
+  - Requester profile and circle-tag visibility during creator review.
+- Remaining work:
+  - Invitation withdrawal is still not implemented.
+  - Team-owner bulk review actions are still not implemented.
 
 ### 13. Circle membership management
 - Why it matters:
@@ -152,12 +172,14 @@ This document tracks the main engineering fixes and feature opportunities after 
   - Add remove-member and role-management actions if role management stays in scope.
 
 ### 14. Better account management
-- Why it matters:
-  - Account lifecycle is still minimal.
-- Suggested addition:
-  - Add change password.
+- Status:
+  - Partially completed on 2026-04-18.
+- Delivered:
   - Add edit profile.
-  - Add optional password reset.
+  - Add dedicated public profile viewing.
+- Remaining work:
+  - Change password.
+  - Optional password reset.
 
 ## 4. Stretch features
 
@@ -180,10 +202,10 @@ This document tracks the main engineering fixes and feature opportunities after 
 
 ## 5. Suggested priority order
 
-As of 2026-04-16, items #1, #2, #3, and #11 are completed, #10 is partially completed, and #4 is skipped. Suggested next steps:
+As of 2026-04-18, items #1, #2, #3, #11, and #12 are completed, #10 and #14 are partially completed, and #4 is skipped. Suggested next steps:
 
-1. Improve the frontend matching explanation UI.
-2. Decide whether numeric team requirements should support range-based matching.
-3. Expand negative-path tests around malformed structured rules and ownership boundaries.
-4. Separate more business logic from route handlers into services.
-5. Decide whether to add one standout stretch feature, ideally LLM-generated matching explanations.
+1. Implement the LLM freedom-tags feature designed on 2026-04-17.
+2. Hand the approved UI redesign brief to Gemini and convert selected ideas into implementation tasks.
+3. Execute the deployment plan on the borrowed Tencent Cloud server and domain.
+4. Improve the frontend matching explanation UI and decide whether numeric team requirements should support range-based matching.
+5. Continue separating route-level business logic into services where it reduces complexity without overengineering.

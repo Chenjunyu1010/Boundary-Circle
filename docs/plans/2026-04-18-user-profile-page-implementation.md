@@ -8,6 +8,19 @@
 
 **Tech Stack:** FastAPI, SQLModel, SQLite, Streamlit, pytest
 
+**Status:** Completed on 2026-04-18.
+
+**Delivered:**
+- dedicated `UserProfile` backend model and profile APIs
+- `frontend/pages/profile.py` and `frontend/pages/public_profile.py`
+- first-login profile prompt and home-page account-summary cleanup
+- circle/team entry points for viewing another user's public profile
+- seed-data profile coverage and regression tests
+
+**Follow-up completed in the same delivery window:**
+- team join-request review now links to requester public profiles
+- review cards can display the requester's circle tags for creator decision support
+
 ---
 
 ### Task 1: Add backend regression tests for profile APIs
