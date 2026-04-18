@@ -2,6 +2,7 @@ from sqlmodel import select
 
 from scripts.seed_data import seed_dataset
 from src.models.core import Circle
+from src.models.profile import UserProfile
 from src.models.tags import CircleMember
 from src.models.teams import Invitation, InvitationStatus, Team, TeamMember
 
@@ -22,6 +23,7 @@ def _team_member_pairs(db_session) -> set[tuple[int, int]]:
 
 def _seed_datasets_have_internal_consistency(db_session) -> None:
     circles = {circle.id: circle for circle in db_session.exec(select(Circle)).all()}
+    profiles = {profile.user_id: profile for profile in db_session.exec(select(UserProfile)).all()}
     team_members = db_session.exec(select(TeamMember)).all()
     invitations = db_session.exec(select(Invitation)).all()
     teams = db_session.exec(select(Team)).all()
@@ -59,6 +61,10 @@ def _seed_datasets_have_internal_consistency(db_session) -> None:
             assert is_team_member
         if invitation.status == InvitationStatus.REJECTED:
             assert not is_team_member
+
+    member_user_ids = {user_id for _, user_id in circle_member_pairs}
+    for user_id in member_user_ids:
+        assert user_id in profiles
 
 
 def test_demo_seed_dataset_is_consistent(db_session):

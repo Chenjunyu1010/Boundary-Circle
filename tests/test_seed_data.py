@@ -8,6 +8,7 @@ from scripts.seed_data import (
     seed_dataset,
 )
 from src.models.core import Circle, User, UserCreate
+from src.models.profile import UserProfile
 from src.models.tags import CircleMember, CircleRole, TagDefinition
 from src.models.teams import Invitation, InvitationStatus, Team, TeamMember
 from src.services.users import create_user_account
@@ -33,6 +34,21 @@ def count_seed_circles(db_session, dataset: str) -> int:
     )
 
 
+def count_seed_profiles(db_session, dataset: str) -> int:
+    seed_user_ids = {
+        user.id
+        for user in db_session.exec(select(User)).all()
+        if user.username.startswith(dataset_user_prefix(dataset))
+    }
+    return len(
+        [
+            profile
+            for profile in db_session.exec(select(UserProfile)).all()
+            if profile.user_id in seed_user_ids
+        ]
+    )
+
+
 def count_teams_for_dataset(db_session, dataset: str) -> int:
     return len(
         [
@@ -51,6 +67,7 @@ def test_seed_demo_creates_expected_entities_and_markers(db_session):
     assert summary.teams == 4
     assert summary.invitations == 5
     assert count_seed_users(db_session, "demo") == 7
+    assert count_seed_profiles(db_session, "demo") == 7
     assert count_seed_circles(db_session, "demo") == 2
 
     seeded_user = db_session.exec(
@@ -59,6 +76,14 @@ def test_seed_demo_creates_expected_entities_and_markers(db_session):
     assert seeded_user is not None
     assert seeded_user.hashed_password != "SeedData123!"
     assert "$" in seeded_user.hashed_password
+
+    seeded_profile = db_session.exec(
+        select(UserProfile).where(UserProfile.user_id == seeded_user.id)
+    ).first()
+    assert seeded_profile is not None
+    assert seeded_profile.gender is not None
+    assert seeded_profile.birthday is not None
+    assert seeded_profile.bio
 
 
 def test_seed_demo_is_repeatable_without_duplication(db_session):
@@ -79,6 +104,7 @@ def test_seed_stress_creates_varied_dataset(db_session):
     assert summary.teams == 10
     assert summary.invitations == 12
     assert count_seed_users(db_session, "stress") == 18
+    assert count_seed_profiles(db_session, "stress") == 18
     assert count_seed_circles(db_session, "stress") == 4
 
     tag_names = {tag.name for tag in db_session.exec(select(TagDefinition)).all()}

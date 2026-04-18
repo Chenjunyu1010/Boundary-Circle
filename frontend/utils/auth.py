@@ -18,6 +18,8 @@ def init_session_state():
         "user_id": None,
         "username": None,
         "email": None,
+        "full_name": None,
+        "show_profile_completion_prompt": False,
     }
     for key, value in defaults.items():
         if key not in st.session_state:
@@ -38,6 +40,7 @@ def get_current_user() -> dict:
         "id": st.session_state.get("user_id"),
         "username": st.session_state.get("username"),
         "email": st.session_state.get("email"),
+        "full_name": st.session_state.get("full_name"),
     }
 
 
@@ -53,10 +56,35 @@ def _fetch_user_info() -> bool:
             st.session_state.user_id = data.get("id")
             st.session_state.username = data.get("username")
             st.session_state.email = data.get("email")
+            st.session_state.full_name = data.get("full_name")
             return True
     except Exception:
         logging.exception("Failed to fetch user info from /auth/me")
     return False
+
+
+def _should_prompt_profile_completion(profile: dict) -> bool:
+    if profile.get("profile_prompt_dismissed"):
+        return False
+    return not any(
+        [
+            profile.get("gender"),
+            profile.get("birthday"),
+            profile.get("bio"),
+        ]
+    )
+
+
+def _load_profile_prompt_state() -> None:
+    try:
+        response = api_client.get("/profile/me")
+        if not response.ok:
+            st.session_state.show_profile_completion_prompt = False
+            return
+        st.session_state.show_profile_completion_prompt = _should_prompt_profile_completion(response.json())
+    except Exception:
+        logging.exception("Failed to fetch profile onboarding state")
+        st.session_state.show_profile_completion_prompt = False
 
 
 def login(email: str, password: str) -> tuple[bool, str]:
@@ -86,6 +114,7 @@ def login(email: str, password: str) -> tuple[bool, str]:
                 st.session_state.user_id = user.get("id", 1)
                 st.session_state.username = user.get("username", email.split("@")[0])
                 st.session_state.email = user.get("email", email)
+                st.session_state.full_name = user.get("full_name")
                 st.session_state.logged_in = True
             else:
                 if not _fetch_user_info():
@@ -94,8 +123,10 @@ def login(email: str, password: str) -> tuple[bool, str]:
                     st.session_state.user_id = None
                     st.session_state.username = None
                     st.session_state.email = None
+                    st.session_state.full_name = None
                     return False, "Login failed: unable to load user profile."
                 st.session_state.logged_in = True
+                _load_profile_prompt_state()
 
             return True, "Login successful!"
 
@@ -124,7 +155,6 @@ def register(username: str, email: str, password: str) -> tuple[bool, str]:
             st.session_state.user_id = data.get("id")
             st.session_state.username = data.get("username")
             st.session_state.email = data.get("email")
-
             return True, "Registration successful! Please login."
 
         else:
@@ -142,6 +172,8 @@ def logout():
     st.session_state.user_id = None
     st.session_state.username = None
     st.session_state.email = None
+    st.session_state.full_name = None
+    st.session_state.show_profile_completion_prompt = False
 
 
 def require_auth():

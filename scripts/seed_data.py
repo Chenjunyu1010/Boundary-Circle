@@ -3,12 +3,14 @@ from __future__ import annotations
 import argparse
 import json
 from dataclasses import dataclass
+from datetime import date
 from typing import Any, Callable, Dict, Iterable, List, Optional, Set, Tuple
 
 from sqlmodel import Session, select
 
 from src.db.database import create_db_and_tables, engine
 from src.models.core import Circle, User, UserCreate
+from src.models.profile import UserProfile
 from src.models.tags import CircleMember, CircleRole, TagDataType, TagDefinition, UserTag
 from src.models.teams import (
     Invitation,
@@ -72,8 +74,21 @@ class CircleSeed:
 
 @dataclass(frozen=True)
 class DatasetSeed:
-    users: Dict[str, str]
+    users: Dict[str, "UserSeed"]
     circles: List[CircleSeed]
+
+
+@dataclass(frozen=True)
+class UserSeed:
+    full_name: str
+    gender: str
+    birthday: str
+    bio: str
+    show_full_name: bool = True
+    show_gender: bool = True
+    show_birthday: bool = True
+    show_email: bool = True
+    show_bio: bool = True
 
 
 @dataclass
@@ -131,13 +146,13 @@ def _normalize_tag_value(value: Any) -> str:
 
 def build_demo_dataset() -> DatasetSeed:
     users = {
-        "alice": "Alice Chen",
-        "ben": "Ben Li",
-        "clara": "Clara Wu",
-        "derek": "Derek Sun",
-        "eva": "Eva Lin",
-        "felix": "Felix Zhou",
-        "grace": "Grace Fang",
+        "alice": UserSeed("Alice Chen", "Female", "2002-03-14", "Research-driven builder who enjoys structuring AI demos."),
+        "ben": UserSeed("Ben Li", "Male", "2001-11-02", "Backend teammate focused on reliable APIs and data flow."),
+        "clara": UserSeed("Clara Wu", "Female", "2003-05-27", "Frontend-heavy collaborator who likes clear product stories."),
+        "derek": UserSeed("Derek Sun", "Male", "2002-08-09", "Comfortable with Python systems and technical iteration."),
+        "eva": UserSeed("Eva Lin", "Female", "2002-12-18", "Enjoys coordination, demos, and keeping team scope realistic."),
+        "felix": UserSeed("Felix Zhou", "Male", "2001-07-30", "Hackathon-oriented builder who moves quickly from idea to MVP."),
+        "grace": UserSeed("Grace Fang", "Female", "2003-01-16", "Design-leaning teammate focused on presentation and clarity."),
     }
     circles = [
         CircleSeed(
@@ -245,7 +260,7 @@ def build_demo_dataset() -> DatasetSeed:
 
 
 def build_stress_dataset() -> DatasetSeed:
-    users = {
+    user_names = {
         "amir": "Amir He",
         "bella": "Bella Xu",
         "cyrus": "Cyrus Gu",
@@ -264,6 +279,18 @@ def build_stress_dataset() -> DatasetSeed:
         "pearl": "Pearl Yang",
         "quentin": "Quentin Shen",
         "rachel": "Rachel Nie",
+    }
+    genders = ["Male", "Female", "Other", "Prefer not to say"]
+    users = {
+        slug: UserSeed(
+            full_name=full_name,
+            gender=genders[index % len(genders)],
+            birthday=f"200{index % 4 + 1}-{index % 9 + 1:02d}-{index % 17 + 10:02d}",
+            bio=f"{full_name} contributes steadily across course and project collaborations.",
+            show_birthday=index % 3 != 0,
+            show_email=index % 4 != 0,
+        )
+        for index, (slug, full_name) in enumerate(user_names.items())
     }
     majors = ["AI", "SE", "DS", "HCI"]
     roles = ["Frontend", "Backend", "Research", "PM"]
@@ -420,6 +447,11 @@ def reset_dataset(session: Session, dataset: str) -> SeedSummary:
     circles = _filter_by_dataset(session.exec(select(Circle)).all(), lambda item: _circle_matches_dataset(item, dataset))
     user_ids: Set[int] = {user.id for user in users if user.id is not None}
     circle_ids: Set[int] = {circle.id for circle in circles if circle.id is not None}
+    profiles = [
+        profile
+        for profile in session.exec(select(UserProfile)).all()
+        if profile.user_id in user_ids
+    ]
 
     teams = _filter_by_dataset(
         session.exec(select(Team)).all(),
@@ -479,6 +511,8 @@ def reset_dataset(session: Session, dataset: str) -> SeedSummary:
         session.delete(membership)
     for circle in circles:
         session.delete(circle)
+    for profile in profiles:
+        session.delete(profile)
     for user in users:
         session.delete(user)
     session.commit()
@@ -498,17 +532,31 @@ def seed_dataset(session: Session, dataset: str) -> SeedSummary:
 
     summary = SeedSummary()
     usernames: Dict[str, str] = {}
-    for slug, full_name in blueprint.users.items():
+    for slug, user_seed in blueprint.users.items():
         username = seed_username(dataset, slug)
-        create_user_account(
+        created_user = create_user_account(
             session,
             UserCreate(
                 username=username,
                 email=seed_email(dataset, slug),
-                full_name=full_name,
+                full_name=user_seed.full_name,
                 password=PASSWORD,
             ),
         )
+        session.add(
+            UserProfile(
+                user_id=created_user.id,
+                gender=user_seed.gender,
+                birthday=date.fromisoformat(user_seed.birthday),
+                bio=user_seed.bio,
+                show_full_name=user_seed.show_full_name,
+                show_gender=user_seed.show_gender,
+                show_birthday=user_seed.show_birthday,
+                show_email=user_seed.show_email,
+                show_bio=user_seed.show_bio,
+            )
+        )
+        session.commit()
         usernames[slug] = username
         summary.users += 1
 

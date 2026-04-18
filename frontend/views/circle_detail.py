@@ -220,6 +220,28 @@ def resolve_circle_id(query_params=None) -> int:
         return 1
 
 
+def open_public_profile(user_id: int) -> None:
+    """Open the public profile page for a circle member."""
+    st.session_state.public_profile_return_page = "pages/circles.py"
+    st.session_state.public_profile_return_label = "Back to Circle Detail"
+    st.session_state.public_profile_target_user_id = int(user_id)
+    st.session_state.public_profile_return_context = {
+        "selected_circle_id": st.session_state.get("selected_circle_id"),
+        "current_circle_id": st.session_state.get("current_circle_id"),
+        "circle_hall_focus_detail": st.session_state.get("circle_hall_focus_detail", True),
+    }
+    st.query_params["user_id"] = str(user_id)
+    st.switch_page("pages/public_profile.py")
+
+
+def go_to_circle_hall() -> None:
+    """Return to the circle hall list view and clear detail state."""
+    st.session_state.circle_hall_focus_detail = False
+    st.session_state.pop("selected_circle_id", None)
+    st.session_state.pop("current_circle_id", None)
+    st.switch_page("pages/circles.py")
+
+
 def join_circle(circle_id: int, tag_definitions: list, tag_data: dict) -> tuple[bool, str]:
     """Join a circle and submit initial tag data."""
     current_user = get_current_user()
@@ -362,7 +384,8 @@ def main():
     circle = fetch_circle_detail(circle_id)
     if not circle:
         st.error("Circle not found")
-        st.page_link("pages/circles.py", label="Back to Circle Hall")
+        if st.button("Back to Circle Hall", key="back_to_circle_hall_missing_circle"):
+            go_to_circle_hall()
         return
 
     joined = is_circle_joined(circle_id)
@@ -377,7 +400,8 @@ def main():
     st.markdown(f"**Description:** {circle.get('description', 'No description')}")
 
     if not st.session_state.get("circle_hall_focus_detail"):
-        st.page_link("pages/circles.py", label="Back to Circle Hall")
+        if st.button("Back to Circle Hall", key=f"back_to_circle_hall_{circle_id}"):
+            go_to_circle_hall()
 
     st.markdown("---")
     col1, col2 = st.columns([1, 2])
@@ -496,7 +520,7 @@ def main():
     if members:
         for member in members:
             with st.container(border=True):
-                col1, col2 = st.columns([1, 4])
+                col1, col2, col3 = st.columns([1, 4, 1])
                 with col1:
                     st.markdown(
                         "<div style='font-size:24px;text-align:center;'>User</div>",
@@ -505,6 +529,13 @@ def main():
                 with col2:
                     st.markdown(f"**{member.get('username', 'Unknown')}**")
                     st.caption(member.get("email", ""))
+                with col3:
+                    member_id = member.get("id") or member.get("user_id")
+                    if member_id is not None and st.button(
+                        "View Profile",
+                        key=f"circle_member_profile_{circle_id}_{member_id}",
+                    ):
+                        open_public_profile(int(member_id))
     else:
         st.info("No members yet. Be the first to join!")
 

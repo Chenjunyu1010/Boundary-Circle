@@ -4,11 +4,12 @@ from contextlib import asynccontextmanager
 # Import database and models
 from src.db.database import create_db_and_tables
 from src.models.core import Circle, User  # Keep this to ensure models are registered
+from src.models.profile import UserProfile
 from src.models.tags import CircleMember, TagDefinition, UserTag
 from src.models.teams import Invitation, Team, TeamMember
 
 # Import routers
-from src.api import auth, circles, matching, tags, teams, users
+from src.api import auth, circles, matching, profile, tags, teams, users
 
 
 @asynccontextmanager
@@ -50,6 +51,7 @@ def health_check() -> dict[str, str]:
 # Include routers
 app.include_router(users.router)
 app.include_router(auth.router)
+app.include_router(profile.router)
 app.include_router(circles.router)
 app.include_router(tags.router)
 app.include_router(teams.router)
