@@ -2,6 +2,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from src.main import app
+from src.models.tags import CircleMember, CircleRole
 
 
 client = TestClient(app)
@@ -385,3 +386,58 @@ def test_get_my_tags_and_delete(creator, normal_user, circle):
         headers=normal_headers,
     )
     assert len(get_after_delete.json()) == 0
+
+
+def test_circle_creator_can_view_member_tags_for_review(creator, normal_user, circle, db_session):
+    creator_user, creator_headers = creator
+    normal_user_payload, normal_headers = normal_user
+
+    db_session.add(
+        CircleMember(
+            user_id=normal_user_payload["id"],
+            circle_id=circle["id"],
+            role=CircleRole.MEMBER,
+        )
+    )
+    db_session.commit()
+
+    tag_definition = create_tag_definition(
+        circle["id"],
+        creator_headers,
+        {
+            "name": "Tech Stack",
+            "data_type": "multi_select",
+            "options": '["Python", "React", "SQL"]',
+            "max_selections": 2,
+        },
+    )
+
+    submit_response = client.post(
+        f"/circles/{circle['id']}/tags/submit",
+        headers=normal_headers,
+        json={"tag_definition_id": tag_definition["id"], "value": '["Python", "SQL"]'},
+    )
+    assert submit_response.status_code == 200
+
+    view_response = client.get(
+        f"/circles/{circle['id']}/members/{normal_user_payload['id']}/tags",
+        headers=creator_headers,
+    )
+
+    assert view_response.status_code == 200
+    payload = view_response.json()
+    assert len(payload) == 1
+    assert payload[0]["tag_name"] == "Tech Stack"
+    assert payload[0]["value"] == '["Python", "SQL"]'
+
+
+def test_non_member_cannot_view_circle_member_tags(creator, normal_user, circle):
+    _, creator_headers = creator
+    normal_user_payload, normal_headers = normal_user
+
+    view_response = client.get(
+        f"/circles/{circle['id']}/members/{normal_user_payload['id']}/tags",
+        headers=normal_headers,
+    )
+
+    assert view_response.status_code == 403

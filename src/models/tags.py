@@ -76,3 +76,13 @@ class TagDefinitionCreate(SQLModel):
 class UserTagSubmit(SQLModel):
     tag_definition_id: int
     value: str
+
+
+class CircleMemberTagRead(SQLModel):
+    id: int
+    user_id: int
+    circle_id: int
+    tag_definition_id: int
+    tag_name: str
+    data_type: TagDataType
+    value: str

@@ -16,6 +16,11 @@ class InvitationStatus(str, Enum):
     REJECTED = "rejected"
 
 
+class InvitationKind(str, Enum):
+    INVITE = "invite"
+    JOIN_REQUEST = "join_request"
+
+
 class Team(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     name: str
@@ -39,6 +44,7 @@ class Invitation(SQLModel, table=True):
     team_id: int = Field(foreign_key="team.id", index=True)
     inviter_id: int = Field(foreign_key="user.id", index=True)
     invitee_id: int = Field(foreign_key="user.id", index=True)
+    kind: InvitationKind = Field(default=InvitationKind.INVITE)
     status: InvitationStatus = Field(default=InvitationStatus.PENDING)
 
 
@@ -80,8 +86,12 @@ class InvitationCreate(SQLModel):
 class InvitationRead(SQLModel):
     id: int
     team_id: int
+    team_name: Optional[str] = None
     inviter_id: int
+    inviter_username: Optional[str] = None
     invitee_id: int
+    invitee_username: Optional[str] = None
+    kind: InvitationKind = InvitationKind.INVITE
     status: InvitationStatus
 
 

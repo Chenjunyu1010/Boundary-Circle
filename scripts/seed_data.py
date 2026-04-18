@@ -14,6 +14,7 @@ from src.models.profile import UserProfile
 from src.models.tags import CircleMember, CircleRole, TagDataType, TagDefinition, UserTag
 from src.models.teams import (
     Invitation,
+    InvitationKind,
     InvitationStatus,
     Team,
     TeamMember,
@@ -56,6 +57,7 @@ class InvitationSeed:
     inviter: str
     invitee: str
     status: InvitationStatus
+    kind: InvitationKind = InvitationKind.INVITE
 
 
 @dataclass(frozen=True)
@@ -205,6 +207,13 @@ def build_demo_dataset() -> DatasetSeed:
                 InvitationSeed("vision_builders", "alice", "derek", InvitationStatus.PENDING),
                 InvitationSeed("vision_builders", "ben", "clara", InvitationStatus.REJECTED),
                 InvitationSeed("data_bridge", "clara", "eva", InvitationStatus.ACCEPTED),
+                InvitationSeed(
+                    "vision_builders",
+                    "eva",
+                    "alice",
+                    InvitationStatus.PENDING,
+                    kind=InvitationKind.JOIN_REQUEST,
+                ),
             ],
         ),
         CircleSeed(
@@ -393,6 +402,16 @@ def build_stress_dataset() -> DatasetSeed:
             InvitationSeed(teams[1].slug, teams[1].creator, members[1], InvitationStatus.REJECTED),
             InvitationSeed(teams[1].slug, teams[1].creator, members[-2], InvitationStatus.ACCEPTED),
         ]
+        if len(members) >= 6:
+            invitations.append(
+                InvitationSeed(
+                    teams[0].slug,
+                    members[-2],
+                    teams[0].creator,
+                    InvitationStatus.PENDING,
+                    kind=InvitationKind.JOIN_REQUEST,
+                )
+            )
 
         circles.append(
             CircleSeed(
@@ -658,22 +677,28 @@ def seed_dataset(session: Session, dataset: str) -> SeedSummary:
                 team_id=team_ids[invitation_seed.team_slug],
                 inviter_id=_get_user_id(session, usernames[invitation_seed.inviter]),
                 invitee_id=_get_user_id(session, usernames[invitation_seed.invitee]),
+                kind=invitation_seed.kind,
                 status=invitation_seed.status,
             )
             session.add(invitation)
             summary.invitations += 1
             if invitation_seed.status == InvitationStatus.ACCEPTED:
+                joined_user_id = (
+                    _get_user_id(session, usernames[invitation_seed.invitee])
+                    if invitation_seed.kind == InvitationKind.INVITE
+                    else _get_user_id(session, usernames[invitation_seed.inviter])
+                )
                 existing = session.exec(
                     select(TeamMember).where(
                         TeamMember.team_id == team_ids[invitation_seed.team_slug],
-                        TeamMember.user_id == _get_user_id(session, usernames[invitation_seed.invitee]),
+                        TeamMember.user_id == joined_user_id,
                     )
                 ).first()
                 if existing is None:
                     session.add(
                         TeamMember(
                             team_id=team_ids[invitation_seed.team_slug],
-                            user_id=_get_user_id(session, usernames[invitation_seed.invitee]),
+                            user_id=joined_user_id,
                         )
                     )
                     summary.team_members += 1

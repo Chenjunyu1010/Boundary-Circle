@@ -191,6 +191,18 @@ def fetch_matching_teams(circle_id: int) -> list[dict]:
     return []
 
 
+def fetch_member_tags(circle_id: int, user_id: int) -> list[dict]:
+    """Fetch another circle member's submitted tags."""
+    try:
+        response = api_client.get(f"/circles/{circle_id}/members/{user_id}/tags")
+        if response.ok:
+            return response.json()
+        st.error(f"Failed to load member tags: {response.reason}")
+    except Exception as exc:  # pragma: no cover - defensive
+        st.error(f"Error loading member tags: {exc}")
+    return []
+
+
 def get_stored_user_matches(selected_team_id: int) -> list[dict]:
     """Return persisted matching users for the currently selected team."""
     if st.session_state.get("matching_selected_team_id") != selected_team_id:
@@ -408,6 +420,82 @@ def respond_to_invitation(invite_id: int, accept: bool) -> tuple[bool, str]:
         return False, f"Error responding to invitation: {exc}"
 
 
+def request_to_join_team(team_id: int) -> tuple[bool, str]:
+    """Submit a join request for the current user."""
+    try:
+        response = api_client.post(f"/teams/{team_id}/request-join")
+        if response.ok:
+            payload = response.json()
+            return True, payload.get("message", "Join request sent.")
+
+        detail = ""
+        try:
+            error_payload = response.json()
+            detail = error_payload.get("detail") or error_payload.get("message", "")
+        except Exception:
+            detail = ""
+        return False, detail or f"Failed to request to join: {response.reason}"
+    except Exception as exc:  # pragma: no cover - defensive
+        return False, f"Error requesting to join: {exc}"
+
+
+def format_member_tag_value(tag: dict) -> str:
+    """Render stored tag values into a compact human-readable string."""
+    raw_value = tag.get("value", "")
+    tag_type = tag.get("data_type")
+
+    if tag_type == "multi_select":
+        try:
+            parsed = json.loads(raw_value)
+        except (TypeError, json.JSONDecodeError):
+            return str(raw_value)
+        if isinstance(parsed, list):
+            return ", ".join(str(item) for item in parsed)
+    if tag_type == "boolean":
+        if str(raw_value).lower() in {"true", "1"}:
+            return "Yes"
+        if str(raw_value).lower() in {"false", "0"}:
+            return "No"
+    return str(raw_value)
+
+
+def split_invitations_for_management(
+    invitations: list[dict], user_id: int
+) -> tuple[list[dict], list[dict], list[dict], list[dict]]:
+    """Split inbox items into incoming invites, creator approvals, outgoing requests, and history."""
+    incoming_invites = [
+        invite
+        for invite in invitations
+        if invite.get("kind", "invite") == "invite"
+        and invite.get("invitee_id") == user_id
+        and invite.get("status") == "pending"
+    ]
+    incoming_requests = [
+        invite
+        for invite in invitations
+        if invite.get("kind") == "join_request"
+        and invite.get("invitee_id") == user_id
+        and invite.get("status") == "pending"
+    ]
+    outgoing_requests = [
+        invite
+        for invite in invitations
+        if invite.get("kind") == "join_request"
+        and invite.get("inviter_id") == user_id
+        and invite.get("status") == "pending"
+    ]
+    processed = [
+        invite
+        for invite in invitations
+        if invite.get("status") != "pending"
+        and (
+            invite.get("invitee_id") == user_id
+            or invite.get("inviter_id") == user_id
+        )
+    ]
+    return incoming_invites, incoming_requests, outgoing_requests, processed
+
+
 def render_team_detail() -> None:
     """Render a detailed view of the selected team."""
     circle_id = st.session_state.get("current_circle_id")
@@ -603,8 +691,8 @@ def render_team_list() -> None:
                 if current_user_id in member_ids:
                     st.caption("You are already in this team")
                 elif is_joinable:
-                    st.caption("Invitation only")
-                    st.caption("Ask a team creator/member to invite you")
+                    st.caption("Open to join requests")
+                    st.caption("Use Matching to send a request to the creator")
                 else:
                     st.caption("Not accepting members")
 
@@ -778,21 +866,15 @@ def render_invitation_management() -> None:
 
     current_user = get_current_user()
     user_id = current_user.get("id")
+    circle_id = st.session_state.get("current_circle_id")
     if user_id is None:
         st.warning("Please log in again.")
         return
 
     invitations = fetch_invitations()
-    pending = [
-        invite
-        for invite in invitations
-        if invite.get("invitee_id") == user_id and invite.get("status") == "pending"
-    ]
-    processed = [
-        invite
-        for invite in invitations
-        if invite.get("invitee_id") == user_id and invite.get("status") != "pending"
-    ]
+    pending, pending_requests, outgoing_requests, processed = split_invitations_for_management(
+        invitations, user_id
+    )
 
     st.subheader("Pending Invitations")
     if not pending:
@@ -835,6 +917,77 @@ def render_invitation_management() -> None:
                             st.error(message)
 
     st.markdown("---")
+    st.subheader("Join Requests To Review")
+    if not pending_requests:
+        st.info("No join requests waiting for your approval.")
+    else:
+        for invite in pending_requests:
+            with st.container(border=True):
+                team_display = invite.get("team_name") or f"Team #{invite.get('team_id')}"
+                requester_label = invite.get("inviter_username") or f"User #{invite.get('inviter_id')}"
+                requester_id = invite.get("inviter_id")
+                st.markdown(f"**{team_display}**")
+                st.caption(f"Requested by {requester_label}")
+                if requester_id is not None and circle_id is not None:
+                    requester_tags = fetch_member_tags(circle_id, int(requester_id))
+                    if requester_tags:
+                        formatted_tags = [
+                            f"{tag.get('tag_name', 'Tag')}: {format_member_tag_value(tag)}"
+                            for tag in requester_tags
+                        ]
+                        st.write("Tags: " + " | ".join(formatted_tags))
+                    else:
+                        st.caption("Tags: none submitted")
+
+                profile_col, approve_col, reject_col = st.columns(3)
+                with profile_col:
+                    if requester_id is not None and st.button(
+                        "View Profile",
+                        key=f"view_join_request_profile_{invite.get('id')}",
+                    ):
+                        open_public_profile(int(requester_id))
+                with approve_col:
+                    if st.button(
+                        "Approve",
+                        key=f"approve_join_request_{invite.get('id')}",
+                        type="primary",
+                    ):
+                        invite_id = invite.get("id")
+                        if invite_id is None:
+                            st.error("Unable to respond because request data is incomplete.")
+                            continue
+                        success, message = respond_to_invitation(invite_id, True)
+                        if success:
+                            st.success(message)
+                            st.rerun()
+                        else:
+                            st.error(message)
+                with reject_col:
+                    if st.button("Reject", key=f"reject_join_request_{invite.get('id')}"):
+                        invite_id = invite.get("id")
+                        if invite_id is None:
+                            st.error("Unable to respond because request data is incomplete.")
+                            continue
+                        success, message = respond_to_invitation(invite_id, False)
+                        if success:
+                            st.info(message)
+                            st.rerun()
+                        else:
+                            st.error(message)
+
+    st.markdown("---")
+    st.subheader("My Join Requests")
+    if not outgoing_requests:
+        st.info("You have not requested to join any teams.")
+    else:
+        for invite in outgoing_requests:
+            with st.container(border=True):
+                team_display = invite.get("team_name") or f"Team #{invite.get('team_id')}"
+                creator_label = invite.get("invitee_username") or f"User #{invite.get('invitee_id')}"
+                st.markdown(f"**{team_display}**")
+                st.caption(f"Waiting for {creator_label} to respond")
+
+    st.markdown("---")
     st.subheader("Invitation History")
     if not processed:
         st.info("No invitation history.")
@@ -845,7 +998,8 @@ def render_invitation_management() -> None:
                 with col_left:
                     team_display = invite.get("team_name") or f"Team #{invite.get('team_id')}"
                     st.markdown(f"**{team_display}**")
-                    st.caption(f"Status: {invite.get('status', 'unknown')}")
+                    kind_label = "Join request" if invite.get("kind") == "join_request" else "Invitation"
+                    st.caption(f"{kind_label} status: {invite.get('status', 'unknown')}")
                 with col_right:
                     if invite.get("status") == "accepted":
                         st.success("Accepted")
@@ -942,7 +1096,7 @@ def render_matching_section() -> None:
 
     st.markdown("---")
     st.subheader("Recommend teams for me")
-    st.caption("Recommended teams still require an invitation from a current member or creator.")
+    st.caption("You can send a join request directly to the team creator from here.")
 
     if st.button("Find teams for me", key="find_matching_teams", type="primary"):
         matches = fetch_matching_teams(circle_id)
@@ -952,19 +1106,42 @@ def render_matching_section() -> None:
             for item in matches:
                 team = item.get("team", {})
                 with st.container(border=True):
-                    st.markdown(f"**{team.get('name', 'Unnamed Team')}**")
-                    creator_label = team.get("creator_username") or "Unknown"
-                    st.caption(f"Creator: {creator_label}")
-                    st.caption(team.get("description", "No description"))
-                    st.write(
-                        f"Members: {team.get('current_members', 0)}/"
-                        f"{team.get('max_members', 0)}"
-                    )
-                    cov = item.get("coverage_score", 0.0)
-                    jac = item.get("jaccard_score", 0.0)
-                    st.caption(f"Coverage: {cov:.2f} | Similarity: {jac:.2f}")
-                    missing = ", ".join(item.get("missing_required_tags", [])) or "-"
-                    st.write(f"Missing required tags: {missing}")
+                    info_col, action_col = st.columns([4, 1])
+                    with info_col:
+                        st.markdown(f"**{team.get('name', 'Unnamed Team')}**")
+                        creator_label = team.get("creator_username") or "Unknown"
+                        st.caption(f"Creator: {creator_label}")
+                        st.caption(team.get("description", "No description"))
+                        st.write(
+                            f"Members: {team.get('current_members', 0)}/"
+                            f"{team.get('max_members', 0)}"
+                        )
+                        cov = item.get("coverage_score", 0.0)
+                        jac = item.get("jaccard_score", 0.0)
+                        st.caption(f"Coverage: {cov:.2f} | Similarity: {jac:.2f}")
+                        missing = ", ".join(item.get("missing_required_tags", [])) or "-"
+                        st.write(f"Missing required tags: {missing}")
+                    with action_col:
+                        team_id = team.get("id")
+                        member_ids = team.get("member_ids", []) or []
+                        is_joinable = (
+                            team.get("status") == "Recruiting"
+                            and user_id not in member_ids
+                            and team_id is not None
+                        )
+                        if user_id in member_ids:
+                            st.caption("Already joined")
+                        elif is_joinable and st.button(
+                            "Request to Join",
+                            key=f"request_join_match_{team_id}",
+                        ):
+                            success, message = request_to_join_team(int(team_id))
+                            if success:
+                                st.success(message)
+                            else:
+                                st.error(message)
+                        elif not is_joinable:
+                            st.caption("Unavailable")
 
 
 def main() -> None:

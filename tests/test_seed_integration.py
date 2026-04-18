@@ -396,3 +396,52 @@ def test_stress_seed_locked_team_unlocks_when_member_leaves(db_session):
     assert matching_response.status_code == 200
     team_names = [item["team"]["name"] for item in matching_response.json()]
     assert "[SEED STRESS] Systems Lab Alpha" in team_names
+
+
+def test_seed_join_request_is_visible_to_creator_and_can_be_approved(db_session):
+    seed_dataset(db_session, "demo")
+
+    alice_headers = login_seed_user("seed_demo_alice")
+    eva_headers = login_seed_user("seed_demo_eva")
+
+    creator_inbox_response = client.get("/invitations", headers=alice_headers)
+    assert creator_inbox_response.status_code == 200
+    creator_inbox = creator_inbox_response.json()
+    join_request = next(
+        item
+        for item in creator_inbox
+        if item["kind"] == "join_request"
+        and item["status"] == "pending"
+        and item["inviter_username"] == "seed_demo_eva"
+    )
+
+    respond_response = client.post(
+        f"/invitations/{join_request['id']}/respond",
+        headers=alice_headers,
+        json={"accept": True},
+    )
+    assert respond_response.status_code == 200
+    assert respond_response.json()["success"] is True
+
+    circles_response = client.get("/circles/", headers=alice_headers)
+    assert circles_response.status_code == 200
+    ai_circle = find_by_name(circles_response.json(), "[SEED DEMO] AI Capstone Showcase")
+
+    teams_response = client.get(f"/circles/{ai_circle['id']}/teams", headers=alice_headers)
+    assert teams_response.status_code == 200
+    vision_builders = find_by_name(teams_response.json(), "[SEED DEMO] Vision Builders")
+
+    members_response = client.get(f"/circles/{ai_circle['id']}/members", headers=alice_headers)
+    assert members_response.status_code == 200
+    eva = find_by_username(members_response.json(), "seed_demo_eva")
+
+    assert eva["id"] in vision_builders["member_ids"]
+
+    requester_inbox_response = client.get("/invitations", headers=eva_headers)
+    assert requester_inbox_response.status_code == 200
+    requester_record = next(
+        item
+        for item in requester_inbox_response.json()
+        if item["id"] == join_request["id"]
+    )
+    assert requester_record["status"] == "accepted"

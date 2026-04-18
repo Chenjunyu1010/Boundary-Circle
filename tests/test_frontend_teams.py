@@ -240,3 +240,115 @@ def test_get_stored_user_matches_only_returns_results_for_selected_team(monkeypa
 
     assert team_module.get_stored_user_matches(9) == [{"user_id": 3, "username": "carol"}]
     assert team_module.get_stored_user_matches(8) == []
+
+
+def test_mock_join_request_flow_allows_creator_approval(monkeypatch):
+    fake_streamlit, api_module, _, _ = load_team_modules(monkeypatch)
+    fake_streamlit.session_state.logged_in = True
+    fake_streamlit.session_state.mock_teams = {
+        1: [
+            {
+                "id": 8,
+                "name": "Systems Team",
+                "description": "Need another member",
+                "max_members": 3,
+                "current_members": 1,
+                "status": "Recruiting",
+                "creator_id": 1,
+                "circle_id": 1,
+                "member_ids": [1],
+            }
+        ]
+    }
+    fake_streamlit.session_state.mock_invitations = []
+
+    fake_streamlit.session_state.user_id = 4
+    request_response = api_module.api_client.post("/teams/8/request-join")
+
+    assert request_response.status_code == 201
+    assert request_response.json()["kind"] == "join_request"
+    assert request_response.json()["inviter_id"] == 4
+    assert request_response.json()["invitee_id"] == 1
+
+    fake_streamlit.session_state.user_id = 1
+    creator_inbox = api_module.api_client.get("/invitations").json()
+    assert any(item["kind"] == "join_request" and item["team_id"] == 8 for item in creator_inbox)
+
+    approve_response = api_module.api_client.post(
+        f"/invitations/{request_response.json()['id']}/respond",
+        data={"accept": True},
+    )
+
+    assert approve_response.status_code == 200
+    assert approve_response.json()["success"] is True
+    assert fake_streamlit.session_state.mock_teams[1][0]["member_ids"] == [1, 4]
+
+
+def test_request_join_helper_uses_join_request_endpoint(monkeypatch):
+    _, _, _, team_module = load_team_modules(monkeypatch)
+    captured = {}
+
+    class DummyResponse:
+        ok = True
+        reason = "OK"
+
+        def json(self):
+            return {"message": "Join request sent.", "status": "pending", "kind": "join_request"}
+
+    def fake_post(endpoint, data=None, params=None):
+        captured["endpoint"] = endpoint
+        captured["data"] = data
+        return DummyResponse()
+
+    team_module.api_client.post = fake_post
+
+    success, message = team_module.request_to_join_team(12)
+
+    assert success is True
+    assert message == "Join request sent."
+    assert captured["endpoint"] == "/teams/12/request-join"
+    assert captured["data"] is None
+
+
+def test_fetch_member_tags_uses_member_tags_endpoint(monkeypatch):
+    _, _, _, team_module = load_team_modules(monkeypatch)
+    captured = {}
+
+    class DummyResponse:
+        ok = True
+        reason = "OK"
+
+        def json(self):
+            return [{"tag_name": "Tech Stack", "value": '["Python", "SQL"]'}]
+
+    def fake_get(endpoint, params=None):
+        captured["endpoint"] = endpoint
+        return DummyResponse()
+
+    team_module.api_client.get = fake_get
+
+    payload = team_module.fetch_member_tags(6, 12)
+
+    assert payload == [{"tag_name": "Tech Stack", "value": '["Python", "SQL"]'}]
+    assert captured["endpoint"] == "/circles/6/members/12/tags"
+
+
+def test_split_invitations_for_management_keeps_join_request_buckets_separate(monkeypatch):
+    _, _, _, team_module = load_team_modules(monkeypatch)
+
+    invitations = [
+        {"id": 1, "kind": "invite", "invitee_id": 7, "inviter_id": 2, "status": "pending"},
+        {"id": 2, "kind": "join_request", "invitee_id": 7, "inviter_id": 3, "status": "pending"},
+        {"id": 3, "kind": "join_request", "invitee_id": 5, "inviter_id": 7, "status": "pending"},
+        {"id": 4, "kind": "join_request", "invitee_id": 7, "inviter_id": 4, "status": "accepted"},
+    ]
+
+    pending, pending_requests, outgoing_requests, processed = team_module.split_invitations_for_management(
+        invitations,
+        user_id=7,
+    )
+
+    assert [item["id"] for item in pending] == [1]
+    assert [item["id"] for item in pending_requests] == [2]
+    assert [item["id"] for item in outgoing_requests] == [3]
+    assert [item["id"] for item in processed] == [4]
