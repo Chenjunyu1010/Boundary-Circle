@@ -94,8 +94,8 @@ def build_invitation_read(invitation: Invitation, session: Session) -> Invitatio
 def build_invitation_reads(
     invitations: Sequence[Invitation],
     session: Session,
-    teams_by_id: Optional[dict[int, Team | None]] = None,
-    users_by_id: Optional[dict[int, User | None]] = None,
+    teams_by_id: Optional[dict[int, Optional[Team]]] = None,
+    users_by_id: Optional[dict[int, Optional[User]]] = None,
 ) -> list[InvitationRead]:
     if teams_by_id is None:
         teams_by_id = {}

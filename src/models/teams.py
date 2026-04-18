@@ -175,7 +175,7 @@ def normalize_freedom_profile(data: object) -> dict[str, list[str]]:
     return {"keywords": deduped}
 
 
-def decode_freedom_profile(raw: str | None) -> dict[str, list[str]]:
+def decode_freedom_profile(raw: Optional[str]) -> dict[str, list[str]]:
     if raw is None or raw == "":
         return empty_freedom_profile()
     try:

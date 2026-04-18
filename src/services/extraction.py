@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from typing import Any
+from typing import Any, Optional
 
 import httpx
 
@@ -59,7 +59,7 @@ class OpenAICompatibleFreedomProfileExtractor(FreedomProfileExtractor):
 
     def _post_chat_completions(self, text: str) -> httpx.Response:
         timeout = httpx.Timeout(connect=10.0, read=60.0, write=20.0, pool=10.0)
-        last_exc: Exception | None = None
+        last_exc: Optional[Exception] = None
         for attempt in range(1, self._MAX_ATTEMPTS + 1):
             try:
                 return httpx.post(
@@ -156,8 +156,8 @@ def _normalize_keywords(keywords: list[str]) -> dict[str, list[str]]:
 
 
 def extract_freedom_profile(
-    text: str | None,
-    extractor: FreedomProfileExtractor | None = None,
+    text: Optional[str],
+    extractor: Optional[FreedomProfileExtractor] = None,
 ) -> dict[str, list[str]]:
     """Extract a freedom profile from text.
 
@@ -194,7 +194,7 @@ def extract_freedom_profile(
     return _normalize_keywords(keywords)
 
 
-def build_freedom_profile_extractor() -> FreedomProfileExtractor | None:
+def build_freedom_profile_extractor() -> Optional[FreedomProfileExtractor]:
     """Build the configured freedom-profile extractor, if any."""
     settings = get_settings()
     if settings.llm_provider.strip().lower() != "openai_compatible":

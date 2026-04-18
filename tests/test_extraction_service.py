@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import httpx
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
 from src.core.settings import get_settings
 from src.services.extraction import (
@@ -17,7 +17,7 @@ if TYPE_CHECKING:
 class MockExtractor(FreedomProfileExtractor):
     """Mock extractor for testing - returns deterministic keywords."""
 
-    def __init__(self, keywords: list[str] | None = None):
+    def __init__(self, keywords: Optional[list[str]] = None):
         super().__init__()
         self._keywords = keywords or []
 
