@@ -1,8 +1,10 @@
 from fastapi.testclient import TestClient
 
+from src.api.teams import build_invitation_reads
 from src.main import app
+from src.models.core import User
 from src.models.tags import CircleMember, CircleRole
-from src.models.teams import TeamMember
+from src.models.teams import Invitation, InvitationKind, InvitationStatus, Team, TeamMember
 
 
 client = TestClient(app)
@@ -592,3 +594,395 @@ def test_accept_invitation_rejects_when_team_is_full(db_session):
 
     assert accept_b_response.status_code == 409
     assert accept_b_response.json()["detail"] == "Team is already full"
+
+
+def test_circle_member_can_request_to_join_team(db_session):
+    creator, creator_headers = register_and_login("requestcaptain", "requestcaptain@example.com")
+    requester, requester_headers = register_and_login("requestmember", "requestmember@example.com")
+    circle_response = client.post(
+        "/circles/",
+        headers=creator_headers,
+        json={"name": "Join Request Circle", "description": "Circle for join-request flow"},
+    )
+    assert circle_response.status_code == 201
+    circle = circle_response.json()
+
+    db_session.add(add_circle_member(circle["id"], requester["id"]))
+    db_session.commit()
+
+    team_response = client.post(
+        "/teams",
+        headers=creator_headers,
+        json={
+            "name": "Join Request Team",
+            "description": "Team accepting join requests",
+            "circle_id": circle["id"],
+            "max_members": 3,
+            "required_tags": [],
+        },
+    )
+    assert team_response.status_code == 201
+    team = team_response.json()
+
+    request_response = client.post(
+        f"/teams/{team['id']}/request-join",
+        headers=requester_headers,
+    )
+
+    assert request_response.status_code == 201
+    payload = request_response.json()
+    assert payload["team_id"] == team["id"]
+    assert payload["inviter_id"] == requester["id"]
+    assert payload["invitee_id"] == creator["id"]
+    assert payload["kind"] == "join_request"
+    assert payload["status"] == "pending"
+
+
+def test_non_circle_member_cannot_request_to_join_team(db_session):
+    creator, creator_headers = register_and_login("requestcaptain2", "requestcaptain2@example.com")
+    requester, requester_headers = register_and_login("requestoutsider2", "requestoutsider2@example.com")
+    circle_response = client.post(
+        "/circles/",
+        headers=creator_headers,
+        json={"name": "Join Boundary Circle", "description": "Circle join boundary checks"},
+    )
+    assert circle_response.status_code == 201
+    circle = circle_response.json()
+
+    team_response = client.post(
+        "/teams",
+        headers=creator_headers,
+        json={
+            "name": "Boundary Join Team",
+            "description": "Team guarded by circle membership",
+            "circle_id": circle["id"],
+            "max_members": 3,
+            "required_tags": [],
+        },
+    )
+    assert team_response.status_code == 201
+    team = team_response.json()
+
+    request_response = client.post(
+        f"/teams/{team['id']}/request-join",
+        headers=requester_headers,
+    )
+
+    assert request_response.status_code == 403
+    assert request_response.json()["detail"] == "Requester must be a member of the same circle"
+
+
+def test_duplicate_join_request_overwrites_previous_pending_request(db_session):
+    creator, creator_headers = register_and_login("requestcaptain3", "requestcaptain3@example.com")
+    requester, requester_headers = register_and_login("requestmember3", "requestmember3@example.com")
+    circle_response = client.post(
+        "/circles/",
+        headers=creator_headers,
+        json={"name": "Repeat Join Circle", "description": "Circle for repeated join requests"},
+    )
+    assert circle_response.status_code == 201
+    circle = circle_response.json()
+
+    db_session.add(add_circle_member(circle["id"], requester["id"]))
+    db_session.commit()
+
+    team_response = client.post(
+        "/teams",
+        headers=creator_headers,
+        json={
+            "name": "Repeat Join Team",
+            "description": "Team for repeated join requests",
+            "circle_id": circle["id"],
+            "max_members": 4,
+            "required_tags": [],
+        },
+    )
+    assert team_response.status_code == 201
+    team = team_response.json()
+
+    first_response = client.post(
+        f"/teams/{team['id']}/request-join",
+        headers=requester_headers,
+    )
+    second_response = client.post(
+        f"/teams/{team['id']}/request-join",
+        headers=requester_headers,
+    )
+
+    assert first_response.status_code == 201
+    assert second_response.status_code == 201
+
+    creator_invitations_response = client.get("/invitations", headers=creator_headers)
+    assert creator_invitations_response.status_code == 200
+    creator_pending = [
+        item
+        for item in creator_invitations_response.json()
+        if item["team_id"] == team["id"]
+        and item["kind"] == "join_request"
+        and item["status"] == "pending"
+    ]
+    assert len(creator_pending) == 1
+    assert creator_pending[0]["id"] == second_response.json()["id"]
+
+
+def test_invitations_endpoint_includes_join_requests_for_team_creator(db_session):
+    creator, creator_headers = register_and_login("requestcaptain4", "requestcaptain4@example.com")
+    requester, requester_headers = register_and_login("requestmember4", "requestmember4@example.com")
+    circle_response = client.post(
+        "/circles/",
+        headers=creator_headers,
+        json={"name": "Creator Inbox Circle", "description": "Circle for creator inbox"},
+    )
+    assert circle_response.status_code == 201
+    circle = circle_response.json()
+
+    db_session.add(add_circle_member(circle["id"], requester["id"]))
+    db_session.commit()
+
+    team_response = client.post(
+        "/teams",
+        headers=creator_headers,
+        json={
+            "name": "Creator Inbox Team",
+            "description": "Team whose creator reviews requests",
+            "circle_id": circle["id"],
+            "max_members": 3,
+            "required_tags": [],
+        },
+    )
+    assert team_response.status_code == 201
+    team = team_response.json()
+
+    request_response = client.post(
+        f"/teams/{team['id']}/request-join",
+        headers=requester_headers,
+    )
+    assert request_response.status_code == 201
+
+    creator_invitations_response = client.get("/invitations", headers=creator_headers)
+    requester_invitations_response = client.get("/invitations", headers=requester_headers)
+
+    assert creator_invitations_response.status_code == 200
+    assert requester_invitations_response.status_code == 200
+
+    creator_items = creator_invitations_response.json()
+    requester_items = requester_invitations_response.json()
+
+    assert any(
+        item["team_id"] == team["id"]
+        and item["kind"] == "join_request"
+        and item["invitee_id"] == creator["id"]
+        for item in creator_items
+    )
+    assert any(
+        item["team_id"] == team["id"]
+        and item["kind"] == "join_request"
+        and item["inviter_id"] == requester["id"]
+        for item in requester_items
+    )
+
+
+def test_only_team_creator_can_respond_to_join_request(db_session):
+    creator, creator_headers = register_and_login("requestcaptain5", "requestcaptain5@example.com")
+    member, member_headers = register_and_login("requestmember5", "requestmember5@example.com")
+    requester, requester_headers = register_and_login("requestuser5", "requestuser5@example.com")
+    circle_response = client.post(
+        "/circles/",
+        headers=creator_headers,
+        json={"name": "Join Approval Circle", "description": "Circle for join-request approvals"},
+    )
+    assert circle_response.status_code == 201
+    circle = circle_response.json()
+
+    db_session.add(add_circle_member(circle["id"], member["id"]))
+    db_session.add(add_circle_member(circle["id"], requester["id"]))
+    db_session.commit()
+
+    team_response = client.post(
+        "/teams",
+        headers=creator_headers,
+        json={
+            "name": "Join Approval Team",
+            "description": "Team with creator-only approvals",
+            "circle_id": circle["id"],
+            "max_members": 4,
+            "required_tags": [],
+        },
+    )
+    assert team_response.status_code == 201
+    team = team_response.json()
+
+    db_session.add(TeamMember(team_id=team["id"], user_id=member["id"]))
+    db_session.commit()
+
+    request_response = client.post(
+        f"/teams/{team['id']}/request-join",
+        headers=requester_headers,
+    )
+    assert request_response.status_code == 201
+    join_request = request_response.json()
+
+    member_respond_response = client.post(
+        f"/invitations/{join_request['id']}/respond",
+        headers=member_headers,
+        json={"accept": True},
+    )
+    requester_respond_response = client.post(
+        f"/invitations/{join_request['id']}/respond",
+        headers=requester_headers,
+        json={"accept": True},
+    )
+
+    assert member_respond_response.status_code == 403
+    assert member_respond_response.json()["detail"] == "Only the team creator can respond"
+    assert requester_respond_response.status_code == 403
+    assert requester_respond_response.json()["detail"] == "Only the team creator can respond"
+
+
+def test_team_creator_can_accept_join_request_and_add_member(db_session):
+    creator, creator_headers = register_and_login("requestcaptain6", "requestcaptain6@example.com")
+    requester, requester_headers = register_and_login("requestmember6", "requestmember6@example.com")
+    circle_response = client.post(
+        "/circles/",
+        headers=creator_headers,
+        json={"name": "Join Accept Circle", "description": "Circle for accepting join requests"},
+    )
+    assert circle_response.status_code == 201
+    circle = circle_response.json()
+
+    db_session.add(add_circle_member(circle["id"], requester["id"]))
+    db_session.commit()
+
+    team_response = client.post(
+        "/teams",
+        headers=creator_headers,
+        json={
+            "name": "Join Accept Team",
+            "description": "Team that accepts join requests",
+            "circle_id": circle["id"],
+            "max_members": 3,
+            "required_tags": [],
+        },
+    )
+    assert team_response.status_code == 201
+    team = team_response.json()
+
+    request_response = client.post(
+        f"/teams/{team['id']}/request-join",
+        headers=requester_headers,
+    )
+    assert request_response.status_code == 201
+    join_request = request_response.json()
+
+    respond_response = client.post(
+        f"/invitations/{join_request['id']}/respond",
+        headers=creator_headers,
+        json={"accept": True},
+    )
+
+    assert respond_response.status_code == 200
+    assert respond_response.json()["success"] is True
+    assert respond_response.json()["message"] == "Join request accepted"
+
+    teams_response = client.get(f"/circles/{circle['id']}/teams", headers=creator_headers)
+    assert teams_response.status_code == 200
+    stored_team = teams_response.json()[0]
+    assert requester["id"] in stored_team["member_ids"]
+    assert stored_team["current_members"] == 2
+
+
+def test_team_creator_can_reject_join_request_without_adding_member(db_session):
+    creator, creator_headers = register_and_login("requestcaptain7", "requestcaptain7@example.com")
+    requester, requester_headers = register_and_login("requestmember7", "requestmember7@example.com")
+    circle_response = client.post(
+        "/circles/",
+        headers=creator_headers,
+        json={"name": "Join Reject Circle", "description": "Circle for rejecting join requests"},
+    )
+    assert circle_response.status_code == 201
+    circle = circle_response.json()
+
+    db_session.add(add_circle_member(circle["id"], requester["id"]))
+    db_session.commit()
+
+    team_response = client.post(
+        "/teams",
+        headers=creator_headers,
+        json={
+            "name": "Join Reject Team",
+            "description": "Team that rejects join requests",
+            "circle_id": circle["id"],
+            "max_members": 3,
+            "required_tags": [],
+        },
+    )
+    assert team_response.status_code == 201
+    team = team_response.json()
+
+    request_response = client.post(
+        f"/teams/{team['id']}/request-join",
+        headers=requester_headers,
+    )
+    assert request_response.status_code == 201
+    join_request = request_response.json()
+
+    respond_response = client.post(
+        f"/invitations/{join_request['id']}/respond",
+        headers=creator_headers,
+        json={"accept": False},
+    )
+
+    assert respond_response.status_code == 200
+    assert respond_response.json()["success"] is True
+    assert respond_response.json()["message"] == "Join request rejected"
+
+    teams_response = client.get(f"/circles/{circle['id']}/teams", headers=creator_headers)
+    stored_team = teams_response.json()[0]
+    assert requester["id"] not in stored_team["member_ids"]
+    assert stored_team["current_members"] == 1
+
+
+def test_build_invitation_reads_can_use_preloaded_related_records(db_session):
+    creator, _ = register_and_login("batchcaptain", "batchcaptain@example.com")
+    invitee, _ = register_and_login("batchinvitee", "batchinvitee@example.com")
+    team = Team(name="Batch Team", description="Batch read team", circle_id=1, creator_id=creator["id"], max_members=4)
+    db_session.add(team)
+    db_session.commit()
+    db_session.refresh(team)
+
+    invitation = Invitation(
+        team_id=team.id,
+        inviter_id=creator["id"],
+        invitee_id=invitee["id"],
+        kind=InvitationKind.INVITE,
+        status=InvitationStatus.PENDING,
+    )
+    db_session.add(invitation)
+    db_session.commit()
+    db_session.refresh(invitation)
+
+    original_get = db_session.get
+
+    def fail_related_get(model, identity, *args, **kwargs):
+        if model in {Team, User}:
+            raise AssertionError("session.get should not be used for preloaded Team/User records")
+        return original_get(model, identity, *args, **kwargs)
+
+    db_session.get = fail_related_get
+    try:
+        payload = build_invitation_reads(
+            [invitation],
+            db_session,
+            teams_by_id={team.id: team},
+            users_by_id={
+                creator["id"]: original_get(User, creator["id"]),
+                invitee["id"]: original_get(User, invitee["id"]),
+            },
+        )
+    finally:
+        db_session.get = original_get
+
+    assert len(payload) == 1
+    assert payload[0].team_name == "Batch Team"
+    assert payload[0].inviter_username == "batchcaptain"
+    assert payload[0].invitee_username == "batchinvitee"

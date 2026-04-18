@@ -10,7 +10,7 @@ from scripts.seed_data import (
 from src.models.core import Circle, User, UserCreate
 from src.models.profile import UserProfile
 from src.models.tags import CircleMember, CircleRole, TagDefinition
-from src.models.teams import Invitation, InvitationStatus, Team, TeamMember
+from src.models.teams import Invitation, InvitationKind, InvitationStatus, Team, TeamMember
 from src.services.users import create_user_account
 
 
@@ -65,7 +65,7 @@ def test_seed_demo_creates_expected_entities_and_markers(db_session):
     assert summary.users == 7
     assert summary.circles == 2
     assert summary.teams == 4
-    assert summary.invitations == 5
+    assert summary.invitations == 6
     assert count_seed_users(db_session, "demo") == 7
     assert count_seed_profiles(db_session, "demo") == 7
     assert count_seed_circles(db_session, "demo") == 2
@@ -85,6 +85,13 @@ def test_seed_demo_creates_expected_entities_and_markers(db_session):
     assert seeded_profile.birthday is not None
     assert seeded_profile.bio
 
+    join_requests = [
+        invitation
+        for invitation in db_session.exec(select(Invitation)).all()
+        if invitation.kind == InvitationKind.JOIN_REQUEST
+    ]
+    assert join_requests
+
 
 def test_seed_demo_is_repeatable_without_duplication(db_session):
     first = seed_dataset(db_session, "demo")
@@ -102,7 +109,7 @@ def test_seed_stress_creates_varied_dataset(db_session):
     assert summary.users == 18
     assert summary.circles == 4
     assert summary.teams == 10
-    assert summary.invitations == 12
+    assert summary.invitations == 16
     assert count_seed_users(db_session, "stress") == 18
     assert count_seed_profiles(db_session, "stress") == 18
     assert count_seed_circles(db_session, "stress") == 4
@@ -115,6 +122,11 @@ def test_seed_stress_creates_varied_dataset(db_session):
         InvitationStatus.PENDING,
         InvitationStatus.ACCEPTED,
         InvitationStatus.REJECTED,
+    }
+    kinds = {invitation.kind for invitation in db_session.exec(select(Invitation)).all()}
+    assert kinds == {
+        InvitationKind.INVITE,
+        InvitationKind.JOIN_REQUEST,
     }
 
 

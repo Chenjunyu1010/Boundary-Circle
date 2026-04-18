@@ -2,6 +2,12 @@
 
 Date: 2026-04-17
 
+Status: Implemented on 2026-04-18 and extended with public profile navigation, first-login profile prompt, seed/profile sample updates, and team join-request review links to requester profiles.
+
+Implementation references:
+- PR #88 for the main dedicated profile page flow
+- PR #89 for follow-up integration in team join-request review
+
 ## Goal
 
 Add a dedicated user profile page with basic personal information fields and field-level visibility controls, replacing the current lightweight profile summary on the home page.
@@ -60,6 +66,8 @@ This change will cover:
 - public profile read API with field filtering
 - home-page navigation update
 - seed-data and test-sample updates for profile information
+- profile entry points from circle detail and team management flows
+- a first-login prompt that sends new users into profile completion
 
 This change will not cover:
 

@@ -1,3 +1,5 @@
+from typing import Optional
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlmodel import Session, select
 
@@ -8,6 +10,7 @@ from src.models.tags import CircleMember
 from src.models.teams import (
     Invitation,
     InvitationCreate,
+    InvitationKind,
     InvitationRead,
     InvitationRespond,
     InvitationStatus,
@@ -56,6 +59,77 @@ def build_team_read(team: Team, session: Session) -> TeamRead:
         required_tag_rules=decode_required_tag_rules(team.required_tag_rules_json),
         member_ids=member_ids,
     )
+
+
+def build_invitation_read(invitation: Invitation, session: Session) -> InvitationRead:
+    team = session.get(Team, invitation.team_id)
+    inviter = session.get(User, invitation.inviter_id)
+    invitee = session.get(User, invitation.invitee_id)
+    return InvitationRead(
+        id=invitation.id,
+        team_id=invitation.team_id,
+        team_name=team.name if team is not None else None,
+        inviter_id=invitation.inviter_id,
+        inviter_username=inviter.username if inviter is not None else None,
+        invitee_id=invitation.invitee_id,
+        invitee_username=invitee.username if invitee is not None else None,
+        kind=invitation.kind,
+        status=invitation.status,
+    )
+
+
+def build_invitation_reads(
+    invitations: list[Invitation],
+    session: Session,
+    teams_by_id: Optional[dict[int, Team]] = None,
+    users_by_id: Optional[dict[int, User]] = None,
+) -> list[InvitationRead]:
+    if teams_by_id is None:
+        team_ids = {invitation.team_id for invitation in invitations}
+        teams_by_id = (
+            {
+                team.id: team
+                for team in session.exec(select(Team).where(Team.id.in_(team_ids))).all()
+                if team.id is not None
+            }
+            if team_ids
+            else {}
+        )
+    if users_by_id is None:
+        user_ids = {
+            user_id
+            for invitation in invitations
+            for user_id in (invitation.inviter_id, invitation.invitee_id)
+        }
+        users_by_id = (
+            {
+                user.id: user
+                for user in session.exec(select(User).where(User.id.in_(user_ids))).all()
+                if user.id is not None
+            }
+            if user_ids
+            else {}
+        )
+
+    result: list[InvitationRead] = []
+    for invitation in invitations:
+        team = teams_by_id.get(invitation.team_id)
+        inviter = users_by_id.get(invitation.inviter_id)
+        invitee = users_by_id.get(invitation.invitee_id)
+        result.append(
+            InvitationRead(
+                id=invitation.id,
+                team_id=invitation.team_id,
+                team_name=team.name if team is not None else None,
+                inviter_id=invitation.inviter_id,
+                inviter_username=inviter.username if inviter is not None else None,
+                invitee_id=invitation.invitee_id,
+                invitee_username=invitee.username if invitee is not None else None,
+                kind=invitation.kind,
+                status=invitation.status,
+            )
+        )
+    return result
 
 
 def require_circle_member(
@@ -183,17 +257,81 @@ def send_invitation(
         select(Invitation).where(
             Invitation.team_id == team_id,
             Invitation.invitee_id == payload.user_id,
+            Invitation.kind == InvitationKind.INVITE,
             Invitation.status == InvitationStatus.PENDING,
         )
     ).first()
     if existing_pending is not None:
         raise HTTPException(status_code=409, detail="Invitation already pending")
 
-    invitation = Invitation(team_id=team_id, inviter_id=current_user.id, invitee_id=payload.user_id)
+    invitation = Invitation(
+        team_id=team_id,
+        inviter_id=current_user.id,
+        invitee_id=payload.user_id,
+        kind=InvitationKind.INVITE,
+    )
     session.add(invitation)
     session.commit()
     session.refresh(invitation)
-    return invitation
+    return build_invitation_read(invitation, session)
+
+
+@router.post("/teams/{team_id}/request-join", response_model=InvitationRead, status_code=status.HTTP_201_CREATED)
+def request_to_join_team(
+    team_id: int,
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+):
+    if current_user.id is None:
+        raise HTTPException(status_code=500, detail="Current user ID missing")
+
+    team = session.get(Team, team_id)
+    if team is None:
+        raise HTTPException(status_code=404, detail="Team not found")
+
+    require_circle_member(
+        team.circle_id,
+        current_user.id,
+        session,
+        detail="Requester must be a member of the same circle",
+    )
+
+    if team.creator_id == current_user.id:
+        raise HTTPException(status_code=400, detail="Team creator is already in the team")
+
+    existing_member = session.exec(
+        select(TeamMember).where(TeamMember.team_id == team_id, TeamMember.user_id == current_user.id)
+    ).first()
+    if existing_member is not None:
+        raise HTTPException(status_code=400, detail="User is already a team member")
+
+    team_read = build_team_read(team, session)
+    if team_read.status == TeamStatus.LOCKED:
+        raise HTTPException(status_code=409, detail="Team is already full")
+
+    existing_pending = session.exec(
+        select(Invitation).where(
+            Invitation.team_id == team_id,
+            Invitation.inviter_id == current_user.id,
+            Invitation.kind == InvitationKind.JOIN_REQUEST,
+            Invitation.status == InvitationStatus.PENDING,
+        )
+    ).all()
+    for invitation in existing_pending:
+        session.delete(invitation)
+    if existing_pending:
+        session.commit()
+
+    join_request = Invitation(
+        team_id=team_id,
+        inviter_id=current_user.id,
+        invitee_id=team.creator_id,
+        kind=InvitationKind.JOIN_REQUEST,
+    )
+    session.add(join_request)
+    session.commit()
+    session.refresh(join_request)
+    return build_invitation_read(join_request, session)
 
 
 @router.get("/teams/{team_id}/invitations", response_model=list[InvitationRead])
@@ -221,7 +359,13 @@ def list_team_invitations(
             detail="Only team creator or members can view team invitations",
         )
 
-    return session.exec(select(Invitation).where(Invitation.team_id == team_id)).all()
+    invitations = session.exec(
+        select(Invitation).where(
+            Invitation.team_id == team_id,
+            Invitation.kind == InvitationKind.INVITE,
+        )
+    ).all()
+    return build_invitation_reads(invitations, session)
 
 
 @router.get("/invitations", response_model=list[InvitationRead])
@@ -231,7 +375,14 @@ def list_invitations(
 ):
     if current_user.id is None:
         raise HTTPException(status_code=500, detail="Current user ID missing")
-    return session.exec(select(Invitation).where(Invitation.invitee_id == current_user.id)).all()
+    invitations = session.exec(
+        select(Invitation).where(
+            (Invitation.kind == InvitationKind.INVITE) & (Invitation.invitee_id == current_user.id)
+            | (Invitation.kind == InvitationKind.JOIN_REQUEST) & (Invitation.invitee_id == current_user.id)
+            | (Invitation.kind == InvitationKind.JOIN_REQUEST) & (Invitation.inviter_id == current_user.id)
+        )
+    ).all()
+    return build_invitation_reads(invitations, session)
 
 
 @router.post("/invitations/{invite_id}/respond")
@@ -246,14 +397,24 @@ def respond_to_invitation(
     invitation = session.get(Invitation, invite_id)
     if invitation is None:
         raise HTTPException(status_code=404, detail="Invitation not found")
-    if invitation.invitee_id != current_user.id:
-        raise HTTPException(status_code=403, detail="Only the invitee can respond")
     if invitation.status != InvitationStatus.PENDING:
         raise HTTPException(status_code=400, detail="Invitation already processed")
 
     team = session.get(Team, invitation.team_id)
     if team is None:
         raise HTTPException(status_code=404, detail="Team not found")
+
+    joining_user_id = invitation.invitee_id
+    message_prefix = "Invitation"
+
+    if invitation.kind == InvitationKind.INVITE:
+        if invitation.invitee_id != current_user.id:
+            raise HTTPException(status_code=403, detail="Only the invitee can respond")
+    else:
+        if team.creator_id != current_user.id:
+            raise HTTPException(status_code=403, detail="Only the team creator can respond")
+        joining_user_id = invitation.inviter_id
+        message_prefix = "Join request"
 
     team_read = build_team_read(team, session)
     if payload.accept and team_read.current_members >= team.max_members:
@@ -263,7 +424,7 @@ def respond_to_invitation(
     session.add(invitation)
 
     if payload.accept:
-        session.add(TeamMember(team_id=invitation.team_id, user_id=current_user.id))
+        session.add(TeamMember(team_id=invitation.team_id, user_id=joining_user_id))
 
     session.commit()
 
@@ -272,7 +433,7 @@ def respond_to_invitation(
         raise HTTPException(status_code=404, detail="Team not found")
     assert refreshed_team is not None
     refreshed_team_read = build_team_read(refreshed_team, session)
-    message = "Invitation accepted" if payload.accept else "Invitation rejected"
+    message = f"{message_prefix} accepted" if payload.accept else f"{message_prefix} rejected"
     return {"success": True, "message": message, "team_status": refreshed_team_read.status}
 
 

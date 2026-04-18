@@ -7,7 +7,15 @@ from sqlmodel import Session, select
 from src.auth.dependencies import get_current_user
 from src.db.database import get_session
 from src.models.core import Circle, User
-from src.models.tags import TagDataType, TagDefinition, TagDefinitionCreate, UserTag, UserTagSubmit
+from src.models.tags import (
+    CircleMember,
+    CircleMemberTagRead,
+    TagDataType,
+    TagDefinition,
+    TagDefinitionCreate,
+    UserTag,
+    UserTagSubmit,
+)
 
 
 router = APIRouter(tags=["Tags"])
@@ -92,6 +100,24 @@ def require_user_id(current_user: User) -> int:
     if current_user.id is None:
         raise HTTPException(status_code=500, detail="Current user ID missing")
     return current_user.id
+
+
+def require_circle_access(circle_id: int, user_id: int, session: Session) -> Circle:
+    circle = session.get(Circle, circle_id)
+    if not circle:
+        raise HTTPException(status_code=404, detail="Circle not found")
+    if circle.creator_id == user_id:
+        return circle
+
+    membership = session.exec(
+        select(CircleMember).where(
+            CircleMember.circle_id == circle_id,
+            CircleMember.user_id == user_id,
+        )
+    ).first()
+    if membership is None:
+        raise HTTPException(status_code=403, detail="User must join the circle first")
+    return circle
 
 
 @router.post("/circles/{circle_id}/tags", response_model=TagDefinition, status_code=status.HTTP_201_CREATED)
@@ -208,6 +234,41 @@ def get_my_tags(
             UserTag.user_id == current_user_id,
         )
     ).all()
+
+
+@router.get("/circles/{circle_id}/members/{user_id}/tags", response_model=list[CircleMemberTagRead])
+def get_circle_member_tags(
+    circle_id: int,
+    user_id: int,
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+):
+    current_user_id = require_user_id(current_user)
+    require_circle_access(circle_id, current_user_id, session)
+    require_circle_access(circle_id, user_id, session)
+
+    rows = session.exec(
+        select(UserTag, TagDefinition)
+        .join(TagDefinition, TagDefinition.id == UserTag.tag_definition_id)
+        .where(
+            UserTag.circle_id == circle_id,
+            UserTag.user_id == user_id,
+        )
+    ).all()
+
+    return [
+        CircleMemberTagRead(
+            id=user_tag.id,
+            user_id=user_tag.user_id,
+            circle_id=user_tag.circle_id,
+            tag_definition_id=user_tag.tag_definition_id,
+            tag_name=tag_definition.name,
+            data_type=tag_definition.data_type,
+            value=user_tag.value,
+        )
+        for user_tag, tag_definition in rows
+        if user_tag.id is not None
+    ]
 
 
 @router.delete("/tags/{user_tag_id}", status_code=status.HTTP_204_NO_CONTENT)

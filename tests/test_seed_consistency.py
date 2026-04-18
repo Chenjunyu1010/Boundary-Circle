@@ -4,7 +4,7 @@ from scripts.seed_data import seed_dataset
 from src.models.core import Circle
 from src.models.profile import UserProfile
 from src.models.tags import CircleMember
-from src.models.teams import Invitation, InvitationStatus, Team, TeamMember
+from src.models.teams import Invitation, InvitationKind, InvitationStatus, Team, TeamMember
 
 
 def _circle_member_pairs(db_session) -> set[tuple[int, int]]:
@@ -56,11 +56,16 @@ def _seed_datasets_have_internal_consistency(db_session) -> None:
         assert (team.circle_id, invitation.inviter_id) in circle_member_pairs
         assert (team.circle_id, invitation.invitee_id) in circle_member_pairs
 
-        is_team_member = (invitation.team_id, invitation.invitee_id) in team_member_pairs
+        joined_user_id = (
+            invitation.invitee_id
+            if invitation.kind == InvitationKind.INVITE
+            else invitation.inviter_id
+        )
+        is_joined_member = (invitation.team_id, joined_user_id) in team_member_pairs
         if invitation.status == InvitationStatus.ACCEPTED:
-            assert is_team_member
+            assert is_joined_member
         if invitation.status == InvitationStatus.REJECTED:
-            assert not is_team_member
+            assert not is_joined_member
 
     member_user_ids = {user_id for _, user_id in circle_member_pairs}
     for user_id in member_user_ids:

@@ -170,7 +170,10 @@ class APIClient:
                     "circle_id": 1,
                     "team_name": "AI Pioneer Team",
                     "inviter_id": 1,
+                    "inviter_username": "alice",
                     "invitee_id": 2,
+                    "invitee_username": "bob",
+                    "kind": "invite",
                     "status": "pending",
                 }
             ]
@@ -205,9 +208,20 @@ class APIClient:
             if "not found" in message:
                 status_code = 404
                 reason = "Not Found"
+            elif "only" in message and "respond" in message:
+                status_code = 403
+                reason = "Forbidden"
             elif "already" in message or "duplicate" in message or "exists" in message:
                 status_code = 409
                 reason = "Conflict"
+        elif (
+            isinstance(payload, dict)
+            and payload.get("id") is not None
+            and payload.get("team_id") is not None
+            and payload.get("status") == "pending"
+        ):
+            status_code = 201
+            reason = "Created"
 
         response.status_code = status_code
         response._content = json.dumps(payload).encode("utf-8")
@@ -340,6 +354,64 @@ class APIClient:
                     return self._get_mock_members(int(match.group(1)))
 
             if "/tags" in endpoint:
+                member_tags_match = re.match(r"/circles/(\d+)/members/(\d+)/tags", endpoint)
+                if member_tags_match:
+                    circle_id = int(member_tags_match.group(1))
+                    user_id = int(member_tags_match.group(2))
+                    mock_tags = self._get_mock_tags(circle_id)
+                    sample_values = {
+                        1: {
+                            "Major": "Artificial Intelligence",
+                            "Weekly Hours": "10",
+                            "Tech Stack": '["Python", "React"]',
+                            "Remote OK": "true",
+                        },
+                        2: {
+                            "Major": "Computer Science",
+                            "Weekly Hours": "8",
+                            "Tech Stack": '["Python", "SQL"]',
+                            "Remote OK": "false",
+                        },
+                        3: {
+                            "Major": "Software Engineering",
+                            "Weekly Hours": "6",
+                            "Tech Stack": '["React"]',
+                            "Remote OK": "true",
+                        },
+                        4: {
+                            "Major": "Artificial Intelligence",
+                            "Weekly Hours": "12",
+                            "Tech Stack": '["Python", "SQL"]',
+                            "Remote OK": "true",
+                        },
+                        5: {
+                            "Major": "Computer Science",
+                            "Weekly Hours": "7",
+                            "Tech Stack": '["React", "SQL"]',
+                            "Remote OK": "false",
+                        },
+                    }
+                    values = sample_values.get(user_id, {})
+                    result = []
+                    next_id = 1
+                    for tag in mock_tags:
+                        tag_name = tag.get("name")
+                        if tag_name not in values:
+                            continue
+                        result.append(
+                            {
+                                "id": next_id,
+                                "user_id": user_id,
+                                "circle_id": circle_id,
+                                "tag_definition_id": tag.get("id"),
+                                "tag_name": tag_name,
+                                "data_type": tag.get("data_type"),
+                                "value": values[tag_name],
+                            }
+                        )
+                        next_id += 1
+                    return result
+
                 match = re.match(r"/circles/(\d+)/tags", endpoint)
                 if match:
                     return self._get_mock_tags(int(match.group(1)))
@@ -459,11 +531,81 @@ class APIClient:
                     "circle_id": team.get("circle_id"),
                     "team_name": data.get("team_name", team.get("name", "Team")),
                     "inviter_id": st.session_state.get("user_id", 1),
+                    "inviter_username": next(
+                        (
+                            member.get("username")
+                            for member in self._get_mock_members(team.get("circle_id", 1))
+                            if member.get("id") == st.session_state.get("user_id", 1)
+                        ),
+                        None,
+                    ),
                     "invitee_id": invitee_id,
+                    "invitee_username": next(
+                        (
+                            member.get("username")
+                            for member in self._get_mock_members(team.get("circle_id", 1))
+                            if member.get("id") == invitee_id
+                        ),
+                        None,
+                    ),
+                    "kind": "invite",
                     "status": "pending",
                 }
                 invitations.append(new_invitation)
                 return new_invitation
+
+        if endpoint.startswith("/teams/") and endpoint.endswith("/request-join") and method == "POST":
+            import re
+
+            match = re.match(r"/teams/(\d+)/request-join", endpoint)
+            if match:
+                team_id = int(match.group(1))
+                team = self._find_mock_team(team_id)
+                invitations = self._ensure_mock_invitations()
+                requester_id = st.session_state.get("user_id", 1)
+
+                if team is None:
+                    return {"success": False, "message": "Team not found"}
+                if requester_id in team.get("member_ids", []):
+                    return {"success": False, "message": "User is already a team member"}
+                if team.get("current_members", 0) >= team.get("max_members", 0):
+                    return {"success": False, "message": "Team is already full"}
+
+                invitations[:] = [
+                    invite
+                    for invite in invitations
+                    if not (
+                        invite.get("team_id") == team_id
+                        and invite.get("inviter_id") == requester_id
+                        and invite.get("kind") == "join_request"
+                        and invite.get("status") == "pending"
+                    )
+                ]
+
+                circle_members = self._get_mock_members(team.get("circle_id", 1))
+                requester_username = next(
+                    (member.get("username") for member in circle_members if member.get("id") == requester_id),
+                    f"user{requester_id}",
+                )
+                creator_id = team.get("creator_id", 1)
+                creator_username = next(
+                    (member.get("username") for member in circle_members if member.get("id") == creator_id),
+                    f"user{creator_id}",
+                )
+                new_request = {
+                    "id": max((invite.get("id", 0) for invite in invitations), default=0) + 1,
+                    "team_id": team_id,
+                    "circle_id": team.get("circle_id"),
+                    "team_name": team.get("name", "Team"),
+                    "inviter_id": requester_id,
+                    "inviter_username": requester_username,
+                    "invitee_id": creator_id,
+                    "invitee_username": creator_username,
+                    "kind": "join_request",
+                    "status": "pending",
+                }
+                invitations.append(new_request)
+                return new_request
 
         if endpoint == "/invitations" and method == "GET":
             invitations = self._ensure_mock_invitations()
@@ -471,7 +613,16 @@ class APIClient:
             return [
                 invite
                 for invite in invitations
-                if invite.get("invitee_id") == user_id or invite.get("inviter_id") == user_id
+                if (
+                    invite.get("kind", "invite") == "invite"
+                    and invite.get("invitee_id") == user_id
+                )
+                or (
+                    invite.get("kind", "invite") == "join_request"
+                    and (
+                        invite.get("invitee_id") == user_id or invite.get("inviter_id") == user_id
+                    )
+                )
             ]
 
         if endpoint.startswith("/invitations/") and endpoint.endswith("/respond") and method == "POST":
@@ -486,14 +637,25 @@ class APIClient:
                     if invitation.get("id") != invite_id:
                         continue
 
+                    kind = invitation.get("kind", "invite")
+                    current_user_id = st.session_state.get("user_id", 1)
+                    if kind == "join_request" and invitation.get("invitee_id") != current_user_id:
+                        return {"success": False, "message": "Only the team creator can respond"}
+                    if kind == "invite" and invitation.get("invitee_id") != current_user_id:
+                        return {"success": False, "message": "Only the invitee can respond"}
+
                     invitation["status"] = "accepted" if accept else "rejected"
                     if accept:
                         team = self._find_mock_team(invitation.get("team_id"))
-                        invitee_id = invitation.get("invitee_id")
-                        if team is not None and invitee_id is not None:
+                        joined_user_id = (
+                            invitation.get("inviter_id")
+                            if kind == "join_request"
+                            else invitation.get("invitee_id")
+                        )
+                        if team is not None and joined_user_id is not None:
                             member_ids = team.setdefault("member_ids", [])
-                            if invitee_id not in member_ids:
-                                member_ids.append(invitee_id)
+                            if joined_user_id not in member_ids:
+                                member_ids.append(joined_user_id)
                             team["current_members"] = len(member_ids)
                             team["status"] = (
                                 "Locked"
@@ -502,7 +664,15 @@ class APIClient:
                             )
                     return {
                         "success": True,
-                        "message": "Invitation accepted" if accept else "Invitation rejected",
+                        "message": (
+                            "Join request accepted"
+                            if kind == "join_request" and accept
+                            else "Join request rejected"
+                            if kind == "join_request"
+                            else "Invitation accepted"
+                            if accept
+                            else "Invitation rejected"
+                        ),
                     }
 
             return {"success": False, "message": "Invalid request"}
