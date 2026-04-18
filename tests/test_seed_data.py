@@ -10,6 +10,7 @@ from scripts.seed_data import (
 from src.models.core import Circle, User, UserCreate
 from src.models.profile import UserProfile
 from src.models.tags import CircleMember, CircleRole, TagDefinition
+from src.models.teams import decode_freedom_profile
 from src.models.teams import Invitation, InvitationKind, InvitationStatus, Team, TeamMember
 from src.services.users import create_user_account
 
@@ -59,6 +60,42 @@ def count_teams_for_dataset(db_session, dataset: str) -> int:
     )
 
 
+def seeded_circle_members(db_session, dataset: str) -> list[CircleMember]:
+    seed_circle_ids = {
+        circle.id
+        for circle in db_session.exec(select(Circle)).all()
+        if circle.name.startswith(dataset_circle_prefix(dataset)) and circle.id is not None
+    }
+    return [
+        membership
+        for membership in db_session.exec(select(CircleMember)).all()
+        if membership.circle_id in seed_circle_ids
+    ]
+
+
+def seeded_teams(db_session, dataset: str) -> list[Team]:
+    return [
+        team
+        for team in db_session.exec(select(Team)).all()
+        if team.name.startswith(dataset_team_prefix(dataset))
+    ]
+
+
+def assert_seeded_freedom_profiles_present(db_session, dataset: str) -> None:
+    memberships = seeded_circle_members(db_session, dataset)
+    teams = seeded_teams(db_session, dataset)
+    assert memberships
+    assert teams
+
+    for membership in memberships:
+        assert membership.freedom_tag_text.strip()
+        assert decode_freedom_profile(membership.freedom_tag_profile_json)["keywords"]
+
+    for team in teams:
+        assert team.freedom_requirement_text.strip()
+        assert decode_freedom_profile(team.freedom_requirement_profile_json)["keywords"]
+
+
 def test_seed_demo_creates_expected_entities_and_markers(db_session):
     summary = seed_dataset(db_session, "demo")
 
@@ -69,6 +106,7 @@ def test_seed_demo_creates_expected_entities_and_markers(db_session):
     assert count_seed_users(db_session, "demo") == 7
     assert count_seed_profiles(db_session, "demo") == 7
     assert count_seed_circles(db_session, "demo") == 2
+    assert_seeded_freedom_profiles_present(db_session, "demo")
 
     seeded_user = db_session.exec(
         select(User).where(User.username == "seed_demo_alice")
@@ -100,6 +138,7 @@ def test_seed_demo_is_repeatable_without_duplication(db_session):
     assert first.users == second.users == 7
     assert count_seed_users(db_session, "demo") == 7
     assert count_seed_circles(db_session, "demo") == 2
+    assert_seeded_freedom_profiles_present(db_session, "demo")
     assert count_teams_for_dataset(db_session, "demo") == 4
 
 
@@ -113,6 +152,7 @@ def test_seed_stress_creates_varied_dataset(db_session):
     assert count_seed_users(db_session, "stress") == 18
     assert count_seed_profiles(db_session, "stress") == 18
     assert count_seed_circles(db_session, "stress") == 4
+    assert_seeded_freedom_profiles_present(db_session, "stress")
 
     tag_names = {tag.name for tag in db_session.exec(select(TagDefinition)).all()}
     assert {"Major", "Preferred Role", "Tech Stack", "Focus Track"} <= tag_names
@@ -139,10 +179,13 @@ def test_demo_reset_preserves_non_seed_data(db_session):
         db_session,
         UserCreate(username="keeper_b", email="keeper_b@example.com", full_name="Keeper B", password="pw123456"),
     )
+    assert keeper_a.id is not None
+    assert keeper_b.id is not None
     circle = Circle(name="Real Circle", description="Real data", category="Course", creator_id=keeper_a.id)
     db_session.add(circle)
     db_session.commit()
     db_session.refresh(circle)
+    assert circle.id is not None
     db_session.add(CircleMember(user_id=keeper_a.id, circle_id=circle.id, role=CircleRole.ADMIN))
     db_session.add(CircleMember(user_id=keeper_b.id, circle_id=circle.id, role=CircleRole.MEMBER))
     db_session.commit()
@@ -151,6 +194,7 @@ def test_demo_reset_preserves_non_seed_data(db_session):
     db_session.add(team)
     db_session.commit()
     db_session.refresh(team)
+    assert team.id is not None
     db_session.add(TeamMember(team_id=team.id, user_id=keeper_a.id))
     db_session.commit()
 
@@ -184,3 +228,4 @@ def test_stress_reset_does_not_delete_demo_data(db_session):
     assert count_seed_circles(db_session, "stress") == 0
     assert count_seed_users(db_session, "demo") == 7
     assert count_seed_circles(db_session, "demo") == 2
+    assert_seeded_freedom_profiles_present(db_session, "demo")

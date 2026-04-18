@@ -16,18 +16,16 @@ from src.models.teams import (
 
 
 def get_user_tag_names_for_circle(session: Session, user_id: int, circle_id: int) -> Set[str]:
-    """Return the set of tag *names* this user has submitted in a given circle.
-
-    The result is based on TagDefinition.name joined through UserTag for the
-    specified user and circle.
-    """
-    statement = (
-        select(TagDefinition.name)
-        .join(UserTag, TagDefinition.id == UserTag.tag_definition_id)
-        .where(UserTag.user_id == user_id, UserTag.circle_id == circle_id)
-    )
-    names: List[str] = session.exec(statement).all()
-    return set(names)
+    """Return the set of tag names this user has submitted in a given circle."""
+    user_tags = session.exec(
+        select(UserTag).where(UserTag.user_id == user_id, UserTag.circle_id == circle_id)
+    ).all()
+    names: set[str] = set()
+    for user_tag in user_tags:
+        tag_definition = session.get(TagDefinition, user_tag.tag_definition_id)
+        if tag_definition is not None:
+            names.add(tag_definition.name)
+    return names
 
 
 def parse_user_tag_value(tag_definition: TagDefinition, raw_value: str) -> Any:
@@ -55,14 +53,14 @@ def parse_user_tag_value(tag_definition: TagDefinition, raw_value: str) -> Any:
 
 def get_user_tag_values_for_circle(session: Session, user_id: int, circle_id: int) -> dict[str, Any]:
     """Return parsed user tag values keyed by tag name for a circle."""
-    statement = (
-        select(TagDefinition, UserTag)
-        .join(UserTag, TagDefinition.id == UserTag.tag_definition_id)
-        .where(UserTag.user_id == user_id, UserTag.circle_id == circle_id)
-    )
-    rows = session.exec(statement).all()
+    user_tags = session.exec(
+        select(UserTag).where(UserTag.user_id == user_id, UserTag.circle_id == circle_id)
+    ).all()
     tag_values: dict[str, Any] = {}
-    for tag_definition, user_tag in rows:
+    for user_tag in user_tags:
+        tag_definition = session.get(TagDefinition, user_tag.tag_definition_id)
+        if tag_definition is None:
+            continue
         tag_values[tag_definition.name] = parse_user_tag_value(tag_definition, user_tag.value)
     return tag_values
 
@@ -165,3 +163,42 @@ def jaccard_score(left: Set[str], right: Set[str]) -> float:
         return 0.0
     intersection_size = len(left & right)
     return intersection_size / float(len(union))
+
+
+def decode_freedom_keywords(profile_json: str) -> List[str]:
+    """Decode freedom profile JSON to list of keywords.
+
+    Uses the same normalization as src.models.teams.decode_freedom_profile
+    but returns only the keywords list.
+    """
+    try:
+        profile = json.loads(profile_json) if profile_json else {"keywords": []}
+    except json.JSONDecodeError:
+        return []
+    if not isinstance(profile, dict):
+        return []
+    keywords = profile.get("keywords", [])
+    if not isinstance(keywords, list):
+        return []
+    return [str(k).strip() for k in keywords if isinstance(k, str) and str(k).strip()]
+
+
+def compute_freedom_score(user_keywords: List[str], team_keywords: List[str]) -> float:
+    """Compute freedom overlap score as intersection over team requirements.
+
+    freedom_score = len(user_keywords ∩ team_keywords) / len(team_keywords)
+    Returns 0.0 when team_keywords is empty.
+    """
+    if not team_keywords:
+        return 0.0
+    user_set = set(user_keywords)
+    team_set = set(team_keywords)
+    overlap_size = len(user_set & team_set)
+    return overlap_size / float(len(team_set))
+
+
+def get_matched_freedom_keywords(user_keywords: List[str], team_keywords: List[str]) -> List[str]:
+    """Return the list of keywords that match between user and team profiles."""
+    user_set = set(user_keywords)
+    team_set = set(team_keywords)
+    return sorted(list(user_set & team_set))

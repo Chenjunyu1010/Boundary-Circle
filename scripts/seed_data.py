@@ -20,6 +20,7 @@ from src.models.teams import (
     TeamMember,
     TeamRequirementRule,
     TeamStatus,
+    encode_freedom_profile,
     encode_required_tag_rules,
     encode_required_tags,
 )
@@ -144,6 +145,96 @@ def _normalize_tag_value(value: Any) -> str:
     if isinstance(value, bool):
         return "true" if value else "false"
     return str(value)
+
+
+def _add_keyword(target: list[str], keyword: str) -> None:
+    normalized = keyword.strip().lower()
+    if normalized and normalized not in target:
+        target.append(normalized)
+
+
+def _keywords_from_value(value: Any) -> list[str]:
+    keywords: list[str] = []
+    if isinstance(value, list):
+        for item in value:
+            if isinstance(item, str):
+                _add_keyword(keywords, item)
+        return keywords
+    if isinstance(value, bool):
+        if value:
+            _add_keyword(keywords, "collaboration")
+        return keywords
+    if isinstance(value, (int, float)):
+        return keywords
+    if isinstance(value, str):
+        _add_keyword(keywords, value)
+    return keywords
+
+
+def build_member_freedom_profile(values: Dict[str, Any], bio: str) -> tuple[str, dict[str, list[str]]]:
+    keywords: list[str] = []
+    sentences: list[str] = []
+
+    preferred_role = values.get("Preferred Role") or values.get("Build Role")
+    if isinstance(preferred_role, str) and preferred_role.strip():
+        sentences.append(f"Prefers {preferred_role.lower()} work")
+        _add_keyword(keywords, preferred_role)
+
+    major = values.get("Major")
+    if isinstance(major, str) and major.strip():
+        sentences.append(f"Studies {major}")
+        _add_keyword(keywords, major)
+
+    focus_track = values.get("Focus Track") or values.get("Track")
+    if isinstance(focus_track, str) and focus_track.strip():
+        sentences.append(f"Interested in {focus_track.lower()}")
+        _add_keyword(keywords, focus_track)
+
+    for tech_keyword in _keywords_from_value(values.get("Tech Stack") or values.get("Toolkit") or []):
+        _add_keyword(keywords, tech_keyword)
+    if values.get("Wants Research") is True:
+        _add_keyword(keywords, "research")
+        sentences.append("Enjoys research work")
+    if values.get("Open To Lead") is True:
+        _add_keyword(keywords, "leadership")
+        sentences.append("Open to leading coordination")
+
+    if not keywords:
+        _add_keyword(keywords, "collaboration")
+    if not sentences:
+        sentences.append(bio)
+
+    return ". ".join(sentences), {"keywords": keywords[:5]}
+
+
+def build_team_freedom_profile(team_seed: TeamSeed, creator_values: Dict[str, Any]) -> tuple[str, dict[str, list[str]]]:
+    keywords: list[str] = []
+
+    for rule in team_seed.required_tag_rules:
+        expected_value = rule.expected_value
+        if isinstance(expected_value, list):
+            for item in expected_value:
+                _add_keyword(keywords, str(item))
+        else:
+            _add_keyword(keywords, str(expected_value))
+
+    if team_seed.required_tags:
+        for tag_name in team_seed.required_tags:
+            for keyword in _keywords_from_value(creator_values.get(tag_name)):
+                _add_keyword(keywords, keyword)
+
+    if not keywords:
+        for fallback_key in ("Preferred Role", "Build Role", "Tech Stack", "Toolkit", "Focus Track", "Track"):
+            for keyword in _keywords_from_value(creator_values.get(fallback_key)):
+                _add_keyword(keywords, keyword)
+            if len(keywords) >= 5:
+                break
+
+    if not keywords:
+        _add_keyword(keywords, "collaboration")
+
+    text = f"{team_seed.description} Looking for teammates with {', '.join(keywords[:3])}."
+    return text, {"keywords": keywords[:5]}
 
 
 def build_demo_dataset() -> DatasetSeed:
@@ -562,6 +653,8 @@ def seed_dataset(session: Session, dataset: str) -> SeedSummary:
                 password=PASSWORD,
             ),
         )
+        if created_user.id is None:
+            raise ValueError(f"User ID missing for seed user: {username}")
         session.add(
             UserProfile(
                 user_id=created_user.id,
@@ -600,11 +693,17 @@ def seed_dataset(session: Session, dataset: str) -> SeedSummary:
         summary.circles += 1
 
         for member_slug in circle_seed.members:
+            freedom_text, freedom_profile = build_member_freedom_profile(
+                circle_seed.user_tags.get(member_slug, {}),
+                blueprint.users[member_slug].bio,
+            )
             session.add(
                 CircleMember(
                     user_id=_get_user_id(session, usernames[member_slug]),
                     circle_id=circle.id,
                     role=CircleRole.ADMIN if member_slug == circle_seed.creator else CircleRole.MEMBER,
+                    freedom_tag_text=freedom_text,
+                    freedom_tag_profile_json=encode_freedom_profile(freedom_profile),
                 )
             )
         session.commit()
@@ -642,6 +741,10 @@ def seed_dataset(session: Session, dataset: str) -> SeedSummary:
 
         for team_seed in circle_seed.teams:
             creator_user_id = _get_user_id(session, usernames[team_seed.creator])
+            freedom_text, freedom_profile = build_team_freedom_profile(
+                team_seed,
+                circle_seed.user_tags.get(team_seed.creator, {}),
+            )
             team = Team(
                 name=seed_team_name(dataset, team_seed.name),
                 description=team_seed.description,
@@ -650,6 +753,8 @@ def seed_dataset(session: Session, dataset: str) -> SeedSummary:
                 max_members=team_seed.max_members,
                 required_tags_json=encode_required_tags(team_seed.required_tags),
                 required_tag_rules_json=encode_required_tag_rules(team_seed.required_tag_rules),
+                freedom_requirement_text=freedom_text,
+                freedom_requirement_profile_json=encode_freedom_profile(freedom_profile),
             )
             session.add(team)
             session.commit()

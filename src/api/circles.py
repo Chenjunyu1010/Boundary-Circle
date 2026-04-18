@@ -2,15 +2,28 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.exc import IntegrityError
-from sqlmodel import Session, select
+from sqlmodel import SQLModel, Session, select
 
 from src.auth.dependencies import get_current_user, get_optional_current_user
 from src.db.database import get_session
 from src.models.core import Circle, CircleCreate, CircleRead, User
 from src.models.tags import CircleMember, CircleRole, UserTag
+from src.services.extraction import build_freedom_profile_extractor, extract_freedom_profile
+from src.models.teams import encode_freedom_profile, decode_freedom_profile
 
 
 router = APIRouter(prefix="/circles", tags=["Circles"])
+
+
+class CircleProfileUpdate(SQLModel):
+    """Request model for updating a user's freedom tag in a circle."""
+    freedom_tag_text: str = ""
+
+
+class CircleProfileRead(SQLModel):
+    """Response model for a user's freedom tag profile in a circle."""
+    freedom_tag_text: str
+    freedom_tag_profile: dict[str, list[str]]
 
 
 def build_circle_read(
@@ -19,6 +32,9 @@ def build_circle_read(
     current_user: Optional[User] = None,
 ) -> CircleRead:
     """Build a circle read payload enriched with creator identity."""
+    if circle.id is None or circle.creator_id is None:
+        raise HTTPException(status_code=500, detail="Circle ID or creator_id missing")
+    
     creator = session.get(User, circle.creator_id)
     current_user_id = current_user.id if current_user is not None else None
     is_creator = current_user_id is not None and circle.creator_id == current_user_id
@@ -185,3 +201,50 @@ def leave_circle(
         "message": "Successfully left the circle",
         "circle_id": circle_id,
     }
+
+
+@router.put("/{circle_id}/profile", response_model=CircleProfileRead, status_code=status.HTTP_200_OK)
+def update_circle_profile(
+    circle_id: int,
+    profile_in: CircleProfileUpdate,
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+):
+    """Update the authenticated user's freedom tag text in the specified circle."""
+    if current_user.id is None:
+        raise HTTPException(status_code=500, detail="Current user ID missing")
+
+    # Check if the user is a member of the circle
+    membership = session.exec(
+        select(CircleMember).where(
+            CircleMember.circle_id == circle_id,
+            CircleMember.user_id == current_user.id,
+        )
+    ).first()
+    if membership is None:
+        raise HTTPException(status_code=403, detail="User must join the circle first")
+
+    # Update the freedom tag text
+    membership.freedom_tag_text = profile_in.freedom_tag_text
+
+    # Extract freedom profile
+    # Note: extract_freedom_profile returns empty keywords if extractor is None
+    freedom_profile = extract_freedom_profile(
+        profile_in.freedom_tag_text,
+        extractor=build_freedom_profile_extractor(),
+    )
+
+    # Encode and store the profile
+    membership.freedom_tag_profile_json = encode_freedom_profile(freedom_profile)
+
+    session.add(membership)
+    session.commit()
+    session.refresh(membership)
+
+    # Decode profile for response
+    decoded_profile = decode_freedom_profile(membership.freedom_tag_profile_json)
+
+    return CircleProfileRead(
+        freedom_tag_text=membership.freedom_tag_text,
+        freedom_tag_profile=decoded_profile,
+    )

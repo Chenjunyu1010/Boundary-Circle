@@ -1,0 +1,29 @@
+{
+  "run_id": "R021",
+  "sample_id": "S006",
+  "sample_name": "zh_c_language_calculus",
+  "language": "zh",
+  "provider": "openai_compatible",
+  "model": "qwen3-coder-next",
+  "base_url": "https://coding.dashscope.aliyuncs.com/v1",
+  "status": "PASS",
+  "input": "我会C语言和微积分。",
+  "expected": [
+    "C语言",
+    "微积分"
+  ],
+  "actual": [
+    "C语言",
+    "微积分"
+  ],
+  "matched_expected": [
+    "c语言",
+    "微积分"
+  ],
+  "metrics": {
+    "precision": 1.0,
+    "recall": 1.0
+  },
+  "notes": "Chinese skill sample with non-English expected keywords.",
+  "timestamp_utc": "2026-04-18T17:28:04.768329+00:00"
+}

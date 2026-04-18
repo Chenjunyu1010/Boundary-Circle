@@ -1,0 +1,30 @@
+{
+  "run_id": "R012",
+  "sample_id": "S003",
+  "sample_name": "zh_short_tech_qwen3_coder_next_prompt_tightened",
+  "language": "zh",
+  "provider": "openai_compatible",
+  "model": "qwen3-coder-next",
+  "base_url": "https://coding.dashscope.aliyuncs.com/v1",
+  "status": "PARTIAL",
+  "input": "我喜欢 Python、FastAPI 和数据库设计。",
+  "expected": [
+    "Python",
+    "FastAPI",
+    "数据库设计"
+  ],
+  "actual": [
+    "Python",
+    "FastAPI"
+  ],
+  "matched_expected": [
+    "fastapi",
+    "python"
+  ],
+  "metrics": {
+    "precision": 1.0,
+    "recall": 0.67
+  },
+  "notes": "Migrated from legacy markdown log after prompt tightening.",
+  "timestamp_utc": "2026-04-19T00:00:00+00:00"
+}

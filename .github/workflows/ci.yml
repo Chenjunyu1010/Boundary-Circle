@@ -32,6 +32,7 @@ jobs:
       run: |
         mkdir -p test-results
         pytest \
+          -m "not llm_live" \
           --junitxml=test-results/pytest.xml \
           --cov=src \
           --cov=frontend \

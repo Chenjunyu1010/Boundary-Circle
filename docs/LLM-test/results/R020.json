@@ -1,0 +1,29 @@
+{
+  "run_id": "R020",
+  "sample_id": "S004",
+  "sample_name": "zh_negation_mixed",
+  "language": "zh",
+  "provider": "openai_compatible",
+  "model": "qwen3-coder-next",
+  "base_url": "https://coding.dashscope.aliyuncs.com/v1",
+  "status": "PASS",
+  "input": "我会 Python 和 SQL，但不喜欢前端，也不想做纯运营工作。",
+  "expected": [
+    "Python",
+    "SQL"
+  ],
+  "actual": [
+    "Python",
+    "SQL"
+  ],
+  "matched_expected": [
+    "python",
+    "sql"
+  ],
+  "metrics": {
+    "precision": 1.0,
+    "recall": 1.0
+  },
+  "notes": "Chinese negation sample.",
+  "timestamp_utc": "2026-04-18T17:25:01.231752+00:00"
+}

@@ -1,0 +1,29 @@
+{
+  "run_id": "R009",
+  "sample_id": "S002",
+  "sample_name": "en_negation_short_after_retry_patch",
+  "language": "en",
+  "provider": "openai_compatible",
+  "model": "qwen3.5-plus",
+  "base_url": "https://coding.dashscope.aliyuncs.com/v1",
+  "status": "PASS",
+  "input": "I know Python and SQL, but I do not like frontend.",
+  "expected": [
+    "Python",
+    "SQL"
+  ],
+  "actual": [
+    "Python",
+    "SQL"
+  ],
+  "matched_expected": [
+    "python",
+    "sql"
+  ],
+  "metrics": {
+    "precision": 1.0,
+    "recall": 1.0
+  },
+  "notes": "Migrated from legacy markdown log.",
+  "timestamp_utc": "2026-04-19T00:00:00+00:00"
+}

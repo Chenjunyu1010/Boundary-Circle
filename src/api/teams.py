@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, Sequence
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlmodel import Session, select
@@ -19,11 +19,15 @@ from src.models.teams import (
     TeamMember,
     TeamRead,
     TeamStatus,
+    decode_freedom_profile,
     decode_required_tag_rules,
     decode_required_tags,
+    encode_freedom_profile,
     encode_required_tag_rules,
     encode_required_tags,
 )
+
+from src.services.extraction import build_freedom_profile_extractor, extract_freedom_profile
 
 
 router = APIRouter(tags=["Teams"])
@@ -44,6 +48,10 @@ def build_team_read(team: Team, session: Session) -> TeamRead:
 
     creator = session.get(User, team.creator_id)
 
+    # Decode freedom profile
+    freedom_profile = decode_freedom_profile(team.freedom_requirement_profile_json)
+    freedom_profile_keywords = freedom_profile.get("keywords", [])
+
     return TeamRead(
         id=team.id,
         name=team.name,
@@ -58,10 +66,15 @@ def build_team_read(team: Team, session: Session) -> TeamRead:
         required_tags=decode_required_tags(team.required_tags_json),
         required_tag_rules=decode_required_tag_rules(team.required_tag_rules_json),
         member_ids=member_ids,
+        freedom_requirement_text=team.freedom_requirement_text,
+        freedom_requirement_profile_keywords=freedom_profile_keywords,
     )
 
 
 def build_invitation_read(invitation: Invitation, session: Session) -> InvitationRead:
+    if invitation.id is None:
+        raise HTTPException(status_code=500, detail="Invitation ID missing")
+
     team = session.get(Team, invitation.team_id)
     inviter = session.get(User, invitation.inviter_id)
     invitee = session.get(User, invitation.invitee_id)
@@ -79,40 +92,27 @@ def build_invitation_read(invitation: Invitation, session: Session) -> Invitatio
 
 
 def build_invitation_reads(
-    invitations: list[Invitation],
+    invitations: Sequence[Invitation],
     session: Session,
-    teams_by_id: Optional[dict[int, Team]] = None,
-    users_by_id: Optional[dict[int, User]] = None,
+    teams_by_id: Optional[dict[int, Team | None]] = None,
+    users_by_id: Optional[dict[int, User | None]] = None,
 ) -> list[InvitationRead]:
     if teams_by_id is None:
-        team_ids = {invitation.team_id for invitation in invitations}
-        teams_by_id = (
-            {
-                team.id: team
-                for team in session.exec(select(Team).where(Team.id.in_(team_ids))).all()
-                if team.id is not None
-            }
-            if team_ids
-            else {}
-        )
+        teams_by_id = {}
     if users_by_id is None:
-        user_ids = {
-            user_id
-            for invitation in invitations
-            for user_id in (invitation.inviter_id, invitation.invitee_id)
-        }
-        users_by_id = (
-            {
-                user.id: user
-                for user in session.exec(select(User).where(User.id.in_(user_ids))).all()
-                if user.id is not None
-            }
-            if user_ids
-            else {}
-        )
+        users_by_id = {}
 
     result: list[InvitationRead] = []
     for invitation in invitations:
+        if invitation.id is None:
+            continue
+        if invitation.team_id not in teams_by_id:
+            teams_by_id[invitation.team_id] = session.get(Team, invitation.team_id)
+        if invitation.inviter_id not in users_by_id:
+            users_by_id[invitation.inviter_id] = session.get(User, invitation.inviter_id)
+        if invitation.invitee_id not in users_by_id:
+            users_by_id[invitation.invitee_id] = session.get(User, invitation.invitee_id)
+
         team = teams_by_id.get(invitation.team_id)
         inviter = users_by_id.get(invitation.inviter_id)
         invitee = users_by_id.get(invitation.invitee_id)
@@ -165,6 +165,13 @@ def create_team(
         raise HTTPException(status_code=500, detail="Current user ID missing")
     require_circle_member(payload.circle_id, current_user.id, session, allow_creator=True)
 
+    # Always derive freedom profile from text via the extraction path
+    freedom_profile = extract_freedom_profile(
+        payload.freedom_requirement_text,
+        extractor=build_freedom_profile_extractor(),
+    )
+    freedom_profile_json = encode_freedom_profile(freedom_profile)
+
     team = Team(
         name=payload.name,
         description=payload.description,
@@ -173,6 +180,8 @@ def create_team(
         max_members=payload.max_members,
         required_tags_json=encode_required_tags(payload.required_tags),
         required_tag_rules_json=encode_required_tag_rules(payload.required_tag_rules),
+        freedom_requirement_text=payload.freedom_requirement_text,
+        freedom_requirement_profile_json=freedom_profile_json,
     )
     session.add(team)
     session.commit()

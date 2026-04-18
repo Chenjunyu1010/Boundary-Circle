@@ -299,6 +299,29 @@ def leave_circle(circle_id: int) -> tuple[bool, str]:
         return False, f"Error: {str(exc)}"
 
 
+def save_freedom_tag_profile(circle_id: int, freedom_tag_text: str) -> tuple[bool, str]:
+    """Save the current user's free-text freedom tag profile for a circle."""
+    current_user = get_current_user()
+    if not current_user or current_user.get("id") is None:
+        return False, "Please login again before saving your profile."
+
+    try:
+        response = api_client.put(
+            f"/circles/{circle_id}/profile",
+            data={"freedom_tag_text": freedom_tag_text},
+        )
+        if response.ok:
+            return True, "Freedom tag profile saved successfully."
+        detail = ""
+        try:
+            detail = response.json().get("detail", "")
+        except Exception:
+            detail = ""
+        return False, detail or f"Failed to save profile: {response.reason}"
+    except Exception as exc:
+        return False, f"Error: {str(exc)}"
+
+
 def is_circle_joined(circle_id: int) -> bool:
     """Check if the current user has joined the circle."""
     current_user = get_current_user()
@@ -424,10 +447,10 @@ def main():
 
     if not joined and st.session_state.get("show_join_form", False):
         with col2:
-            tag_definitions = fetch_circle_tags(circle_id)
-            tag_data = render_tag_form(tag_definitions, circle_id)
-            if tag_data is not None:
-                success, message = join_circle(circle_id, tag_definitions, tag_data)
+            tag_definitions = fetch_circle_tags(circle_id) or []
+            join_tag_data = render_tag_form(tag_definitions, circle_id)
+            if join_tag_data is not None:
+                success, message = join_circle(circle_id, tag_definitions, join_tag_data)
                 if success:
                     st.success(message)
                     st.session_state.show_join_form = False
@@ -442,7 +465,7 @@ def main():
     if joined:
         with col2:
             with st.expander("Update My Tags", expanded=False):
-                tag_definitions_for_update = fetch_circle_tags(circle_id)
+                tag_definitions_for_update = fetch_circle_tags(circle_id) or []
                 if not tag_definitions_for_update:
                     st.info("No tag definitions available for this circle yet.")
                 else:
@@ -512,6 +535,23 @@ def main():
                                     st.rerun()
                                 else:
                                     st.error(message)
+
+            with st.expander("Update Freedom Tag Profile", expanded=False):
+                st.caption("Add free-text keywords to improve team matching.")
+                with st.form(f"update_freedom_profile_form_{circle_id}"):
+                    freedom_text = st.text_area(
+                        "Your interests and skills (free text)",
+                        placeholder="e.g., Python, machine learning, hiking, photography",
+                        key=f"freedom_text_{circle_id}",
+                    )
+                    save_freedom = st.form_submit_button("Save Profile", type="primary")
+                    if save_freedom:
+                        success, message = save_freedom_tag_profile(circle_id, freedom_text)
+                        if success:
+                            st.success(message)
+                            st.rerun()
+                        else:
+                            st.error(message)
 
     st.markdown("---")
     st.markdown("### Members")

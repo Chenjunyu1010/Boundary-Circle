@@ -239,6 +239,7 @@ def create_team(
     required_tags: list[str],
     required_tag_rules: list[dict],
     circle_id: int,
+    freedom_requirement_text: str = "",
 ) -> tuple[bool, str]:
     """Create a team."""
     current_user = get_current_user()
@@ -256,6 +257,7 @@ def create_team(
                 "required_tags": required_tags,
                 "required_tag_rules": required_tag_rules,
                 "circle_id": circle_id,
+                "freedom_requirement_text": freedom_requirement_text,
             },
         )
         if response.ok:
@@ -629,16 +631,20 @@ def render_team_detail() -> None:
         invite_submitted = st.form_submit_button("Send Invitation", type="primary")
         if invite_submitted:
             selected_user_id = options[selected_member]
-            success, message = send_invitation(
-                team_id=team["id"],
-                user_id=selected_user_id,
-                team_name=team.get("name", "Team"),
-            )
-            if success:
-                st.success(message)
-                st.rerun()
+            team_id = team.get("id")
+            if team_id is None or selected_user_id is None:
+                st.error("Unable to send invitation because team or user data is incomplete.")
             else:
-                st.error(message)
+                success, message = send_invitation(
+                    team_id=int(team_id),
+                    user_id=int(selected_user_id),
+                    team_name=team.get("name", "Team"),
+                )
+                if success:
+                    st.success(message)
+                    st.rerun()
+                else:
+                    st.error(message)
 
 
 def render_team_list() -> None:
@@ -682,7 +688,9 @@ def render_team_list() -> None:
                 st.caption(f"Members: {members}/{max_members}")
             with col_action:
                 if st.button("View Details", key=f"team_list_detail_{team.get('id')}"):
-                    open_team_detail(team.get("id"))
+                    team_id = team.get("id")
+                    if team_id is not None:
+                        open_team_detail(int(team_id))
                 member_ids = team.get("member_ids", []) or []
                 is_joinable = (
                     team.get("status") == "Recruiting"
@@ -767,6 +775,13 @@ def render_create_team() -> None:
         else:
             st.info("No circle tag definitions found. Team requirements will be empty.")
 
+        freedom_requirement_text = st.text_area(
+            "Freedom Tag Requirements (optional)",
+            placeholder="Describe what you're looking for in free text. e.g., Looking for someone passionate about AI and creative projects",
+            max_chars=500,
+            key=f"freedom_requirement_{circle_id}",
+        )
+
         submitted = st.form_submit_button("Create Team", type="primary")
 
         if submitted:
@@ -800,6 +815,7 @@ def render_create_team() -> None:
                 required_tags=required_tags,
                 required_tag_rules=required_tag_rules,
                 circle_id=circle_id,
+                freedom_requirement_text=freedom_requirement_text.strip(),
             )
             if success:
                 st.success(message)
@@ -840,7 +856,9 @@ def render_my_teams() -> None:
                     f"Members: {team.get('current_members', 0)}/{team.get('max_members', 0)}"
                 )
                 if st.button("View Details", key=f"my_created_team_detail_{team.get('id')}"):
-                    open_team_detail(team.get("id"))
+                    team_id = team.get("id")
+                    if team_id is not None:
+                        open_team_detail(int(team_id))
 
     st.markdown("---")
     st.subheader("Teams I Joined")
@@ -857,7 +875,9 @@ def render_my_teams() -> None:
                     f"Members: {team.get('current_members', 0)}/{team.get('max_members', 0)}"
                 )
                 if st.button("View Details", key=f"my_joined_team_detail_{team.get('id')}"):
-                    open_team_detail(team.get("id"))
+                    team_id = team.get("id")
+                    if team_id is not None:
+                        open_team_detail(int(team_id))
 
 
 def render_invitation_management() -> None:
@@ -1073,6 +1093,12 @@ def render_matching_section() -> None:
                         missing = ", ".join(match.get("missing_required_tags", [])) or "-"
                         st.write(f"Matched tags: {matched}")
                         st.write(f"Missing required tags: {missing}")
+                        freedom_keywords = match.get("matched_freedom_keywords", [])
+                        freedom_score = match.get("freedom_score", 0.0)
+                        if freedom_keywords:
+                            st.caption(f"Extra keyword match: {', '.join(freedom_keywords)}")
+                        if freedom_score > 0:
+                            st.caption(f"Freedom score: {freedom_score:.2f}")
                     with profile_col:
                         if st.button(
                             "View Profile",
@@ -1121,6 +1147,12 @@ def render_matching_section() -> None:
                         st.caption(f"Coverage: {cov:.2f} | Similarity: {jac:.2f}")
                         missing = ", ".join(item.get("missing_required_tags", [])) or "-"
                         st.write(f"Missing required tags: {missing}")
+                        freedom_keywords = item.get("matched_freedom_keywords", [])
+                        freedom_score = item.get("freedom_score", 0.0)
+                        if freedom_keywords:
+                            st.caption(f"Extra keyword match: {', '.join(freedom_keywords)}")
+                        if freedom_score > 0:
+                            st.caption(f"Freedom score: {freedom_score:.2f}")
                     with action_col:
                         team_id = team.get("id")
                         member_ids = team.get("member_ids", []) or []
