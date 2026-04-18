@@ -133,6 +133,7 @@ def main():
         st.session_state.show_profile_completion_prompt = False
         st.success("Profile updated.")
         st.switch_page("Home.py")
+        return
 
     detail = getattr(response, "reason", "Unknown error")
     try:

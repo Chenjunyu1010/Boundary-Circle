@@ -293,7 +293,11 @@ class APIClient:
                     None,
                 )
                 if member is None:
-                    return {"success": False, "message": "User not found"}
+                    return {
+                        "success": False,
+                        "message": "User not found",
+                        "detail": "User not found",
+                    }
 
                 return {
                     "id": user_id,
