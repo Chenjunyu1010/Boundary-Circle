@@ -203,6 +203,21 @@ def fetch_member_tags(circle_id: int, user_id: int) -> list[dict]:
     return []
 
 
+def build_match_explanation(match: dict) -> str:
+    """Build a concise template-based explanation for a match result."""
+    parts: list[str] = []
+
+    freedom_keywords = match.get("matched_freedom_keywords", []) or []
+    if freedom_keywords:
+        parts.append(f"Keyword overlap: {', '.join(freedom_keywords)}")
+
+    final_score = match.get("final_score")
+    if isinstance(final_score, (int, float)):
+        parts.append(f"Final score: {final_score:.2f}")
+
+    return " | ".join(parts) if parts else "Final score pending additional signals."
+
+
 def get_stored_user_matches(selected_team_id: int) -> list[dict]:
     """Return persisted matching users for the currently selected team."""
     if st.session_state.get("matching_selected_team_id") != selected_team_id:
@@ -461,6 +476,19 @@ def format_member_tag_value(tag: dict) -> str:
     return str(raw_value)
 
 
+def build_team_freedom_summary(team: dict) -> str:
+    """Build a concise summary of a team's saved freedom requirement."""
+    freedom_text = (team.get("freedom_requirement_text") or "").strip()
+    freedom_keywords = team.get("freedom_requirement_profile_keywords", []) or []
+
+    parts: list[str] = []
+    if freedom_text:
+        parts.append(freedom_text)
+    if freedom_keywords:
+        parts.append(f"Keywords: {', '.join(freedom_keywords)}")
+    return " | ".join(parts)
+
+
 def split_invitations_for_management(
     invitations: list[dict], user_id: int
 ) -> tuple[list[dict], list[dict], list[dict], list[dict]]:
@@ -550,6 +578,9 @@ def render_team_detail() -> None:
             for rule in required_rules
         ]
         st.caption(f"Required rules: {', '.join(formatted_rules)}")
+    freedom_summary = build_team_freedom_summary(team)
+    if freedom_summary:
+        st.caption(f"Freedom requirement: {freedom_summary}")
 
     st.markdown("---")
     st.subheader("Members")
@@ -1088,7 +1119,12 @@ def render_matching_section() -> None:
                         )
                         cov = match.get("coverage_score", 0.0)
                         jac = match.get("jaccard_score", 0.0)
-                        st.caption(f"Coverage: {cov:.2f} | Similarity: {jac:.2f}")
+                        keyword_overlap = match.get("keyword_overlap_score", 0.0)
+                        final_score = match.get("final_score", 0.0)
+                        st.caption(
+                            f"Final: {final_score:.2f} | Coverage: {cov:.2f} | "
+                            f"Similarity: {jac:.2f} | Keyword overlap: {keyword_overlap:.2f}"
+                        )
                         matched = ", ".join(match.get("matched_tags", [])) or "-"
                         missing = ", ".join(match.get("missing_required_tags", [])) or "-"
                         st.write(f"Matched tags: {matched}")
@@ -1099,6 +1135,7 @@ def render_matching_section() -> None:
                             st.caption(f"Extra keyword match: {', '.join(freedom_keywords)}")
                         if freedom_score > 0:
                             st.caption(f"Freedom score: {freedom_score:.2f}")
+                        st.caption(build_match_explanation(match))
                     with profile_col:
                         if st.button(
                             "View Profile",
@@ -1144,7 +1181,12 @@ def render_matching_section() -> None:
                         )
                         cov = item.get("coverage_score", 0.0)
                         jac = item.get("jaccard_score", 0.0)
-                        st.caption(f"Coverage: {cov:.2f} | Similarity: {jac:.2f}")
+                        keyword_overlap = item.get("keyword_overlap_score", 0.0)
+                        final_score = item.get("final_score", 0.0)
+                        st.caption(
+                            f"Final: {final_score:.2f} | Coverage: {cov:.2f} | "
+                            f"Similarity: {jac:.2f} | Keyword overlap: {keyword_overlap:.2f}"
+                        )
                         missing = ", ".join(item.get("missing_required_tags", [])) or "-"
                         st.write(f"Missing required tags: {missing}")
                         freedom_keywords = item.get("matched_freedom_keywords", [])
@@ -1153,6 +1195,7 @@ def render_matching_section() -> None:
                             st.caption(f"Extra keyword match: {', '.join(freedom_keywords)}")
                         if freedom_score > 0:
                             st.caption(f"Freedom score: {freedom_score:.2f}")
+                        st.caption(build_match_explanation(item))
                     with action_col:
                         team_id = team.get("id")
                         member_ids = team.get("member_ids", []) or []

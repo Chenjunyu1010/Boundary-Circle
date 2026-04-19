@@ -170,6 +170,42 @@ def test_seed_stress_creates_varied_dataset(db_session):
     }
 
 
+def test_seed_stress2_creates_large_diverse_dataset(db_session):
+    summary = seed_dataset(db_session, "stress2")
+
+    assert summary.users >= 30
+    assert summary.circles >= 6
+    assert summary.teams >= 16
+    assert summary.invitations >= 24
+    assert count_seed_users(db_session, "stress2") == summary.users
+    assert count_seed_profiles(db_session, "stress2") == summary.users
+    assert count_seed_circles(db_session, "stress2") == summary.circles
+    assert_seeded_freedom_profiles_present(db_session, "stress2")
+
+    teams = seeded_teams(db_session, "stress2")
+    assert any(team.required_tags_json not in (None, "[]") for team in teams)
+    assert any(team.required_tag_rules_json not in (None, "[]") for team in teams)
+    assert any("AI" in team.freedom_requirement_text for team in teams)
+    assert any("Figma" in team.freedom_requirement_text for team in teams)
+
+    memberships = seeded_circle_members(db_session, "stress2")
+    freedom_texts = [membership.freedom_tag_text for membership in memberships]
+    assert any("AI" in text for text in freedom_texts)
+    assert any("数据" in text for text in freedom_texts)
+    assert any("Figma" in text for text in freedom_texts)
+
+    statuses = {
+        invitation.status
+        for invitation in db_session.exec(select(Invitation)).all()
+        if invitation.team_id in {team.id for team in teams}
+    }
+    assert statuses == {
+        InvitationStatus.PENDING,
+        InvitationStatus.ACCEPTED,
+        InvitationStatus.REJECTED,
+    }
+
+
 def test_demo_reset_preserves_non_seed_data(db_session):
     keeper_a = create_user_account(
         db_session,
@@ -229,3 +265,18 @@ def test_stress_reset_does_not_delete_demo_data(db_session):
     assert count_seed_users(db_session, "demo") == 7
     assert count_seed_circles(db_session, "demo") == 2
     assert_seeded_freedom_profiles_present(db_session, "demo")
+
+
+def test_stress2_reset_does_not_delete_existing_seed_datasets(db_session):
+    seed_dataset(db_session, "demo")
+    seed_dataset(db_session, "stress")
+    seed_dataset(db_session, "stress2")
+
+    reset_dataset(db_session, "stress2")
+
+    assert count_seed_users(db_session, "stress2") == 0
+    assert count_seed_circles(db_session, "stress2") == 0
+    assert count_seed_users(db_session, "demo") == 7
+    assert count_seed_circles(db_session, "demo") == 2
+    assert count_seed_users(db_session, "stress") == 18
+    assert count_seed_circles(db_session, "stress") == 4

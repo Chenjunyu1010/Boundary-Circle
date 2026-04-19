@@ -82,6 +82,55 @@ def test_non_circle_member_gets_403_on_freedom_profile_endpoint():
     assert "User must join the circle first" in profile_response.json()["detail"]
 
 
+def test_circle_member_can_read_saved_freedom_tag_text():
+    """A circle member can read the current saved freedom tag profile via GET /circles/{circle_id}/profile."""
+    user, user_headers = register_and_login("freedomreader", "freedomreader@example.com")
+    circle_response = client.post(
+        "/circles/",
+        headers=user_headers,
+        json={"name": "Freedom Read Circle", "description": "Circle for reading freedom tags"},
+    )
+    assert circle_response.status_code == 201
+    circle = circle_response.json()
+
+    save_response = client.put(
+        f"/circles/{circle['id']}/profile",
+        headers=user_headers,
+        json={"freedom_tag_text": "Python FastAPI Docker"},
+    )
+    assert save_response.status_code == 200
+
+    read_response = client.get(
+        f"/circles/{circle['id']}/profile",
+        headers=user_headers,
+    )
+    assert read_response.status_code == 200
+    payload = read_response.json()
+    assert payload["freedom_tag_text"] == "Python FastAPI Docker"
+    assert "freedom_tag_profile" in payload
+    assert isinstance(payload["freedom_tag_profile"], dict)
+
+
+def test_non_circle_member_gets_403_on_reading_freedom_profile():
+    """Non-circle members receive 403 Forbidden on GET /circles/{circle_id}/profile."""
+    user, user_headers = register_and_login("readoutsider", "readoutsider@example.com")
+    creator, creator_headers = register_and_login("readcreator", "readcreator@example.com")
+    circle_response = client.post(
+        "/circles/",
+        headers=creator_headers,
+        json={"name": "Read Private Circle", "description": "Private circle for read test"},
+    )
+    assert circle_response.status_code == 201
+    circle = circle_response.json()
+
+    read_response = client.get(
+        f"/circles/{circle['id']}/profile",
+        headers=user_headers,
+    )
+    assert read_response.status_code == 403
+    assert "User must join the circle first" in read_response.json()["detail"]
+
+
 def test_create_team_with_freedom_requirement_text():
     """POST /teams accepts freedom_requirement_text and includes it in response."""
     creator, creator_headers = register_and_login("teamcreator", "teamcreator@example.com")

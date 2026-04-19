@@ -87,6 +87,16 @@ def test_extract_freedom_profile_extractor_exception_falls_back() -> None:
     assert result.get("keywords") == []
 
 
+def test_extract_freedom_profile_salvages_ascii_acronym_when_llm_returns_empty() -> None:
+    """When the extractor returns nothing, backend fallback should still salvage clear acronyms like AI."""
+    extractor = MockExtractor([])
+    result = extract_freedom_profile(
+        "aosxfqiuhdxsljcqodj AI okfjqwomxpskqa",
+        extractor=extractor,
+    )
+    assert result == {"keywords": ["AI"]}
+
+
 def test_extract_freedom_profile_deduplicates_and_caps_keywords() -> None:
     """extractor output is deduplicated and capped at 5 keywords"""
     extractor = MockExtractor(["python", "python", "fastapi", "web", "development", "api", "python"])

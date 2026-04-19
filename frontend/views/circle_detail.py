@@ -322,6 +322,17 @@ def save_freedom_tag_profile(circle_id: int, freedom_tag_text: str) -> tuple[boo
         return False, f"Error: {str(exc)}"
 
 
+def fetch_freedom_tag_profile(circle_id: int) -> dict:
+    """Fetch the current user's saved freedom tag profile for a circle."""
+    try:
+        response = api_client.get(f"/circles/{circle_id}/profile")
+        if response.ok:
+            return response.json()
+    except Exception:
+        pass
+    return {"freedom_tag_text": "", "freedom_tag_profile": {"keywords": []}}
+
+
 def is_circle_joined(circle_id: int) -> bool:
     """Check if the current user has joined the circle."""
     current_user = get_current_user()
@@ -538,10 +549,17 @@ def main():
 
             with st.expander("Update Freedom Tag Profile", expanded=False):
                 st.caption("Add free-text keywords to improve team matching.")
+                saved_profile = fetch_freedom_tag_profile(circle_id)
+                saved_keywords = (
+                    saved_profile.get("freedom_tag_profile", {}).get("keywords", []) or []
+                )
+                if saved_keywords:
+                    st.caption(f"Saved keywords: {', '.join(saved_keywords)}")
                 with st.form(f"update_freedom_profile_form_{circle_id}"):
                     freedom_text = st.text_area(
                         "Your interests and skills (free text)",
                         placeholder="e.g., Python, machine learning, hiking, photography",
+                        value=saved_profile.get("freedom_tag_text", ""),
                         key=f"freedom_text_{circle_id}",
                     )
                     save_freedom = st.form_submit_button("Save Profile", type="primary")

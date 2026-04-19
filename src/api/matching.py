@@ -17,14 +17,14 @@ from src.models.teams import (
     decode_required_tag_rules,
 )
 from src.services.matching import (
+    analyze_freedom_keyword_overlap,
     build_team_profile,
-    compute_freedom_score,
+    compute_final_matching_score,
     coverage_score,
     coverage_score_for_rules,
     decode_freedom_keywords,
     describe_matched_rules,
     describe_missing_rules,
-    get_matched_freedom_keywords,
     get_team_member_ids,
     get_team_required_tag_names,
     get_user_tag_values_for_circle,
@@ -44,6 +44,8 @@ class UserMatch(SQLModel):
     coverage_score: float
     jaccard_score: float
     freedom_score: float = 0.0
+    keyword_overlap_score: float = 0.0
+    final_score: float = 0.0
     matched_tags: List[str]
     matched_freedom_keywords: List[str] = []
     missing_required_tags: List[str]
@@ -56,6 +58,8 @@ class TeamMatch(SQLModel):
     coverage_score: float
     jaccard_score: float
     freedom_score: float = 0.0
+    keyword_overlap_score: float = 0.0
+    final_score: float = 0.0
     matched_freedom_keywords: List[str] = []
     missing_required_tags: List[str]
 
@@ -168,9 +172,16 @@ def match_users_for_team(
         
         # Compute freedom score
         user_freedom_keywords = decode_freedom_keywords(membership.freedom_tag_profile_json)
-        freedom_score = compute_freedom_score(user_freedom_keywords, team_freedom_keywords)
-        matched_freedom = get_matched_freedom_keywords(user_freedom_keywords, team_freedom_keywords)
-        
+        freedom_score, matched_freedom = analyze_freedom_keyword_overlap(
+            user_freedom_keywords,
+            team_freedom_keywords,
+        )
+        final_score = compute_final_matching_score(
+            coverage=cov,
+            jaccard=jac,
+            keyword_overlap=freedom_score,
+        )
+
         candidates.append(
             UserMatch(
                 user_id=user.id,
@@ -179,6 +190,8 @@ def match_users_for_team(
                 coverage_score=cov,
                 jaccard_score=jac,
                 freedom_score=freedom_score,
+                keyword_overlap_score=freedom_score,
+                final_score=final_score,
                 matched_tags=matched_tags,
                 matched_freedom_keywords=matched_freedom,
                 missing_required_tags=missing_required,
@@ -189,8 +202,7 @@ def match_users_for_team(
         limit = 10
     limit = min(limit, 50)
 
-    # Sort by (coverage_score, jaccard_score, freedom_score) descending
-    candidates.sort(key=lambda m: (m.coverage_score, m.jaccard_score, m.freedom_score), reverse=True)
+    candidates.sort(key=lambda m: m.final_score, reverse=True)
     return candidates[:limit]
 
 
@@ -264,15 +276,24 @@ def match_teams_for_user(
         jac = jaccard_score(team_profile, user_tags)
         
         # Compute freedom score
-        freedom_score = compute_freedom_score(user_freedom_keywords, team_freedom_keywords)
-        matched_freedom = get_matched_freedom_keywords(user_freedom_keywords, team_freedom_keywords)
-        
+        freedom_score, matched_freedom = analyze_freedom_keyword_overlap(
+            user_freedom_keywords,
+            team_freedom_keywords,
+        )
+        final_score = compute_final_matching_score(
+            coverage=cov,
+            jaccard=jac,
+            keyword_overlap=freedom_score,
+        )
+
         results.append(
             TeamMatch(
                 team=team_read,
                 coverage_score=cov,
                 jaccard_score=jac,
                 freedom_score=freedom_score,
+                keyword_overlap_score=freedom_score,
+                final_score=final_score,
                 matched_freedom_keywords=matched_freedom,
                 missing_required_tags=missing_required,
             )
@@ -282,6 +303,5 @@ def match_teams_for_user(
         limit = 10
     limit = min(limit, 50)
 
-    # Sort by (coverage_score, jaccard_score, freedom_score) descending
-    results.sort(key=lambda m: (m.coverage_score, m.jaccard_score, m.freedom_score), reverse=True)
+    results.sort(key=lambda m: m.final_score, reverse=True)
     return results[:limit]
