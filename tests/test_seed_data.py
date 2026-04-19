@@ -10,8 +10,15 @@ from scripts.seed_data import (
 from src.models.core import Circle, User, UserCreate
 from src.models.profile import UserProfile
 from src.models.tags import CircleMember, CircleRole, TagDefinition
-from src.models.teams import decode_freedom_profile
+from src.models.teams import decode_freedom_profile, decode_required_tag_rules
 from src.models.teams import Invitation, InvitationKind, InvitationStatus, Team, TeamMember
+from src.services.matching import (
+    get_team_member_ids,
+    get_team_required_tag_names,
+    get_user_tag_names_for_circle,
+    get_user_tag_values_for_circle,
+    rule_matches_user_value,
+)
 from src.services.users import create_user_account
 
 
@@ -145,17 +152,47 @@ def test_seed_demo_is_repeatable_without_duplication(db_session):
 def test_seed_stress_creates_varied_dataset(db_session):
     summary = seed_dataset(db_session, "stress")
 
-    assert summary.users == 18
-    assert summary.circles == 4
-    assert summary.teams == 10
-    assert summary.invitations == 16
-    assert count_seed_users(db_session, "stress") == 18
-    assert count_seed_profiles(db_session, "stress") == 18
-    assert count_seed_circles(db_session, "stress") == 4
+    assert summary.users == 48
+    assert summary.circles == 8
+    assert summary.teams == 32
+    assert summary.invitations >= 32
+    assert count_seed_users(db_session, "stress") == 48
+    assert count_seed_profiles(db_session, "stress") == 48
+    assert count_seed_circles(db_session, "stress") == 8
     assert_seeded_freedom_profiles_present(db_session, "stress")
 
     tag_names = {tag.name for tag in db_session.exec(select(TagDefinition)).all()}
-    assert {"Major", "Preferred Role", "Tech Stack", "Focus Track"} <= tag_names
+    assert {"GPA", "Weekly Hours", "Willing To Lead"} <= tag_names
+
+    float_tag_names = {
+        tag.name
+        for tag in db_session.exec(select(TagDefinition)).all()
+        if str(tag.data_type) == "TagDataType.FLOAT" or str(tag.data_type) == "float"
+    }
+    assert "GPA" in float_tag_names
+    assert len(float_tag_names) >= 2
+
+    categories = {
+        circle.category
+        for circle in db_session.exec(select(Circle)).all()
+        if circle.name.startswith(dataset_circle_prefix("stress"))
+    }
+    assert {"Course", "Project", "Sports", "Entertainment"} <= categories
+
+    teams = seeded_teams(db_session, "stress")
+    assert any(team.required_tag_rules_json not in (None, "[]") for team in teams)
+    assert any(
+        any(
+            hasattr(rule.expected_value, "min") or hasattr(rule.expected_value, "max")
+            for rule in decode_required_tag_rules(team.required_tag_rules_json)
+        )
+        for team in teams
+    )
+
+    member_counts: dict[int, int] = {}
+    for membership in seeded_circle_members(db_session, "stress"):
+        member_counts[membership.user_id] = member_counts.get(membership.user_id, 0) + 1
+    assert any(count >= 3 for count in member_counts.values())
 
     statuses = {invitation.status for invitation in db_session.exec(select(Invitation)).all()}
     assert statuses == {
@@ -168,6 +205,72 @@ def test_seed_stress_creates_varied_dataset(db_session):
         InvitationKind.INVITE,
         InvitationKind.JOIN_REQUEST,
     }
+
+
+def test_seed_stress_ai_factory_core_builders_cover_all_frontend_tag_types(db_session):
+    seed_dataset(db_session, "stress")
+
+    circle = db_session.exec(
+        select(Circle).where(Circle.name == "[SEED STRESS] AI Factory")
+    ).first()
+    assert circle is not None
+    assert circle.id is not None
+
+    tag_definitions = db_session.exec(
+        select(TagDefinition).where(TagDefinition.circle_id == circle.id)
+    ).all()
+    tag_types_by_name = {
+        tag.name: str(tag.data_type).split(".")[-1].lower() for tag in tag_definitions
+    }
+
+    team = db_session.exec(
+        select(Team).where(Team.name == "[SEED STRESS] AI Factory Core Builders")
+    ).first()
+    assert team is not None
+
+    rule_tag_names = {
+        rule.tag_name for rule in decode_required_tag_rules(team.required_tag_rules_json)
+    }
+    rule_tag_types = {tag_types_by_name[tag_name] for tag_name in rule_tag_names}
+
+    assert {"single_select", "multi_select", "float", "integer", "boolean"} <= rule_tag_types
+
+
+def test_seed_stress_team_members_satisfy_their_team_requirements(db_session):
+    seed_dataset(db_session, "stress")
+
+    for team in seeded_teams(db_session, "stress"):
+        member_ids = get_team_member_ids(db_session, team.id or 0)
+        required_tag_names = get_team_required_tag_names(team)
+        required_rules = decode_required_tag_rules(team.required_tag_rules_json)
+
+        for member_id in member_ids:
+            member_tag_names = get_user_tag_names_for_circle(
+                db_session,
+                member_id,
+                team.circle_id,
+            )
+            member_tag_values = get_user_tag_values_for_circle(
+                db_session,
+                member_id,
+                team.circle_id,
+            )
+
+            missing_required_tags = required_tag_names - member_tag_names
+            assert not missing_required_tags, (
+                f"Team {team.name} member {member_id} is missing required tags: "
+                f"{sorted(missing_required_tags)}"
+            )
+
+            failing_rules = [
+                rule.tag_name
+                for rule in required_rules
+                if not rule_matches_user_value(rule, member_tag_values.get(rule.tag_name))
+            ]
+            assert not failing_rules, (
+                f"Team {team.name} member {member_id} does not satisfy rules: "
+                f"{failing_rules}"
+            )
 
 
 def test_seed_stress2_creates_large_diverse_dataset(db_session):
@@ -278,5 +381,5 @@ def test_stress2_reset_does_not_delete_existing_seed_datasets(db_session):
     assert count_seed_circles(db_session, "stress2") == 0
     assert count_seed_users(db_session, "demo") == 7
     assert count_seed_circles(db_session, "demo") == 2
-    assert count_seed_users(db_session, "stress") == 18
-    assert count_seed_circles(db_session, "stress") == 4
+    assert count_seed_users(db_session, "stress") == 48
+    assert count_seed_circles(db_session, "stress") == 8

@@ -8,6 +8,7 @@ from sqlmodel import Session, select
 
 from src.models.tags import TagDataType, TagDefinition, UserTag
 from src.models.teams import (
+    NumericRangeValue,
     Team,
     TeamMember,
     TeamRequirementRule,
@@ -15,6 +16,18 @@ from src.models.teams import (
     decode_required_tag_rules,
     decode_required_tags,
 )
+
+
+def _coerce_numeric_value(value: Any) -> float | None:
+    """Return a comparable numeric value or None when coercion fails."""
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float)):
+        return float(value)
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
 
 
 def get_user_tag_names_for_circle(session: Session, user_id: int, circle_id: int) -> Set[str]:
@@ -95,21 +108,46 @@ def build_team_profile(session: Session, team: Team) -> Set[str]:
 
 
 def get_team_required_tag_names(team: Team) -> Set[str]:
-    """Return team requirement names, preferring structured rules when present."""
+    """Return the union of presence-only and structured team requirement names."""
     structured_rules = decode_required_tag_rules(team.required_tag_rules_json)
-    if structured_rules:
-        return {rule.tag_name for rule in structured_rules}
-    return set(decode_required_tags(team.required_tags_json))
+    required_tag_names = set(decode_required_tags(team.required_tags_json))
+    required_tag_names |= {rule.tag_name for rule in structured_rules}
+    return required_tag_names
 
 
 def rule_matches_user_value(rule: TeamRequirementRule, user_value: Any) -> bool:
     """Return whether a parsed user value satisfies a team rule."""
     expected_value = rule.expected_value
+    if isinstance(expected_value, NumericRangeValue):
+        comparable_user_value = _coerce_numeric_value(user_value)
+        if comparable_user_value is None:
+            return False
+        if expected_value.min is not None and comparable_user_value < float(expected_value.min):
+            return False
+        if expected_value.max is not None and comparable_user_value > float(expected_value.max):
+            return False
+        return True
     if isinstance(expected_value, list):
         if not isinstance(user_value, list):
             return False
         return bool(set(str(item) for item in expected_value) & set(str(item) for item in user_value))
     return user_value == expected_value
+
+
+def _format_expected_value(expected_value: Any) -> str:
+    """Format a rule value for human-readable match explanations."""
+    if isinstance(expected_value, NumericRangeValue):
+        min_label = "-inf" if expected_value.min is None else str(expected_value.min)
+        max_label = "+inf" if expected_value.max is None else str(expected_value.max)
+        return f"[{min_label} ~ {max_label}]"
+    return str(expected_value)
+
+
+def _format_actual_user_value(user_value: Any) -> str:
+    """Format the matched user value for concise UI display."""
+    if isinstance(user_value, list):
+        return ", ".join(str(item) for item in user_value)
+    return str(user_value)
 
 
 def coverage_score_for_rules(required_rules: list[TeamRequirementRule], user_tag_values: dict[str, Any]) -> float:
@@ -127,8 +165,12 @@ def describe_matched_rules(required_rules: list[TeamRequirementRule], user_tag_v
     """Build matched rule descriptions for API responses."""
     matched: list[str] = []
     for rule in required_rules:
-        if rule_matches_user_value(rule, user_tag_values.get(rule.tag_name)):
-            matched.append(f"{rule.tag_name}={rule.expected_value}")
+        user_value = user_tag_values.get(rule.tag_name)
+        if rule_matches_user_value(rule, user_value):
+            if isinstance(rule.expected_value, NumericRangeValue):
+                matched.append(f"{rule.tag_name}={_format_actual_user_value(user_value)}")
+            else:
+                matched.append(f"{rule.tag_name}={_format_expected_value(rule.expected_value)}")
     return matched
 
 
@@ -137,7 +179,7 @@ def describe_missing_rules(required_rules: list[TeamRequirementRule], user_tag_v
     missing: list[str] = []
     for rule in required_rules:
         if not rule_matches_user_value(rule, user_tag_values.get(rule.tag_name)):
-            missing.append(f"{rule.tag_name}={rule.expected_value}")
+            missing.append(f"{rule.tag_name}={_format_expected_value(rule.expected_value)}")
     return missing
 
 

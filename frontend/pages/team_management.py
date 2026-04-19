@@ -26,9 +26,18 @@ from utils.ui import apply_button_usability_style
 
 init_session_state()
 
+TEAM_REQUIREMENT_MODE_NOT_REQUIRED = "not_required"
+TEAM_REQUIREMENT_MODE_REQUIRED_ONLY = "required_only"
+TEAM_REQUIREMENT_MODE_MATCH_VALUE = "match_value"
+TEAM_REQUIREMENT_MODE_OPTIONS = [
+    TEAM_REQUIREMENT_MODE_NOT_REQUIRED,
+    TEAM_REQUIREMENT_MODE_REQUIRED_ONLY,
+    TEAM_REQUIREMENT_MODE_MATCH_VALUE,
+]
+
 st.set_page_config(
     page_title="Team Management - Boundary Circle",
-    page_icon="👥",
+    page_icon="\U0001F465",
 )
 
 
@@ -204,19 +213,35 @@ def fetch_member_tags(circle_id: int, user_id: int) -> list[dict]:
     return []
 
 
+def get_cached_member_tags(
+    tag_cache: dict[int, list[dict]],
+    circle_id: int,
+    user_id: int,
+) -> list[dict]:
+    """Return member tags using a page-local cache to avoid repeated requests."""
+    if user_id not in tag_cache:
+        tag_cache[user_id] = fetch_member_tags(circle_id, user_id)
+    return tag_cache[user_id]
+
+
 def build_match_explanation(match: dict) -> str:
     """Build a concise template-based explanation for a match result."""
-    parts: list[str] = []
-
     freedom_keywords = match.get("matched_freedom_keywords", []) or []
     if freedom_keywords:
-        parts.append(f"Keyword overlap: {', '.join(freedom_keywords)}")
+        return f"Top keyword match: {', '.join(freedom_keywords)}"
+    return "Strong overall match based on shared tag coverage."
 
-    final_score = match.get("final_score")
-    if isinstance(final_score, (int, float)):
-        parts.append(f"Final score: {final_score:.2f}")
 
-    return " | ".join(parts) if parts else "Final score pending additional signals."
+def build_match_score_summary(match: dict) -> str:
+    """Build a compact one-line numeric summary for a match card."""
+    final_score = match.get("final_score", 0.0)
+    coverage_score = match.get("coverage_score", 0.0)
+    similarity_score = match.get("jaccard_score", 0.0)
+    keyword_score = match.get("keyword_overlap_score", 0.0)
+    return (
+        f"Final {final_score:.2f} | Coverage {coverage_score:.2f} | "
+        f"Similarity {similarity_score:.2f} | Keyword {keyword_score:.2f}"
+    )
 
 
 def get_stored_user_matches(selected_team_id: int) -> list[dict]:
@@ -312,27 +337,52 @@ def normalize_team_tag_definition(tag: dict) -> dict:
     return normalized_tag
 
 
-def validate_team_requirement_value(tag: dict, value) -> tuple[bool, str]:
+def build_team_requirement_mode_widget_key(circle_id: int, tag: dict) -> str:
+    """Build a stable unique widget key for a team requirement mode control."""
+    tag_id = tag.get("id")
+    if tag_id is not None:
+        return f"team_requirement_mode_{circle_id}_{tag_id}"
+    return f"team_requirement_mode_{circle_id}_{tag.get('name', 'unknown')}"
+
+
+def get_team_requirement_mode_label(mode: str) -> str:
+    """Return a human-readable label for a requirement mode."""
+    if mode == TEAM_REQUIREMENT_MODE_REQUIRED_ONLY:
+        return "Required only"
+    if mode == TEAM_REQUIREMENT_MODE_MATCH_VALUE:
+        return "Must match value"
+    return "Not required"
+
+
+def should_collect_team_requirement_value(mode: str) -> bool:
+    """Return whether the UI should collect a concrete expected value for this mode."""
+    return mode == TEAM_REQUIREMENT_MODE_MATCH_VALUE
+
+
+def validate_team_requirement_value(tag: dict, mode: str, value) -> tuple[bool, str]:
     """Validate a team requirement value before sending it."""
-    if value in (None, "", []):
+    if mode != TEAM_REQUIREMENT_MODE_MATCH_VALUE:
         return True, ""
+    if value in (None, "", []):
+        return False, f"{tag['name']} needs a value when set to Must match value."
 
     if tag.get("data_type") == "multi_select":
         max_selections = tag.get("max_selections")
         if max_selections is not None and len(value) > max_selections:
             return False, f"{tag['name']} allows at most {max_selections} selections."
 
-    if tag.get("data_type") == "integer":
+    if is_numeric_team_requirement(tag):
+        numeric_range = coerce_team_requirement_numeric_range_value(tag, value)
         try:
-            int(value)
+            min_value = parse_team_requirement_numeric_bound(tag, numeric_range.get("min"))
+            max_value = parse_team_requirement_numeric_bound(tag, numeric_range.get("max"))
         except (TypeError, ValueError):
-            return False, f"{tag['name']} must be a whole number."
-
-    if tag.get("data_type") == "float":
-        try:
-            float(value)
-        except (TypeError, ValueError):
-            return False, f"{tag['name']} must be a number."
+            if tag.get("data_type") == "integer":
+                return False, f"{tag['name']} must be a whole number range."
+            return False, f"{tag['name']} must be a numeric range."
+        if min_value is not None and max_value is not None and min_value > max_value:
+            return False, f"{tag['name']} must use a valid range where min is not greater than max."
+        return True, ""
 
     return True, ""
 
@@ -341,6 +391,13 @@ def normalize_team_requirement_value(tag: dict, value):
     """Convert team requirement values to backend-compatible typed payloads."""
     if value in (None, "", []):
         return value
+
+    if is_numeric_team_requirement(tag):
+        numeric_range = coerce_team_requirement_numeric_range_value(tag, value)
+        return {
+            "min": parse_team_requirement_numeric_bound(tag, numeric_range.get("min")),
+            "max": parse_team_requirement_numeric_bound(tag, numeric_range.get("max")),
+        }
 
     if tag.get("data_type") == "integer":
         return int(value)
@@ -351,21 +408,32 @@ def normalize_team_requirement_value(tag: dict, value):
     return value
 
 
-def build_team_required_tags_payload(tag_definitions: list[dict], tag_data: dict) -> list[str]:
+def build_team_required_tags_payload(
+    tag_definitions: list[dict],
+    requirement_modes: dict[str, str],
+    tag_data: dict,
+) -> list[str]:
     """Build backend-compatible required_tags from schema-driven team inputs."""
     required_tags: list[str] = []
     for tag in tag_definitions:
-        value = tag_data.get(tag["name"])
-        if value in (None, "", []):
+        mode = requirement_modes.get(tag["name"], TEAM_REQUIREMENT_MODE_NOT_REQUIRED)
+        if mode == TEAM_REQUIREMENT_MODE_NOT_REQUIRED:
             continue
         required_tags.append(tag["name"])
     return required_tags
 
 
-def build_team_required_tag_rules_payload(tag_definitions: list[dict], tag_data: dict) -> list[dict]:
+def build_team_required_tag_rules_payload(
+    tag_definitions: list[dict],
+    requirement_modes: dict[str, str],
+    tag_data: dict,
+) -> list[dict]:
     """Build structured team requirement rules from schema-driven inputs."""
     required_tag_rules: list[dict] = []
     for tag in tag_definitions:
+        mode = requirement_modes.get(tag["name"], TEAM_REQUIREMENT_MODE_NOT_REQUIRED)
+        if mode != TEAM_REQUIREMENT_MODE_MATCH_VALUE:
+            continue
         value = tag_data.get(tag["name"])
         if value in (None, "", []):
             continue
@@ -499,6 +567,51 @@ def build_team_freedom_summary(team: dict) -> str:
     return " | ".join(parts)
 
 
+def build_required_rules_summary(required_rules: list[dict]) -> str:
+    """Build a concise caption-friendly summary for team required rules."""
+    if not required_rules:
+        return ""
+    return ", ".join(
+        f"{rule.get('tag_name')}={format_team_requirement_expected_value(rule.get('expected_value'))}"
+        for rule in required_rules
+    )
+
+
+def is_numeric_team_requirement(tag: dict) -> bool:
+    """Return whether this tag should use numeric range inputs."""
+    return tag.get("data_type") in {"integer", "float"}
+
+
+def parse_team_requirement_numeric_bound(tag: dict, raw_value):
+    """Convert one numeric range bound into the correct type."""
+    if raw_value in (None, ""):
+        return None
+    if tag.get("data_type") == "integer":
+        return int(raw_value)
+    return float(raw_value)
+
+
+def coerce_team_requirement_numeric_range_value(tag: dict, value) -> dict[str, object]:
+    """Normalize legacy scalar and new dict-shaped numeric inputs into one range object."""
+    if isinstance(value, dict):
+        return {
+            "min": value.get("min"),
+            "max": value.get("max"),
+        }
+    return {"min": value, "max": value}
+
+
+def format_team_requirement_expected_value(expected_value) -> str:
+    """Format one expected value for human-readable captions."""
+    if isinstance(expected_value, dict) and ("min" in expected_value or "max" in expected_value):
+        min_value = expected_value.get("min")
+        max_value = expected_value.get("max")
+        min_label = "-inf" if min_value is None else str(min_value)
+        max_label = "+inf" if max_value is None else str(max_value)
+        return f"[{min_label} ~ {max_label}]"
+    return str(expected_value)
+
+
 def split_invitations_for_management(
     invitations: list[dict], user_id: int
 ) -> tuple[list[dict], list[dict], list[dict], list[dict]]:
@@ -515,6 +628,7 @@ def split_invitations_for_management(
         for invite in invitations
         if invite.get("kind") == "join_request"
         and invite.get("invitee_id") == user_id
+        and invite.get("inviter_id") != user_id
         and invite.get("status") == "pending"
     ]
     outgoing_requests = [
@@ -547,7 +661,7 @@ def render_team_detail() -> None:
     team = get_selected_team(teams)
     if team is None:
         st.warning("Selected team was not found.")
-        if st.button("⬅️ Back to Team Overview", key="back_missing_team_detail"):
+        if st.button("\u2B05\uFE0F Back to Team Overview", key="back_missing_team_detail"):
             close_team_detail()
         return
 
@@ -565,8 +679,9 @@ def render_team_detail() -> None:
         for user_id in team.get("member_ids", []) or []
         if user_id in member_lookup
     ]
+    member_tag_cache: dict[int, list[dict]] = {}
 
-    if st.button("⬅️ Back to Team Overview", key=f"back_team_detail_{team.get('id')}"):
+    if st.button("\u2B05\uFE0F Back to Team Overview", key=f"back_team_detail_{team.get('id')}"):
         close_team_detail()
 
     st.title(team.get("name", "Team Detail"))
@@ -583,11 +698,7 @@ def render_team_detail() -> None:
     if required_tags:
         st.caption(f"Required tags: {', '.join(required_tags)}")
     if required_rules:
-        formatted_rules = [
-            f"{rule.get('tag_name')}={rule.get('expected_value')}"
-            for rule in required_rules
-        ]
-        st.caption(f"Required rules: {', '.join(formatted_rules)}")
+        st.caption(f"Required rules: {build_required_rules_summary(required_rules)}")
     freedom_summary = build_team_freedom_summary(team)
     if freedom_summary:
         st.caption(f"Freedom requirement: {freedom_summary}")
@@ -616,6 +727,20 @@ def render_team_detail() -> None:
                 with info_col:
                     st.markdown(f"**{member.get('username', 'Unknown')}**{suffix}")
                     st.caption(member.get("email", ""))
+                    if member_id is not None:
+                        member_tags = get_cached_member_tags(
+                            member_tag_cache,
+                            circle_id,
+                            int(member_id),
+                        )
+                        if member_tags:
+                            formatted_tags = [
+                                f"{tag.get('tag_name', 'Tag')}: {format_member_tag_value(tag)}"
+                                for tag in member_tags
+                            ]
+                            st.caption("Tags: " + " | ".join(formatted_tags))
+                        else:
+                            st.caption("Tags: none submitted")
                 with action_col:
                     if member_id is not None and st.button(
                         "Profile",
@@ -637,8 +762,22 @@ def render_team_detail() -> None:
                 with info_col:
                     st.markdown(f"**{invitee_label}**")
                     st.caption(invitee.get("email", ""))
-                with action_col:
                     invitee_id = invite.get("invitee_id")
+                    if invitee_id is not None:
+                        invitee_tags = get_cached_member_tags(
+                            member_tag_cache,
+                            circle_id,
+                            int(invitee_id),
+                        )
+                        if invitee_tags:
+                            formatted_tags = [
+                                f"{tag.get('tag_name', 'Tag')}: {format_member_tag_value(tag)}"
+                                for tag in invitee_tags
+                            ]
+                            st.caption("Tags: " + " | ".join(formatted_tags))
+                        else:
+                            st.caption("Tags: none submitted")
+                with action_col:
                     if invitee_id is not None and st.button(
                         "Profile",
                         key=f"pending_invitee_profile_{team.get('id')}_{invitee_id}",
@@ -675,7 +814,7 @@ def render_team_detail() -> None:
             "Invite a circle member",
             options=list(options.keys()),
         )
-        invite_submitted = st.form_submit_button("✉️ Send Invitation", type="primary")
+        invite_submitted = st.form_submit_button("\u2709\uFE0F Send Invitation", type="primary")
         if invite_submitted:
             selected_user_id = options[selected_member]
             team_id = team.get("id")
@@ -703,7 +842,7 @@ def render_team_list() -> None:
     circle_id = st.session_state.get("current_circle_id")
     if not circle_id:
         st.warning("Join a circle first to view teams.")
-        if st.button("🏛️ Go to Circle Hall", key="go_circle_hall_list"):
+        if st.button("\U0001F3E0 Go to Circle Hall", key="go_circle_hall_list"):
             st.switch_page("pages/circles.py")
         return
 
@@ -724,6 +863,10 @@ def render_team_list() -> None:
                 required_tags = team.get("required_tags", [])
                 if required_tags:
                     st.caption(f"Required tags: {', '.join(required_tags)}")
+                required_rules = team.get("required_tag_rules", []) or []
+                required_rules_summary = build_required_rules_summary(required_rules)
+                if required_rules_summary:
+                    st.caption(f"Required rules: {required_rules_summary}")
             with col_status:
                 status = team.get("status", "Recruiting")
                 members = team.get("current_members", 0)
@@ -734,7 +877,7 @@ def render_team_list() -> None:
                     st.error(status)
                 st.caption(f"Members: {members}/{max_members}")
             with col_action:
-                if st.button("🔍 View Details", key=f"team_list_detail_{team.get('id')}"):
+                if st.button("\U0001F50D View Details", key=f"team_list_detail_{team.get('id')}"):
                     team_id = team.get("id")
                     if team_id is not None:
                         open_team_detail(int(team_id))
@@ -752,123 +895,175 @@ def render_team_list() -> None:
                     st.caption("Not accepting members")
 
 
+
+
 def render_create_team() -> None:
-    """Render the team creation form."""
+    """Render the team creation form with split value/mode controls."""
     st.header("Create Team")
 
     circle_id = st.session_state.get("current_circle_id")
     if not circle_id:
         st.warning("Join a circle first to create a team.")
-        if st.button("🏛️ Go to Circle Hall", key="go_circle_hall_create"):
+        if st.button("Go to Circle Hall", key="go_circle_hall_create_v2"):
             st.switch_page("pages/circles.py")
         return
 
-    with st.form("create_team_form"):
-        team_name = st.text_input("Team Name *", max_chars=50)
-        team_description = st.text_area("Description", max_chars=500)
-        max_members = st.selectbox(
-            "Max Members",
-            options=[2, 3, 4, 5, 6, 7, 8],
-            index=3,
-        )
-        tag_definitions = [normalize_team_tag_definition(tag) for tag in fetch_circle_tags(circle_id)]
-        team_requirement_values: dict[str, object] = {}
+    team_name = st.text_input("Team Name *", max_chars=50, key=f"team_name_{circle_id}")
+    team_description = st.text_area("Description", max_chars=500, key=f"team_description_{circle_id}")
+    max_members = st.selectbox(
+        "Max Members",
+        options=[2, 3, 4, 5, 6, 7, 8],
+        index=3,
+        key=f"team_max_members_{circle_id}",
+    )
+    tag_definitions = [normalize_team_tag_definition(tag) for tag in fetch_circle_tags(circle_id)]
+    team_requirement_modes: dict[str, str] = {}
+    team_requirement_values: dict[str, object] = {}
 
-        if tag_definitions:
-            st.caption("Select the circle-defined requirements that this team cares about.")
-            for tag in tag_definitions:
-                label = f"Required {tag['name']}"
-                tag_type = tag["data_type"]
-                tag_options = tag.get("options")
-                widget_key = build_team_requirement_widget_key(circle_id, tag)
+    if tag_definitions:
+        st.caption("Left sets the value. Right decides whether the tag is ignored, required, or must match.")
+        for tag in tag_definitions:
+            tag_name = tag["name"]
+            tag_type = tag["data_type"]
+            tag_options = tag.get("options")
+            mode_key = build_team_requirement_mode_widget_key(circle_id, tag)
+            widget_key = build_team_requirement_widget_key(circle_id, tag)
+            value_col, mode_col = st.columns([5, 2])
 
-                if tag_type in ("single_select", "enum") and tag_options:
-                    team_requirement_values[tag["name"]] = st.selectbox(
-                        label,
-                        options=[""] + tag_options,
-                        format_func=lambda value: "Not required" if value == "" else value,
+            with mode_col:
+                selected_mode = st.selectbox(
+                    "Requirement",
+                    options=TEAM_REQUIREMENT_MODE_OPTIONS,
+                    format_func=get_team_requirement_mode_label,
+                    key=mode_key,
+                )
+            team_requirement_modes[tag_name] = selected_mode
+
+            with value_col:
+                if selected_mode == TEAM_REQUIREMENT_MODE_NOT_REQUIRED:
+                    st.text_input(
+                        tag_name,
+                        value="Not required",
+                        disabled=True,
+                        key=f"{widget_key}_disabled",
+                    )
+                    team_requirement_values[tag_name] = ""
+                elif selected_mode == TEAM_REQUIREMENT_MODE_REQUIRED_ONLY:
+                    st.text_input(
+                        tag_name,
+                        value="Any value accepted",
+                        disabled=True,
+                        key=f"{widget_key}_required_only",
+                    )
+                    team_requirement_values[tag_name] = ""
+                elif tag_type in ("single_select", "enum") and tag_options:
+                    team_requirement_values[tag_name] = st.selectbox(
+                        tag_name,
+                        options=tag_options,
                         key=widget_key,
                     )
                 elif tag_type == "multi_select" and tag_options:
                     help_text = None
                     if tag.get("max_selections") is not None:
                         help_text = f"Select up to {tag['max_selections']} options."
-                    team_requirement_values[tag["name"]] = st.multiselect(
-                        label,
+                    team_requirement_values[tag_name] = st.multiselect(
+                        tag_name,
                         options=tag_options,
                         help=help_text,
                         key=widget_key,
                     )
                 elif tag_type == "boolean":
-                    team_requirement_values[tag["name"]] = st.checkbox(label, value=False, key=widget_key)
-                elif tag_type == "integer":
-                    team_requirement_values[tag["name"]] = st.text_input(
-                        label,
-                        placeholder="Leave blank if not required",
+                    team_requirement_values[tag_name] = st.checkbox(
+                        tag_name,
+                        value=False,
                         key=widget_key,
                     )
-                elif tag_type == "float":
-                    team_requirement_values[tag["name"]] = st.text_input(
-                        label,
-                        placeholder="Leave blank if not required",
-                        key=widget_key,
-                    )
+                elif is_numeric_team_requirement(tag):
+                    st.markdown(f"**{tag_name}**")
+                    min_col, separator_col, max_col = st.columns([5, 1, 5])
+                    with min_col:
+                        min_value = st.text_input(
+                            "Min",
+                            placeholder="-inf",
+                            key=f"{widget_key}_min",
+                        )
+                    with separator_col:
+                        st.markdown(
+                            "<div style='text-align:center;padding-top:2rem;'>~</div>",
+                            unsafe_allow_html=True,
+                        )
+                    with max_col:
+                        max_value = st.text_input(
+                            "Max",
+                            placeholder="+inf",
+                            key=f"{widget_key}_max",
+                        )
+                    team_requirement_values[tag_name] = {
+                        "min": min_value.strip(),
+                        "max": max_value.strip(),
+                    }
                 else:
-                    team_requirement_values[tag["name"]] = st.text_input(
-                        label,
-                        placeholder="Leave blank if not required",
+                    team_requirement_values[tag_name] = st.text_input(
+                        tag_name,
+                        placeholder="Enter the expected value",
                         key=widget_key,
                     )
-        else:
-            st.info("No circle tag definitions found. Team requirements will be empty.")
+    else:
+        st.info("No circle tag definitions found. Team requirements will be empty.")
 
-        freedom_requirement_text = st.text_area(
-            "Freedom Tag Requirements (optional)",
-            placeholder="Describe what you're looking for in free text. e.g., Looking for someone passionate about AI and creative projects",
-            max_chars=500,
-            key=f"freedom_requirement_{circle_id}",
+    freedom_requirement_text = st.text_area(
+        "Freedom Tag Requirements (optional)",
+        placeholder="Describe what you're looking for in free text. e.g., Looking for someone passionate about AI and creative projects",
+        max_chars=500,
+        key=f"freedom_requirement_{circle_id}",
+    )
+
+    submitted = st.button("Create Team", type="primary", key=f"create_team_submit_{circle_id}")
+
+    if submitted:
+        if not team_name.strip():
+            st.error("Team name is required.")
+            return
+
+        validation_errors = []
+        for tag in tag_definitions:
+            is_valid, error_message = validate_team_requirement_value(
+                tag,
+                team_requirement_modes.get(tag["name"], TEAM_REQUIREMENT_MODE_NOT_REQUIRED),
+                team_requirement_values.get(tag["name"]),
+            )
+            if not is_valid:
+                validation_errors.append(error_message)
+
+        if validation_errors:
+            st.error(" ".join(validation_errors))
+            return
+
+        required_tags = build_team_required_tags_payload(
+            tag_definitions,
+            team_requirement_modes,
+            team_requirement_values,
+        )
+        required_tag_rules = build_team_required_tag_rules_payload(
+            tag_definitions,
+            team_requirement_modes,
+            team_requirement_values,
         )
 
-        submitted = st.form_submit_button("➕ Create Team", type="primary")
-
-        if submitted:
-            if not team_name.strip():
-                st.error("Team name is required.")
-                return
-
-            validation_errors = []
-            for tag in tag_definitions:
-                is_valid, error_message = validate_team_requirement_value(
-                    tag,
-                    team_requirement_values.get(tag["name"]),
-                )
-                if not is_valid:
-                    validation_errors.append(error_message)
-
-            if validation_errors:
-                st.error(" ".join(validation_errors))
-                return
-
-            required_tags = build_team_required_tags_payload(tag_definitions, team_requirement_values)
-            required_tag_rules = build_team_required_tag_rules_payload(
-                tag_definitions,
-                team_requirement_values,
-            )
-
-            success, message = create_team(
-                name=team_name.strip(),
-                description=team_description.strip(),
-                max_members=max_members,
-                required_tags=required_tags,
-                required_tag_rules=required_tag_rules,
-                circle_id=circle_id,
-                freedom_requirement_text=freedom_requirement_text.strip(),
-            )
-            if success:
-                st.success(message)
-                st.rerun()
-            else:
-                st.error(message)
+        success, message = create_team(
+            name=team_name.strip(),
+            description=team_description.strip(),
+            max_members=max_members,
+            required_tags=required_tags,
+            required_tag_rules=required_tag_rules,
+            circle_id=circle_id,
+            freedom_requirement_text=freedom_requirement_text.strip(),
+        )
+        if success:
+            st.success(message)
+            st.rerun()
+        else:
+            st.error(message)
 
 
 def render_my_teams() -> None:
@@ -899,10 +1094,18 @@ def render_my_teams() -> None:
                 creator_label = team.get("creator_username") or "Unknown"
                 st.caption(f"Creator: {creator_label}")
                 st.caption(team.get("description", "No description"))
+                required_tags = team.get("required_tags", []) or []
+                if required_tags:
+                    st.caption(f"Required tags: {', '.join(required_tags)}")
+                required_rules_summary = build_required_rules_summary(
+                    team.get("required_tag_rules", []) or []
+                )
+                if required_rules_summary:
+                    st.caption(f"Required rules: {required_rules_summary}")
                 st.write(
                     f"Members: {team.get('current_members', 0)}/{team.get('max_members', 0)}"
                 )
-                if st.button("🔍 View Details", key=f"my_created_team_detail_{team.get('id')}"):
+                if st.button("\U0001F50D View Details", key=f"my_created_team_detail_{team.get('id')}"):
                     team_id = team.get("id")
                     if team_id is not None:
                         open_team_detail(int(team_id))
@@ -918,10 +1121,18 @@ def render_my_teams() -> None:
                 creator_label = team.get("creator_username") or "Unknown"
                 st.caption(f"Creator: {creator_label}")
                 st.caption(team.get("description", "No description"))
+                required_tags = team.get("required_tags", []) or []
+                if required_tags:
+                    st.caption(f"Required tags: {', '.join(required_tags)}")
+                required_rules_summary = build_required_rules_summary(
+                    team.get("required_tag_rules", []) or []
+                )
+                if required_rules_summary:
+                    st.caption(f"Required rules: {required_rules_summary}")
                 st.write(
                     f"Members: {team.get('current_members', 0)}/{team.get('max_members', 0)}"
                 )
-                if st.button("🔍 View Details", key=f"my_joined_team_detail_{team.get('id')}"):
+                if st.button("\U0001F50D View Details", key=f"my_joined_team_detail_{team.get('id')}"):
                     team_id = team.get("id")
                     if team_id is not None:
                         open_team_detail(int(team_id))
@@ -956,7 +1167,7 @@ def render_invitation_management() -> None:
                 accept_col, reject_col = st.columns(2)
                 with accept_col:
                     if st.button(
-                        "✅ Accept",
+                        "\u2705 Accept",
                         key=f"accept_invitation_{invite.get('id')}",
                         type="primary",
                     ):
@@ -971,7 +1182,7 @@ def render_invitation_management() -> None:
                         else:
                             st.error(message)
                 with reject_col:
-                    if st.button("❌ Reject", key=f"reject_invitation_{invite.get('id')}"):
+                    if st.button("\u274C Reject", key=f"reject_invitation_{invite.get('id')}"):
                         invite_id = invite.get("id")
                         if invite_id is None:
                             st.error("Unable to respond because invitation data is incomplete.")
@@ -1009,13 +1220,13 @@ def render_invitation_management() -> None:
                 profile_col, approve_col, reject_col = st.columns(3)
                 with profile_col:
                     if requester_id is not None and st.button(
-                        "👤 View Profile",
+                        "\U0001F464 View Profile",
                         key=f"view_join_request_profile_{invite.get('id')}",
                     ):
                         open_public_profile(int(requester_id))
                 with approve_col:
                     if st.button(
-                        "✅ Approve",
+                        "\u2705 Approve",
                         key=f"approve_join_request_{invite.get('id')}",
                         type="primary",
                     ):
@@ -1030,7 +1241,7 @@ def render_invitation_management() -> None:
                         else:
                             st.error(message)
                 with reject_col:
-                    if st.button("❌ Reject", key=f"reject_join_request_{invite.get('id')}"):
+                    if st.button("\u274C Reject", key=f"reject_join_request_{invite.get('id')}"):
                         invite_id = invite.get("id")
                         if invite_id is None:
                             st.error("Unable to respond because request data is incomplete.")
@@ -1113,7 +1324,7 @@ def render_matching_section() -> None:
         matches = get_stored_user_matches(selected_team["id"])
         has_requested_matches = st.session_state.get("matching_requested", False)
 
-        if st.button("👥 Get user recommendations", type="primary"):
+        if st.button("\U0001F465 Get user recommendations", type="primary"):
             matches = fetch_matching_users(selected_team["id"])
             has_requested_matches = True
             st.session_state.matching_requested = True
@@ -1133,24 +1344,11 @@ def render_matching_section() -> None:
                             f"**{match.get('username', 'Unknown user')}** "
                             f"({match.get('email', 'N/A')})"
                         )
-                        cov = match.get("coverage_score", 0.0)
-                        jac = match.get("jaccard_score", 0.0)
-                        keyword_overlap = match.get("keyword_overlap_score", 0.0)
-                        final_score = match.get("final_score", 0.0)
-                        st.caption(
-                            f"Final: {final_score:.2f} | Coverage: {cov:.2f} | "
-                            f"Similarity: {jac:.2f} | Keyword overlap: {keyword_overlap:.2f}"
-                        )
+                        st.caption(build_match_score_summary(match))
                         matched = ", ".join(match.get("matched_tags", [])) or "-"
                         missing = ", ".join(match.get("missing_required_tags", [])) or "-"
                         st.write(f"Matched tags: {matched}")
                         st.write(f"Missing required tags: {missing}")
-                        freedom_keywords = match.get("matched_freedom_keywords", [])
-                        freedom_score = match.get("freedom_score", 0.0)
-                        if freedom_keywords:
-                            st.caption(f"Extra keyword match: {', '.join(freedom_keywords)}")
-                        if freedom_score > 0:
-                            st.caption(f"Freedom score: {freedom_score:.2f}")
                         st.caption(build_match_explanation(match))
                     with profile_col:
                         if st.button(
@@ -1177,7 +1375,7 @@ def render_matching_section() -> None:
     st.subheader("Recommend teams for me")
     st.caption("You can send a join request directly to the team creator from here.")
 
-    if st.button("🤝 Find teams for me", key="find_matching_teams", type="primary"):
+    if st.button("\U0001F50E Find teams for me", key="find_matching_teams", type="primary"):
         matches = fetch_matching_teams(circle_id)
         if not matches:
             st.info("No matching teams found yet.")
@@ -1195,22 +1393,9 @@ def render_matching_section() -> None:
                             f"Members: {team.get('current_members', 0)}/"
                             f"{team.get('max_members', 0)}"
                         )
-                        cov = item.get("coverage_score", 0.0)
-                        jac = item.get("jaccard_score", 0.0)
-                        keyword_overlap = item.get("keyword_overlap_score", 0.0)
-                        final_score = item.get("final_score", 0.0)
-                        st.caption(
-                            f"Final: {final_score:.2f} | Coverage: {cov:.2f} | "
-                            f"Similarity: {jac:.2f} | Keyword overlap: {keyword_overlap:.2f}"
-                        )
+                        st.caption(build_match_score_summary(item))
                         missing = ", ".join(item.get("missing_required_tags", [])) or "-"
                         st.write(f"Missing required tags: {missing}")
-                        freedom_keywords = item.get("matched_freedom_keywords", [])
-                        freedom_score = item.get("freedom_score", 0.0)
-                        if freedom_keywords:
-                            st.caption(f"Extra keyword match: {', '.join(freedom_keywords)}")
-                        if freedom_score > 0:
-                            st.caption(f"Freedom score: {freedom_score:.2f}")
                         st.caption(build_match_explanation(item))
                     with action_col:
                         team_id = team.get("id")
@@ -1246,18 +1431,18 @@ def main() -> None:
 
     if not st.session_state.get("current_circle_id"):
         st.warning("Join a circle first to access team management.")
-        if st.button("🏛️ Go to Circle Hall", key="go_circle_hall_main"):
+        if st.button("\U0001F3E0 Go to Circle Hall", key="go_circle_hall_main"):
             go_to_circle_hall()
         return
 
     if not can_access_current_circle(st.session_state["current_circle_id"]):
-        if st.button("🏛️ Go to Circle Hall", key="go_circle_hall_forbidden"):
+        if st.button("\U0001F3E0 Go to Circle Hall", key="go_circle_hall_forbidden"):
             go_to_circle_hall()
         return
 
     nav_col1 = st.columns(1)[0]
     with nav_col1:
-        if st.button("🏠 Back to Circle Detail", key="back_to_circle_detail_from_team"):
+        if st.button("\u2B05\uFE0F Back to Circle Detail", key="back_to_circle_detail_from_team"):
             go_to_circle_detail()
     if st.session_state.get("team_management_focus_detail"):
         render_team_detail()
@@ -1280,3 +1465,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+

@@ -28,7 +28,7 @@ def test_settings_use_ephemeral_secret_in_development(monkeypatch):
 
 
 def test_settings_fail_fast_without_secret_in_production(monkeypatch):
-    monkeypatch.delenv("SECRET_KEY", raising=False)
+    monkeypatch.setenv("SECRET_KEY", "")
     monkeypatch.setenv("APP_ENV", "production")
 
     settings_module = _reload_settings_module()

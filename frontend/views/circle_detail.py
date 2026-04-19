@@ -60,6 +60,58 @@ def fetch_circle_tags(circle_id: int):
         return []
 
 
+def fetch_member_tags(circle_id: int, user_id: int) -> list[dict]:
+    """Fetch a circle member's submitted tags."""
+    try:
+        response = api_client.get(f"/circles/{circle_id}/members/{user_id}/tags")
+        if response.ok:
+            return response.json()
+        return []
+    except Exception:
+        return []
+
+
+def get_cached_member_tags(
+    tag_cache: dict[int, list[dict]],
+    circle_id: int,
+    user_id: int,
+) -> list[dict]:
+    """Return member tags using a page-local cache to avoid repeated requests."""
+    if user_id not in tag_cache:
+        tag_cache[user_id] = fetch_member_tags(circle_id, user_id)
+    return tag_cache[user_id]
+
+
+def format_member_tag_value(tag: dict) -> str:
+    """Render stored tag values into a compact human-readable string."""
+    raw_value = tag.get("value", "")
+    tag_type = tag.get("data_type")
+
+    if tag_type == "multi_select":
+        try:
+            parsed = json.loads(raw_value)
+        except (TypeError, json.JSONDecodeError):
+            return str(raw_value)
+        if isinstance(parsed, list):
+            return ", ".join(str(item) for item in parsed)
+    if tag_type == "boolean":
+        if str(raw_value).lower() in {"true", "1"}:
+            return "Yes"
+        if str(raw_value).lower() in {"false", "0"}:
+            return "No"
+    return str(raw_value)
+
+
+def build_member_tags_summary(tags: list[dict]) -> str:
+    """Build a concise summary string for a member's submitted tags."""
+    if not tags:
+        return ""
+    return " | ".join(
+        f"{tag.get('tag_name', 'Tag')}: {format_member_tag_value(tag)}"
+        for tag in tags
+    )
+
+
 def create_tag_definition(
     circle_id: int,
     name: str,
@@ -200,10 +252,52 @@ def _admin_tag_form_key(circle_id: int, field_name: str) -> str:
     return f"admin_tag_{field_name}_{circle_id}"
 
 
+def _admin_tag_option_count_key(circle_id: int) -> str:
+    """Build the session key storing the option row count."""
+    return _admin_tag_form_key(circle_id, "option_count")
+
+
+def _admin_tag_option_key(circle_id: int, index: int) -> str:
+    """Build the session key for a specific option input row."""
+    return f"admin_tag_option_{circle_id}_{index}"
+
+
+def get_admin_tag_option_values(circle_id: int) -> list[str]:
+    """Return current admin option row values, initializing two rows by default."""
+    count_key = _admin_tag_option_count_key(circle_id)
+    option_count = int(st.session_state.get(count_key, 0) or 0)
+    if option_count <= 0:
+        option_count = 2
+        st.session_state[count_key] = option_count
+
+    return [
+        str(st.session_state.get(_admin_tag_option_key(circle_id, index), ""))
+        for index in range(option_count)
+    ]
+
+
+def build_selection_options_payload(option_values: list[str]) -> tuple[Optional[str], str]:
+    """Serialize cleaned selection options into the backend JSON payload."""
+    cleaned_options: list[str] = []
+    for raw_value in option_values:
+        normalized_value = str(raw_value).strip()
+        if normalized_value and normalized_value not in cleaned_options:
+            cleaned_options.append(normalized_value)
+
+    if not cleaned_options:
+        return None, "At least one option is required for selection types."
+
+    return json.dumps(cleaned_options, ensure_ascii=False), ""
+
+
 def clear_admin_tag_form_state(circle_id: int) -> None:
     """Clear admin tag form widget state after a successful create."""
     for field_name in ["name", "type", "required", "options", "max_selections"]:
         st.session_state.pop(_admin_tag_form_key(circle_id, field_name), None)
+    option_count = int(st.session_state.get(_admin_tag_option_count_key(circle_id), 0) or 0)
+    st.session_state.pop(_admin_tag_option_count_key(circle_id), None)
+    for index in range(option_count):
+        st.session_state.pop(_admin_tag_option_key(circle_id, index), None)
 
 
 def should_show_tag_options_field(tag_type: str) -> bool:
@@ -589,21 +683,31 @@ def main():
     st.markdown("---")
     st.markdown("### Members")
     members = fetch_circle_members(circle_id)
+    member_tag_cache: dict[int, list[dict]] = {}
 
     if members:
         for member in members:
             with st.container(border=True):
                 col1, col2, col3 = st.columns([1.5, 4, 1.5])
                 with col1:
+                    member_id = member.get("id") or member.get("user_id")
+                    member_role_label = "Creator" if member_id == circle.get("creator_id") else "User"
                     st.markdown(
-                        "<div style='font-size:24px;text-align:center;'>User</div>",
+                        f"<div style='font-size:24px;text-align:center;'>{member_role_label}</div>",
                         unsafe_allow_html=True,
                     )
                 with col2:
                     st.markdown(f"**{member.get('username', 'Unknown')}**")
                     st.caption(member.get("email", ""))
+                    if member_id is not None:
+                        tag_summary = build_member_tags_summary(
+                            get_cached_member_tags(member_tag_cache, circle_id, int(member_id))
+                        )
+                        if tag_summary:
+                            st.caption(f"Tags: {tag_summary}")
+                        else:
+                            st.caption("Tags: none submitted")
                 with col3:
-                    member_id = member.get("id") or member.get("user_id")
                     if member_id is not None and st.button(
                         "👤 View Profile",
                         key=f"circle_member_profile_{circle_id}_{member_id}",
@@ -651,6 +755,26 @@ def main():
             ADMIN_TAG_TYPE_OPTIONS,
             key=_admin_tag_form_key(circle_id, "type"),
         )
+        option_values: list[str] = []
+        if should_show_tag_options_field(new_tag_type):
+            option_count_key = _admin_tag_option_count_key(circle_id)
+            option_values = get_admin_tag_option_values(circle_id)
+            option_action_col, option_remove_col = st.columns(2)
+            with option_action_col:
+                if st.button("Add Option", key=_admin_tag_form_key(circle_id, "add_option")):
+                    st.session_state[option_count_key] = len(option_values) + 1
+                    st.rerun()
+            with option_remove_col:
+                disable_remove = len(option_values) <= 1
+                if st.button(
+                    "Remove Last Option",
+                    key=_admin_tag_form_key(circle_id, "remove_option"),
+                    disabled=disable_remove,
+                ):
+                    last_index = len(option_values) - 1
+                    st.session_state.pop(_admin_tag_option_key(circle_id, last_index), None)
+                    st.session_state[option_count_key] = last_index
+                    st.rerun()
         with st.form(f"add_tag_definition_form_{circle_id}"):
             new_tag_name = st.text_input(
                 "name",
@@ -662,13 +786,14 @@ def main():
                 value=False,
                 key=_admin_tag_form_key(circle_id, "required"),
             )
-            new_tag_options = ""
             if should_show_tag_options_field(new_tag_type):
-                new_tag_options = st.text_input(
-                    "options",
-                    placeholder='Input JSON array like ["A", "B"]',
-                    key=_admin_tag_form_key(circle_id, "options"),
-                )
+                st.caption("Options")
+                for index in range(len(option_values)):
+                    st.text_input(
+                        f"Option {index + 1}",
+                        placeholder=f"Option {index + 1}",
+                        key=_admin_tag_option_key(circle_id, index),
+                    )
 
             new_tag_max_selections = 1
             if should_show_max_selections_field(new_tag_type):
@@ -688,20 +813,11 @@ def main():
                     options_payload: Optional[str] = None
                     max_selections_payload: Optional[int] = None
                     if new_tag_type in {"single_select", "multi_select"}:
-                        if not new_tag_options.strip():
-                            st.error("options is required for selection types")
-                            options_payload = None
-                        else:
-                            try:
-                                parsed_options = json.loads(new_tag_options)
-                                if not isinstance(parsed_options, list) or not parsed_options:
-                                    raise ValueError
-                                options_payload = json.dumps(parsed_options, ensure_ascii=False)
-                            except Exception:
-                                st.error(
-                                    'options must be a valid non-empty JSON array, e.g. ["A", "B"]'
-                                )
-                                options_payload = None
+                        options_payload, options_error = build_selection_options_payload(
+                            get_admin_tag_option_values(circle_id)
+                        )
+                        if options_payload is None:
+                            st.error(options_error)
                         if new_tag_type == "multi_select" and options_payload is not None:
                             max_selections_payload = int(new_tag_max_selections)
                     if new_tag_type not in {"single_select", "multi_select"} or options_payload is not None:

@@ -639,6 +639,82 @@ def test_match_users_for_team_uses_multi_select_overlap_rules(db_session) -> Non
     assert "stack_miss" not in usernames
 
 
+def test_match_users_for_team_uses_integer_range_rules(db_session) -> None:
+    creator, creator_headers = register_and_login(
+        "hours_creator", "hours_creator@example.com"
+    )
+    circle_response = client.post(
+        "/circles/",
+        headers=creator_headers,
+        json={"name": "Hours Circle", "description": "Numeric range matching"},
+    )
+    assert circle_response.status_code == 201
+    circle = circle_response.json()
+
+    inside_user, _ = register_and_login("hours_inside", "hours_inside@example.com")
+    outside_user, _ = register_and_login("hours_outside", "hours_outside@example.com")
+
+    for user in (inside_user, outside_user):
+        db_session.add(
+            CircleMember(user_id=user["id"], circle_id=circle["id"], role=CircleRole.MEMBER)
+        )
+    db_session.commit()
+
+    hours_tag = TagDefinition(
+        circle_id=circle["id"],
+        name="Weekly Hours",
+        data_type=TagDataType.INTEGER,
+        required=False,
+    )
+    db_session.add(hours_tag)
+    db_session.commit()
+    db_session.refresh(hours_tag)
+
+    db_session.add(
+        UserTag(
+            user_id=inside_user["id"],
+            circle_id=circle["id"],
+            tag_definition_id=hours_tag.id,
+            value="10",
+        )
+    )
+    db_session.add(
+        UserTag(
+            user_id=outside_user["id"],
+            circle_id=circle["id"],
+            tag_definition_id=hours_tag.id,
+            value="6",
+        )
+    )
+    db_session.commit()
+
+    team_response = client.post(
+        "/teams",
+        headers=creator_headers,
+        json={
+            "name": "Part Time Team",
+            "description": "Needs 8 to 12 weekly hours",
+            "circle_id": circle["id"],
+            "max_members": 4,
+            "required_tags": ["Weekly Hours"],
+            "required_tag_rules": [
+                {"tag_name": "Weekly Hours", "expected_value": {"min": 8, "max": 12}}
+            ],
+        },
+    )
+    assert team_response.status_code == 201
+    team = team_response.json()
+
+    match_response = client.get(
+        f"/matching/users?team_id={team['id']}",
+        headers=creator_headers,
+    )
+    assert match_response.status_code == 200
+    usernames = [item["username"] for item in match_response.json()]
+    assert "hours_inside" in usernames
+    assert "hours_outside" not in usernames
+
+
 def test_match_teams_for_user_uses_structured_value_rules(db_session) -> None:
     user, user_headers = register_and_login("team_value_user", "team_value_user@example.com")
     creator, creator_headers = register_and_login(

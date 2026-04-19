@@ -885,6 +885,10 @@ def test_circle_detail_clear_admin_tag_form_state_removes_widget_values(monkeypa
     fake_streamlit.session_state["admin_tag_required_5"] = True
     fake_streamlit.session_state["admin_tag_options_5"] = '["AI", "SE"]'
     fake_streamlit.session_state["admin_tag_max_selections_5"] = 2
+    fake_streamlit.session_state["admin_tag_option_count_5"] = 3
+    fake_streamlit.session_state["admin_tag_option_5_0"] = "AI"
+    fake_streamlit.session_state["admin_tag_option_5_1"] = "SE"
+    fake_streamlit.session_state["admin_tag_option_5_2"] = "DS"
 
     circle_detail_module.clear_admin_tag_form_state(5)
 
@@ -893,6 +897,10 @@ def test_circle_detail_clear_admin_tag_form_state_removes_widget_values(monkeypa
     assert "admin_tag_required_5" not in fake_streamlit.session_state
     assert "admin_tag_options_5" not in fake_streamlit.session_state
     assert "admin_tag_max_selections_5" not in fake_streamlit.session_state
+    assert "admin_tag_option_count_5" not in fake_streamlit.session_state
+    assert "admin_tag_option_5_0" not in fake_streamlit.session_state
+    assert "admin_tag_option_5_1" not in fake_streamlit.session_state
+    assert "admin_tag_option_5_2" not in fake_streamlit.session_state
 
 
 def test_circle_detail_admin_tag_field_visibility_matches_type(monkeypatch):
@@ -917,6 +925,146 @@ def test_circle_detail_admin_tag_type_choices_exclude_string(monkeypatch):
         "single_select",
         "multi_select",
     ]
+
+
+def test_circle_detail_get_admin_tag_option_values_initializes_two_blank_rows(monkeypatch):
+    fake_streamlit, circle_detail_module = load_circle_detail_module(monkeypatch)
+
+    values = circle_detail_module.get_admin_tag_option_values(5)
+
+    assert values == ["", ""]
+    assert fake_streamlit.session_state["admin_tag_option_count_5"] == 2
+
+
+def test_circle_detail_get_admin_tag_option_values_reads_existing_rows(monkeypatch):
+    fake_streamlit, circle_detail_module = load_circle_detail_module(monkeypatch)
+
+    fake_streamlit.session_state["admin_tag_option_count_5"] = 3
+    fake_streamlit.session_state["admin_tag_option_5_0"] = "AI"
+    fake_streamlit.session_state["admin_tag_option_5_1"] = "SE"
+    fake_streamlit.session_state["admin_tag_option_5_2"] = "DS"
+
+    values = circle_detail_module.get_admin_tag_option_values(5)
+
+    assert values == ["AI", "SE", "DS"]
+
+
+def test_circle_detail_build_selection_options_payload_from_option_rows(monkeypatch):
+    _, circle_detail_module = load_circle_detail_module(monkeypatch)
+
+    payload, error_message = circle_detail_module.build_selection_options_payload(
+        [" AI ", "", "SE", "AI"]
+    )
+
+    assert payload == '["AI", "SE"]'
+    assert error_message == ""
+
+
+def test_circle_detail_build_selection_options_payload_rejects_empty_options(monkeypatch):
+    _, circle_detail_module = load_circle_detail_module(monkeypatch)
+
+    payload, error_message = circle_detail_module.build_selection_options_payload(["", "   "])
+
+    assert payload is None
+    assert error_message == "At least one option is required for selection types."
+
+
+def test_circle_detail_main_shows_member_tag_summary(monkeypatch):
+    fake_streamlit, circle_detail_module = load_circle_detail_module(monkeypatch)
+
+    captions: list[str] = []
+    fake_streamlit.caption = lambda message="", *args, **kwargs: captions.append(str(message))
+    fake_streamlit.button = lambda *args, **kwargs: False
+    fake_streamlit.title = lambda *args, **kwargs: None
+    fake_streamlit.markdown = lambda *args, **kwargs: None
+    fake_streamlit.success = lambda *args, **kwargs: None
+    fake_streamlit.warning = lambda *args, **kwargs: None
+    fake_streamlit.info = lambda *args, **kwargs: None
+    fake_streamlit.error = lambda *args, **kwargs: None
+    fake_streamlit.columns = lambda spec: tuple(type("DummyContext", (), {"__enter__": lambda self: self, "__exit__": lambda self, exc_type, exc, tb: False})() for _ in range(len(spec) if isinstance(spec, list) else spec))
+    fake_streamlit.container = lambda *args, **kwargs: type("DummyContext", (), {"__enter__": lambda self: self, "__exit__": lambda self, exc_type, exc, tb: False})()
+    fake_streamlit.expander = lambda *args, **kwargs: type("DummyContext", (), {"__enter__": lambda self: self, "__exit__": lambda self, exc_type, exc, tb: False})()
+    fake_streamlit.form = lambda *args, **kwargs: type("DummyContext", (), {"__enter__": lambda self: self, "__exit__": lambda self, exc_type, exc, tb: False})()
+    fake_streamlit.page_link = lambda *args, **kwargs: None
+
+    fake_streamlit.session_state.circle_hall_focus_detail = True
+
+    monkeypatch.setattr(circle_detail_module, "apply_button_usability_style", lambda: None)
+    monkeypatch.setattr(circle_detail_module, "require_auth", lambda: None)
+    monkeypatch.setattr(circle_detail_module, "resolve_circle_id", lambda query_params=None: 5)
+    monkeypatch.setattr(circle_detail_module, "get_current_user", lambda: {"id": 7, "username": "viewer"})
+    monkeypatch.setattr(
+        circle_detail_module,
+        "fetch_circle_detail",
+        lambda circle_id: {"id": 5, "name": "AI Circle", "creator_id": 1, "creator_username": "creator"},
+    )
+    monkeypatch.setattr(
+        circle_detail_module,
+        "fetch_circle_members",
+        lambda circle_id: [{"id": 9, "username": "alice", "email": "alice@example.com"}],
+    )
+    monkeypatch.setattr(circle_detail_module, "fetch_circle_tags", lambda circle_id: [])
+    monkeypatch.setattr(
+        circle_detail_module,
+        "fetch_freedom_tag_profile",
+        lambda circle_id: {"freedom_tag_text": "", "freedom_tag_profile": {"keywords": []}},
+    )
+    monkeypatch.setattr(
+        circle_detail_module,
+        "fetch_member_tags",
+        lambda circle_id, user_id: [{"tag_name": "Major", "data_type": "single_select", "value": "AI"}],
+    )
+
+    circle_detail_module.main()
+
+    assert any("Tags: Major: AI" in caption for caption in captions)
+
+
+def test_circle_detail_main_labels_creator_member_as_creator(monkeypatch):
+    fake_streamlit, circle_detail_module = load_circle_detail_module(monkeypatch)
+
+    markdown_calls: list[str] = []
+    fake_streamlit.markdown = lambda message="", *args, **kwargs: markdown_calls.append(str(message))
+    fake_streamlit.caption = lambda *args, **kwargs: None
+    fake_streamlit.button = lambda *args, **kwargs: False
+    fake_streamlit.title = lambda *args, **kwargs: None
+    fake_streamlit.success = lambda *args, **kwargs: None
+    fake_streamlit.warning = lambda *args, **kwargs: None
+    fake_streamlit.info = lambda *args, **kwargs: None
+    fake_streamlit.error = lambda *args, **kwargs: None
+    fake_streamlit.columns = lambda spec: tuple(type("DummyContext", (), {"__enter__": lambda self: self, "__exit__": lambda self, exc_type, exc, tb: False})() for _ in range(len(spec) if isinstance(spec, list) else spec))
+    fake_streamlit.container = lambda *args, **kwargs: type("DummyContext", (), {"__enter__": lambda self: self, "__exit__": lambda self, exc_type, exc, tb: False})()
+    fake_streamlit.expander = lambda *args, **kwargs: type("DummyContext", (), {"__enter__": lambda self: self, "__exit__": lambda self, exc_type, exc, tb: False})()
+    fake_streamlit.form = lambda *args, **kwargs: type("DummyContext", (), {"__enter__": lambda self: self, "__exit__": lambda self, exc_type, exc, tb: False})()
+    fake_streamlit.page_link = lambda *args, **kwargs: None
+
+    fake_streamlit.session_state.circle_hall_focus_detail = True
+
+    monkeypatch.setattr(circle_detail_module, "apply_button_usability_style", lambda: None)
+    monkeypatch.setattr(circle_detail_module, "require_auth", lambda: None)
+    monkeypatch.setattr(circle_detail_module, "resolve_circle_id", lambda query_params=None: 5)
+    monkeypatch.setattr(circle_detail_module, "get_current_user", lambda: {"id": 7, "username": "viewer"})
+    monkeypatch.setattr(
+        circle_detail_module,
+        "fetch_circle_detail",
+        lambda circle_id: {"id": 5, "name": "AI Circle", "creator_id": 9, "creator_username": "alice"},
+    )
+    monkeypatch.setattr(
+        circle_detail_module,
+        "fetch_circle_members",
+        lambda circle_id: [{"id": 9, "username": "alice", "email": "alice@example.com"}],
+    )
+    monkeypatch.setattr(circle_detail_module, "fetch_circle_tags", lambda circle_id: [])
+    monkeypatch.setattr(
+        circle_detail_module,
+        "fetch_freedom_tag_profile",
+        lambda circle_id: {"freedom_tag_text": "", "freedom_tag_profile": {"keywords": []}},
+    )
+    monkeypatch.setattr(circle_detail_module, "fetch_member_tags", lambda circle_id, user_id: [])
+
+    circle_detail_module.main()
+
+    assert any(">Creator<" in value for value in markdown_calls)
 
 
 def test_circle_detail_delete_tag_definition_uses_expected_endpoint(monkeypatch):

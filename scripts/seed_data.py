@@ -211,7 +211,7 @@ def build_member_freedom_profile(values: Dict[str, Any], bio: str) -> tuple[str,
     if values.get("Wants Research") is True:
         _add_keyword(keywords, "research")
         sentences.append("Enjoys research work")
-    if values.get("Open To Lead") is True:
+    if values.get("Willing To Lead") is True:
         _add_keyword(keywords, "leadership")
         sentences.append("Open to leading coordination")
 
@@ -376,149 +376,670 @@ def build_demo_dataset() -> DatasetSeed:
 
 
 def build_stress_dataset() -> DatasetSeed:
-    user_names = {
-        "amir": "Amir He",
-        "bella": "Bella Xu",
-        "cyrus": "Cyrus Gu",
-        "diana": "Diana Qiu",
-        "ethan": "Ethan Luo",
-        "flora": "Flora Yin",
-        "gavin": "Gavin Hu",
-        "hazel": "Hazel Tang",
-        "isaac": "Isaac Fan",
-        "julia": "Julia Xie",
-        "kevin": "Kevin Rao",
-        "luna": "Luna Gao",
-        "mason": "Mason Ji",
-        "nora": "Nora Peng",
-        "owen": "Owen Yue",
-        "pearl": "Pearl Yang",
-        "quentin": "Quentin Shen",
-        "rachel": "Rachel Nie",
-    }
+    ordered_users = [
+        ("amir", "Amir He"),
+        ("bella", "Bella Xu"),
+        ("cyrus", "Cyrus Gu"),
+        ("diana", "Diana Qiu"),
+        ("ethan", "Ethan Luo"),
+        ("flora", "Flora Yin"),
+        ("gavin", "Gavin Hu"),
+        ("hazel", "Hazel Tang"),
+        ("isaac", "Isaac Fan"),
+        ("julia", "Julia Xie"),
+        ("kevin", "Kevin Rao"),
+        ("luna", "Luna Gao"),
+        ("mason", "Mason Ji"),
+        ("nora", "Nora Peng"),
+        ("owen", "Owen Yue"),
+        ("pearl", "Pearl Yang"),
+        ("quentin", "Quentin Shen"),
+        ("rachel", "Rachel Nie"),
+        ("sam", "Sam Wu"),
+        ("tina", "Tina Sun"),
+        ("uma", "Uma Zhen"),
+        ("vincent", "Vincent Liu"),
+        ("wendy", "Wendy Ma"),
+        ("xavier", "Xavier Ren"),
+        ("yara", "Yara Bao"),
+        ("zane", "Zane Fu"),
+        ("amber", "Amber Mo"),
+        ("blake", "Blake Du"),
+        ("celine", "Celine Shao"),
+        ("damon", "Damon Cheng"),
+        ("elsa", "Elsa Yao"),
+        ("fiona", "Fiona Lai"),
+        ("harry", "Harry Zhou"),
+        ("iris", "Iris Deng"),
+        ("jonah", "Jonah Qi"),
+        ("kira", "Kira Song"),
+        ("leo", "Leo Fang"),
+        ("mia", "Mia Qian"),
+        ("noah", "Noah Su"),
+        ("olivia", "Olivia Lin"),
+        ("parker", "Parker Tan"),
+        ("queenie", "Queenie Bai"),
+        ("ryan", "Ryan Cai"),
+        ("sophia", "Sophia Zheng"),
+        ("trent", "Trent Yao"),
+        ("ursula", "Ursula Zhou"),
+        ("violet", "Violet Guo"),
+        ("wyatt", "Wyatt Song"),
+    ]
     genders = ["Male", "Female", "Other", "Prefer not to say"]
     users = {
         slug: UserSeed(
             full_name=full_name,
             gender=genders[index % len(genders)],
-            birthday=f"200{index % 4 + 1}-{index % 9 + 1:02d}-{index % 17 + 10:02d}",
-            bio=f"{full_name} contributes steadily across course and project collaborations.",
-            show_birthday=index % 3 != 0,
-            show_email=index % 4 != 0,
+            birthday=f"200{index % 5}-{(index % 12) + 1:02d}-{(index % 18) + 10:02d}",
+            bio=f"{full_name} participates in study groups, clubs, and mixed-interest collaborations across campus.",
+            show_birthday=index % 4 != 0,
+            show_email=index % 5 != 0,
+            show_bio=True,
         )
-        for index, (slug, full_name) in enumerate(user_names.items())
+        for index, (slug, full_name) in enumerate(ordered_users, start=1)
     }
-    majors = ["AI", "SE", "DS", "HCI"]
-    roles = ["Frontend", "Backend", "Research", "PM"]
-    stacks = [
-        ["Python", "SQL"],
+    user_order = [slug for slug, _ in ordered_users]
+
+    study_majors = ["AI", "SE", "DS", "HCI", "Business", "Math"]
+    study_roles = ["Frontend", "Backend", "Research", "PM", "Data"]
+    study_tracks = ["AI Infra", "Product Analytics", "Agent UX", "Open Source", "Applied Research"]
+    study_stacks = [
+        ["Python", "FastAPI"],
         ["React", "TypeScript"],
         ["Python", "PyTorch"],
-        ["React", "Figma"],
-        ["FastAPI", "SQLite"],
-        ["Python", "Docker"],
+        ["SQL", "Python"],
+        ["Docker", "Go"],
+        ["Figma", "React"],
+        ["Next.js", "TypeScript"],
+        ["Python", "SQL", "Docker"],
     ]
-    user_order = list(users)
+    study_gpas = [2.3, 2.5, 2.7, 2.8, 2.9, 3.0, 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 3.7, 3.8, 3.9, 4.0]
+    study_hours = [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 16]
+
+    badminton_levels = ["Beginner", "Intermediate", "Advanced", "Competitive"]
+    badminton_positions = ["Singles", "Doubles", "Flexible"]
+    run_levels = ["Beginner", "Intermediate", "Advanced", "Competitive"]
+    run_positions = ["Sprinter", "Pacer", "Long Distance", "Flexible"]
+    sports_days = [
+        ["Tue", "Thu"],
+        ["Wed", "Sat"],
+        ["Sat", "Sun"],
+        ["Mon", "Wed", "Fri"],
+        ["Thu", "Sun"],
+        ["Tue", "Sat"],
+    ]
+    stamina_scores = [3.8, 4.4, 4.9, 5.3, 5.8, 6.2, 6.7, 7.1, 7.6, 8.0, 8.5, 9.0]
+    sports_hours = [2, 3, 4, 5, 6, 7, 8]
+
+    board_genres = ["Strategy", "Party", "Co-op", "Deduction", "Campaign"]
+    board_styles = ["Competitive", "Casual", "Host", "Learner"]
+    board_types = [
+        ["Euro", "Puzzle"],
+        ["Co-op", "Campaign"],
+        ["Party", "Social Deduction"],
+        ["Strategy", "Euro"],
+        ["Card Drafting", "Co-op"],
+    ]
+    music_genres = ["Indie", "Rock", "Pop", "Jazz", "Electronic"]
+    music_styles = ["Performer", "Composer", "Producer", "Listener"]
+    music_instruments = [
+        ["Guitar", "Vocals"],
+        ["Keys", "DAW"],
+        ["Bass", "Drums"],
+        ["Vocals", "DAW"],
+        ["Guitar", "Keys"],
+    ]
+    event_frequencies = ["Weekly", "Biweekly", "Monthly"]
+    entertainment_budgets = [1, 2, 2, 3, 3, 4, 5]
+    social_energy_scores = [3.5, 4.2, 4.8, 5.4, 6.1, 6.7, 7.3, 7.9, 8.5, 9.1]
+
+    def range_rule(tag_name: str, min_value, max_value) -> TeamRequirementRule:
+        return TeamRequirementRule(tag_name=tag_name, expected_value={"min": min_value, "max": max_value})
+
+    def _rule_bounds(expected_value: Any) -> tuple[Optional[float], Optional[float]] | None:
+        if hasattr(expected_value, "min") and hasattr(expected_value, "max"):
+            min_value = getattr(expected_value, "min")
+            max_value = getattr(expected_value, "max")
+            return (
+                None if min_value is None else float(min_value),
+                None if max_value is None else float(max_value),
+            )
+        if isinstance(expected_value, dict) and {"min", "max"} & set(expected_value):
+            min_value = expected_value.get("min")
+            max_value = expected_value.get("max")
+            return (
+                None if min_value is None else float(min_value),
+                None if max_value is None else float(max_value),
+            )
+        return None
+
+    def _value_satisfies_rule(value: Any, expected_value: Any) -> bool:
+        bounds = _rule_bounds(expected_value)
+        if bounds is not None:
+            if isinstance(value, bool):
+                return False
+            if not isinstance(value, (int, float)):
+                return False
+            min_value, max_value = bounds
+            numeric_value = float(value)
+            if min_value is not None and numeric_value < min_value:
+                return False
+            if max_value is not None and numeric_value > max_value:
+                return False
+            return True
+        if isinstance(expected_value, list):
+            if not isinstance(value, list):
+                return False
+            return bool(set(str(item) for item in expected_value) & set(str(item) for item in value))
+        return value == expected_value
+
+    def _normalize_value_to_rule(
+        current_value: Any,
+        base_value: Any,
+        expected_value: Any,
+        tag_type_by_name: dict[str, TagDataType],
+        tag_name: str,
+    ) -> Any:
+        if _value_satisfies_rule(current_value, expected_value):
+            return current_value
+        if _value_satisfies_rule(base_value, expected_value):
+            return base_value
+
+        bounds = _rule_bounds(expected_value)
+        if bounds is not None:
+            min_value, max_value = bounds
+            tag_type = tag_type_by_name.get(tag_name)
+            if tag_type == TagDataType.INTEGER:
+                if min_value is not None and max_value is not None:
+                    return int(round((min_value + max_value) / 2))
+                if min_value is not None:
+                    return int(round(min_value))
+                if max_value is not None:
+                    return int(round(max_value))
+                return 0
+            if min_value is not None and max_value is not None:
+                return round((min_value + max_value) / 2.0, 1)
+            if min_value is not None:
+                return round(min_value, 1)
+            if max_value is not None:
+                return round(max_value, 1)
+            return 0.0
+
+        if isinstance(expected_value, list):
+            if isinstance(base_value, list) and _value_satisfies_rule(base_value, expected_value):
+                return base_value
+            return [str(expected_value[0])] if expected_value else []
+
+        return expected_value
+
+    def enforce_team_member_rule_consistency(
+        circle_user_tags: Dict[str, Dict[str, Any]],
+        circle_base_user_tags: Dict[str, Dict[str, Any]],
+        circle_tags: List[TagSeed],
+        circle_teams: List[TeamSeed],
+        circle_invitations: List[InvitationSeed],
+    ) -> None:
+        tag_type_by_name = {tag.name: tag.data_type for tag in circle_tags}
+        team_member_slugs: Dict[str, Set[str]] = {
+            team_seed.slug: set(team_seed.members) for team_seed in circle_teams
+        }
+
+        for invitation_seed in circle_invitations:
+            if invitation_seed.status != InvitationStatus.ACCEPTED:
+                continue
+            joined_member_slug = (
+                invitation_seed.invitee
+                if invitation_seed.kind == InvitationKind.INVITE
+                else invitation_seed.inviter
+            )
+            team_member_slugs.setdefault(invitation_seed.team_slug, set()).add(joined_member_slug)
+
+        for team_seed in circle_teams:
+            for member_slug in team_member_slugs.get(team_seed.slug, set()):
+                member_values = circle_user_tags.setdefault(member_slug, {})
+                base_values = circle_base_user_tags.get(member_slug, {})
+
+                for tag_name in team_seed.required_tags:
+                    if tag_name not in member_values and tag_name in base_values:
+                        member_values[tag_name] = base_values[tag_name]
+
+                for rule in team_seed.required_tag_rules:
+                    tag_name = rule.tag_name
+                    base_value = base_values.get(tag_name)
+                    current_value = member_values.get(tag_name)
+                    member_values[tag_name] = _normalize_value_to_rule(
+                        current_value=current_value,
+                        base_value=base_value,
+                        expected_value=rule.expected_value,
+                        tag_type_by_name=tag_type_by_name,
+                        tag_name=tag_name,
+                    )
+
+    def build_member_freedom_override(circle_name: str, values: Dict[str, Any]) -> tuple[str, dict[str, list[str]]]:
+        keywords: list[str] = []
+        for raw_value in values.values():
+            if isinstance(raw_value, list):
+                for item in raw_value:
+                    _add_keyword(keywords, str(item))
+            elif isinstance(raw_value, bool):
+                if raw_value:
+                    _add_keyword(keywords, "leadership")
+            elif isinstance(raw_value, (int, float)):
+                continue
+            else:
+                _add_keyword(keywords, str(raw_value))
+            if len(keywords) >= 5:
+                break
+        if not keywords:
+            keywords = ["community", "teamwork"]
+        text = f"Enjoys {circle_name.lower()} activities and usually shows up with {', '.join(keywords[:3])}."
+        return text, {"keywords": keywords[:5]}
+
+    def build_study_values(global_index: int, local_index: int, circle_index: int) -> Dict[str, Any]:
+        base_values = {
+            "Major": study_majors[(global_index + circle_index) % len(study_majors)],
+            "Preferred Role": study_roles[(global_index * 2 + circle_index) % len(study_roles)],
+            "Tech Stack": study_stacks[(global_index + local_index + circle_index) % len(study_stacks)],
+            "Weekly Hours": study_hours[(global_index + circle_index) % len(study_hours)],
+            "GPA": study_gpas[(global_index + 2 * circle_index) % len(study_gpas)],
+            "Willing To Lead": (global_index + circle_index) % 3 == 0,
+            "Focus Track": study_tracks[(global_index + local_index) % len(study_tracks)],
+        }
+        values = dict(base_values)
+        if (global_index + circle_index) % 4 == 0:
+            values.pop("Willing To Lead")
+        if (global_index + circle_index) % 5 == 0:
+            values.pop("Tech Stack")
+        if (global_index + circle_index) % 6 == 0:
+            values.pop("Weekly Hours")
+        if (global_index + circle_index) % 7 == 0:
+            values.pop("GPA")
+        if (global_index + circle_index) % 8 == 0:
+            values.pop("Focus Track")
+        return base_values, values
+
+    def build_sports_values(global_index: int, local_index: int, circle_index: int, run_mode: bool) -> Dict[str, Any]:
+        levels = run_levels if run_mode else badminton_levels
+        positions = run_positions if run_mode else badminton_positions
+        base_values = {
+            "Sport Level": levels[(global_index + circle_index) % len(levels)],
+            "Preferred Position": positions[(global_index + local_index) % len(positions)],
+            "Available Days": sports_days[(global_index + local_index + circle_index) % len(sports_days)],
+            "Weekly Hours": sports_hours[(global_index + circle_index) % len(sports_hours)],
+            "Stamina Score": stamina_scores[(global_index + 2 * circle_index) % len(stamina_scores)],
+            "Willing To Lead": (global_index + local_index) % 4 == 0,
+            "Injury Concern": (global_index + circle_index) % 5 == 0,
+        }
+        values = dict(base_values)
+        if (global_index + circle_index) % 4 == 0:
+            values.pop("Willing To Lead")
+        if (global_index + circle_index) % 6 == 0:
+            values.pop("Available Days")
+        if (global_index + circle_index) % 7 == 0:
+            values.pop("Weekly Hours")
+        if (global_index + circle_index) % 8 == 0:
+            values.pop("Stamina Score")
+        return base_values, values
+
+    def build_board_game_values(global_index: int, local_index: int, circle_index: int) -> Dict[str, Any]:
+        base_values = {
+            "Favorite Genre": board_genres[(global_index + circle_index) % len(board_genres)],
+            "Play Style": board_styles[(global_index + local_index) % len(board_styles)],
+            "Game Types": board_types[(global_index + local_index + circle_index) % len(board_types)],
+            "Budget Level": entertainment_budgets[(global_index + circle_index) % len(entertainment_budgets)],
+            "Event Frequency": event_frequencies[(global_index + local_index) % len(event_frequencies)],
+            "Night Owl": (global_index + local_index) % 2 == 0,
+            "Social Energy": social_energy_scores[(global_index + circle_index) % len(social_energy_scores)],
+            "Willing To Lead": (global_index + circle_index) % 4 == 0,
+        }
+        values = dict(base_values)
+        if (global_index + circle_index) % 4 == 0:
+            values.pop("Willing To Lead")
+        if (global_index + circle_index) % 5 == 0:
+            values.pop("Budget Level")
+        if (global_index + circle_index) % 6 == 0:
+            values.pop("Social Energy")
+        return base_values, values
+
+    def build_music_values(global_index: int, local_index: int, circle_index: int) -> Dict[str, Any]:
+        base_values = {
+            "Favorite Genre": music_genres[(global_index + circle_index) % len(music_genres)],
+            "Play Style": music_styles[(global_index + local_index) % len(music_styles)],
+            "Instruments": music_instruments[(global_index + local_index + circle_index) % len(music_instruments)],
+            "Budget Level": entertainment_budgets[(global_index + circle_index + 1) % len(entertainment_budgets)],
+            "Event Frequency": event_frequencies[(global_index + local_index + 1) % len(event_frequencies)],
+            "Night Owl": (global_index + local_index) % 2 == 1,
+            "Social Energy": social_energy_scores[(global_index + circle_index + 2) % len(social_energy_scores)],
+            "Willing To Lead": (global_index + circle_index) % 3 == 0,
+        }
+        values = dict(base_values)
+        if (global_index + circle_index) % 4 == 0:
+            values.pop("Willing To Lead")
+        if (global_index + circle_index) % 5 == 0:
+            values.pop("Instruments")
+        if (global_index + circle_index) % 6 == 0:
+            values.pop("Night Owl")
+        return base_values, values
 
     circle_specs = [
-        ("systems_lab", "Systems Lab", "Course", user_order[:8]),
-        ("product_studio", "Product Studio", "Course", user_order[4:13]),
-        ("research_exchange", "Research Exchange", "Interest", user_order[8:16]),
-        ("community_build", "Community Build", "Event", user_order[2:18:2]),
+        ("ai_factory", "AI Factory", "Course", "study", user_order[0:14]),
+        ("research_exchange", "Research Exchange", "Course", "study", user_order[8:22]),
+        ("product_garage", "Product Garage", "Project", "study", user_order[16:30]),
+        ("open_source_sprint", "Open Source Sprint", "Project", "study", user_order[24:38]),
+        ("badminton_club", "Badminton Club", "Sports", "badminton", user_order[6:20]),
+        ("city_run_crew", "City Run Crew", "Sports", "running", user_order[28:42]),
+        ("board_game_night", "Board Game Night", "Entertainment", "board_games", user_order[18:32]),
+        ("indie_music_jam", "Indie Music Jam", "Entertainment", "music", user_order[34:48] + user_order[0:2]),
     ]
+
     circles: List[CircleSeed] = []
-    for index, (slug, name, category, members) in enumerate(circle_specs):
+    for index, (slug, name, category, family, members) in enumerate(circle_specs):
         user_tags: Dict[str, Dict[str, Any]] = {}
         base_user_tags: Dict[str, Dict[str, Any]] = {}
-        for offset, member in enumerate(members):
-            user_index = user_order.index(member)
-            base_values = {
-                "Major": majors[(user_index + index) % len(majors)],
-                "Preferred Role": roles[(user_index + index) % len(roles)],
-                "Tech Stack": stacks[(user_index + offset) % len(stacks)],
-                "Weekly Hours": 6 + ((user_index + index) % 10),
-                "Open To Lead": (user_index + index) % 2 == 0,
-                "Focus Track": ["AI Infra", "Campus Ops", "Data Viz", "Community"][((user_index // 2) + index) % 4],
-            }
-            values = dict(base_values)
-            if (user_index + index) % 3 == 0:
-                values.pop("Open To Lead")
-            if (user_index + index) % 4 == 0:
-                values.pop("Focus Track")
-            if (user_index + index) % 5 == 0:
-                values.pop("Weekly Hours")
-            if (user_index + index) % 6 == 0:
-                values.pop("Tech Stack")
-            if (user_index + index) % 7 == 0:
-                values.pop("Preferred Role")
+        member_freedom_profiles: Dict[str, tuple[str, dict[str, list[str]]]] = {}
+
+        for local_index, member in enumerate(members):
+            global_index = user_order.index(member)
+            if family == "study":
+                base_values, values = build_study_values(global_index, local_index, index)
+            elif family == "badminton":
+                base_values, values = build_sports_values(global_index, local_index, index, run_mode=False)
+            elif family == "running":
+                base_values, values = build_sports_values(global_index, local_index, index, run_mode=True)
+            elif family == "board_games":
+                base_values, values = build_board_game_values(global_index, local_index, index)
+            else:
+                base_values, values = build_music_values(global_index, local_index, index)
+
             base_user_tags[member] = base_values
             user_tags[member] = values
+            member_freedom_profiles[member] = build_member_freedom_override(name, base_values)
 
-        teams = [
-            TeamSeed(
-                slug=f"{slug}_alpha",
-                name=f"{name} Alpha",
-                description=f"{name} core delivery team.",
-                creator=members[0],
-                max_members=4,
-                members=members[: min(3, len(members))],
-                required_tags=["Preferred Role", "Tech Stack"] if index % 2 == 0 else [],
-                required_tag_rules=[] if index % 2 == 0 else [
-                    TeamRequirementRule(
-                        tag_name="Focus Track",
-                        expected_value=base_user_tags[members[0]]["Focus Track"],
-                    ),
-                    TeamRequirementRule(
-                        tag_name="Tech Stack",
-                        expected_value=base_user_tags[members[1]]["Tech Stack"],
-                    ),
-                ],
-            ),
-            TeamSeed(
-                slug=f"{slug}_beta",
-                name=f"{name} Beta",
-                description=f"{name} exploratory team.",
-                creator=members[2],
-                max_members=5,
-                members=members[2:5],
-                required_tags=[],
-                required_tag_rules=[
-                    TeamRequirementRule(
-                        tag_name="Major",
-                        expected_value=base_user_tags[members[2]]["Major"],
-                    ),
-                ],
-            ),
-        ]
-        if index < 2:
-            teams.append(
+        if family == "study":
+            tags = [
+                TagSeed("Major", TagDataType.SINGLE_SELECT, required=True, options=study_majors),
+                TagSeed("Preferred Role", TagDataType.SINGLE_SELECT, options=study_roles),
+                TagSeed("Tech Stack", TagDataType.MULTI_SELECT, options=sorted({item for stack in study_stacks for item in stack}), max_selections=3),
+                TagSeed("Weekly Hours", TagDataType.INTEGER),
+                TagSeed("GPA", TagDataType.FLOAT),
+                TagSeed("Willing To Lead", TagDataType.BOOLEAN),
+                TagSeed("Focus Track", TagDataType.SINGLE_SELECT, options=study_tracks),
+            ]
+            teams = [
                 TeamSeed(
-                    slug=f"{slug}_gamma",
-                    name=f"{name} Gamma",
-                    description=f"{name} overflow team.",
-                    creator=members[-2],
-                    max_members=3,
-                    members=members[-2:],
-                    required_tags=["Major"],
+                    slug=f"{slug}_core_builders",
+                    name=f"{name} Core Builders",
+                    description=f"{name} team focused on shipping dependable deliverables.",
+                    creator=members[0],
+                    max_members=4,
+                    members=members[0:3],
+                    required_tags=[],
+                    required_tag_rules=[
+                        TeamRequirementRule(
+                            tag_name="Major",
+                            expected_value=base_user_tags[members[0]]["Major"],
+                        ),
+                        TeamRequirementRule(
+                            tag_name="Tech Stack",
+                            expected_value=base_user_tags[members[0]]["Tech Stack"],
+                        ),
+                        range_rule("Weekly Hours", 6, 12),
+                        range_rule("GPA", 3.0, 4.0),
+                        TeamRequirementRule(tag_name="Willing To Lead", expected_value=True),
+                    ],
+                ),
+                TeamSeed(
+                    slug=f"{slug}_high_gpa_pod",
+                    name=f"{name} High GPA Pod",
+                    description=f"{name} team for members with strong academic bandwidth.",
+                    creator=members[3],
+                    max_members=4,
+                    members=members[3:6],
+                    required_tags=[],
+                    required_tag_rules=[
+                        range_rule("GPA", 3.2, 4.0),
+                        range_rule("Weekly Hours", 8, 14),
+                        TeamRequirementRule(tag_name="Focus Track", expected_value=base_user_tags[members[3]]["Focus Track"]),
+                    ],
+                ),
+                TeamSeed(
+                    slug=f"{slug}_stack_bridge",
+                    name=f"{name} Stack Bridge",
+                    description=f"{name} team pairing implementation depth with reliable delivery.",
+                    creator=members[6],
+                    max_members=5,
+                    members=members[6:9],
+                    required_tags=[],
+                    required_tag_rules=[
+                        TeamRequirementRule(tag_name="Preferred Role", expected_value=base_user_tags[members[6]]["Preferred Role"]),
+                        TeamRequirementRule(tag_name="Tech Stack", expected_value=base_user_tags[members[6]]["Tech Stack"]),
+                        range_rule("Weekly Hours", 6, None),
+                    ],
+                ),
+                TeamSeed(
+                    slug=f"{slug}_leadership_loop",
+                    name=f"{name} Leadership Loop",
+                    description=f"{name} team for members willing to coordinate and keep momentum.",
+                    creator=members[9],
+                    max_members=4,
+                    members=members[9:12],
+                    required_tags=[],
+                    required_tag_rules=[
+                        TeamRequirementRule(tag_name="Willing To Lead", expected_value=True),
+                        range_rule("GPA", 3.0, None),
+                    ],
+                ),
+            ]
+        elif family in {"badminton", "running"}:
+            position_options = badminton_positions if family == "badminton" else run_positions
+            tags = [
+                TagSeed("Sport Level", TagDataType.SINGLE_SELECT, required=True, options=badminton_levels if family == "badminton" else run_levels),
+                TagSeed("Preferred Position", TagDataType.SINGLE_SELECT, options=position_options),
+                TagSeed("Available Days", TagDataType.MULTI_SELECT, options=["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"], max_selections=3),
+                TagSeed("Weekly Hours", TagDataType.INTEGER),
+                TagSeed("Stamina Score", TagDataType.FLOAT),
+                TagSeed("Willing To Lead", TagDataType.BOOLEAN),
+                TagSeed("Injury Concern", TagDataType.BOOLEAN),
+            ]
+            teams = [
+                TeamSeed(
+                    slug=f"{slug}_weekly_regulars",
+                    name=f"{name} Weekly Regulars",
+                    description=f"{name} crew for steady attendance and low-drama coordination.",
+                    creator=members[0],
+                    max_members=5,
+                    members=members[0:3],
+                    required_tags=["Sport Level", "Available Days"],
                     required_tag_rules=[],
-                )
-            )
+                ),
+                TeamSeed(
+                    slug=f"{slug}_competitive_lane",
+                    name=f"{name} Competitive Lane",
+                    description=f"{name} squad for members with stronger pace and consistent stamina.",
+                    creator=members[3],
+                    max_members=4,
+                    members=members[3:6],
+                    required_tags=[],
+                    required_tag_rules=[
+                        TeamRequirementRule(tag_name="Preferred Position", expected_value=base_user_tags[members[3]]["Preferred Position"]),
+                        range_rule("Stamina Score", 6.5, 9.5),
+                        range_rule("Weekly Hours", 4, 8),
+                    ],
+                ),
+                TeamSeed(
+                    slug=f"{slug}_weekend_rotation",
+                    name=f"{name} Weekend Rotation",
+                    description=f"{name} group for weekend schedules and moderate practice volume.",
+                    creator=members[6],
+                    max_members=5,
+                    members=members[6:9],
+                    required_tags=[],
+                    required_tag_rules=[
+                        TeamRequirementRule(tag_name="Available Days", expected_value=["Sat", "Sun"]),
+                        TeamRequirementRule(tag_name="Injury Concern", expected_value=False),
+                        range_rule("Weekly Hours", 2, 6),
+                    ],
+                ),
+                TeamSeed(
+                    slug=f"{slug}_host_crew",
+                    name=f"{name} Host Crew",
+                    description=f"{name} organizer group for people willing to coordinate sessions.",
+                    creator=members[9],
+                    max_members=4,
+                    members=members[9:12],
+                    required_tags=[],
+                    required_tag_rules=[
+                        TeamRequirementRule(tag_name="Willing To Lead", expected_value=True),
+                        range_rule("Stamina Score", 5.0, None),
+                    ],
+                ),
+            ]
+        elif family == "board_games":
+            tags = [
+                TagSeed("Favorite Genre", TagDataType.SINGLE_SELECT, required=True, options=board_genres),
+                TagSeed("Play Style", TagDataType.SINGLE_SELECT, options=board_styles),
+                TagSeed("Game Types", TagDataType.MULTI_SELECT, options=sorted({item for group in board_types for item in group}), max_selections=3),
+                TagSeed("Budget Level", TagDataType.INTEGER),
+                TagSeed("Event Frequency", TagDataType.SINGLE_SELECT, options=event_frequencies),
+                TagSeed("Night Owl", TagDataType.BOOLEAN),
+                TagSeed("Social Energy", TagDataType.FLOAT),
+                TagSeed("Willing To Lead", TagDataType.BOOLEAN),
+            ]
+            teams = [
+                TeamSeed(
+                    slug=f"{slug}_strategy_table",
+                    name=f"{name} Strategy Table",
+                    description=f"{name} table for members who like deeper and longer sessions.",
+                    creator=members[0],
+                    max_members=5,
+                    members=members[0:3],
+                    required_tags=["Favorite Genre", "Game Types"],
+                    required_tag_rules=[],
+                ),
+                TeamSeed(
+                    slug=f"{slug}_host_circle",
+                    name=f"{name} Host Circle",
+                    description=f"{name} group for hosts who can coordinate attendance and teach rules.",
+                    creator=members[3],
+                    max_members=4,
+                    members=members[3:6],
+                    required_tags=[],
+                    required_tag_rules=[
+                        TeamRequirementRule(tag_name="Willing To Lead", expected_value=True),
+                        range_rule("Budget Level", 2, 4),
+                    ],
+                ),
+                TeamSeed(
+                    slug=f"{slug}_night_owl",
+                    name=f"{name} Night Owl",
+                    description=f"{name} group for people who prefer later sessions and high social energy.",
+                    creator=members[6],
+                    max_members=5,
+                    members=members[6:9],
+                    required_tags=[],
+                    required_tag_rules=[
+                        TeamRequirementRule(tag_name="Night Owl", expected_value=True),
+                        range_rule("Social Energy", 6.0, 9.5),
+                    ],
+                ),
+                TeamSeed(
+                    slug=f"{slug}_casual_mix",
+                    name=f"{name} Casual Mix",
+                    description=f"{name} group for consistent but lower-pressure meetups.",
+                    creator=members[9],
+                    max_members=4,
+                    members=members[9:12],
+                    required_tags=[],
+                    required_tag_rules=[
+                        TeamRequirementRule(tag_name="Game Types", expected_value=base_user_tags[members[9]]["Game Types"]),
+                        TeamRequirementRule(tag_name="Event Frequency", expected_value="Weekly"),
+                    ],
+                ),
+            ]
+        else:
+            tags = [
+                TagSeed("Favorite Genre", TagDataType.SINGLE_SELECT, required=True, options=music_genres),
+                TagSeed("Play Style", TagDataType.SINGLE_SELECT, options=music_styles),
+                TagSeed("Instruments", TagDataType.MULTI_SELECT, options=sorted({item for group in music_instruments for item in group}), max_selections=3),
+                TagSeed("Budget Level", TagDataType.INTEGER),
+                TagSeed("Event Frequency", TagDataType.SINGLE_SELECT, options=event_frequencies),
+                TagSeed("Night Owl", TagDataType.BOOLEAN),
+                TagSeed("Social Energy", TagDataType.FLOAT),
+                TagSeed("Willing To Lead", TagDataType.BOOLEAN),
+            ]
+            teams = [
+                TeamSeed(
+                    slug=f"{slug}_jam_session",
+                    name=f"{name} Jam Session",
+                    description=f"{name} group for regular sessions with mixed instruments.",
+                    creator=members[0],
+                    max_members=5,
+                    members=members[0:3],
+                    required_tags=["Favorite Genre", "Instruments"],
+                    required_tag_rules=[],
+                ),
+                TeamSeed(
+                    slug=f"{slug}_producer_corner",
+                    name=f"{name} Producer Corner",
+                    description=f"{name} crew for arranging, producing, and iterative recording work.",
+                    creator=members[3],
+                    max_members=4,
+                    members=members[3:6],
+                    required_tags=[],
+                    required_tag_rules=[
+                        TeamRequirementRule(tag_name="Instruments", expected_value=["DAW", "Keys"]),
+                        range_rule("Social Energy", 5.0, 8.5),
+                    ],
+                ),
+                TeamSeed(
+                    slug=f"{slug}_late_night_set",
+                    name=f"{name} Late Night Set",
+                    description=f"{name} team for members who prefer late rehearsals and lighter budgets.",
+                    creator=members[6],
+                    max_members=5,
+                    members=members[6:9],
+                    required_tags=[],
+                    required_tag_rules=[
+                        TeamRequirementRule(tag_name="Night Owl", expected_value=True),
+                        range_rule("Budget Level", 1, 3),
+                    ],
+                ),
+                TeamSeed(
+                    slug=f"{slug}_showcase_band",
+                    name=f"{name} Showcase Band",
+                    description=f"{name} group for members willing to perform and help coordinate the set list.",
+                    creator=members[9],
+                    max_members=4,
+                    members=members[9:12],
+                    required_tags=[],
+                    required_tag_rules=[
+                        TeamRequirementRule(tag_name="Play Style", expected_value=base_user_tags[members[9]]["Play Style"]),
+                        TeamRequirementRule(tag_name="Willing To Lead", expected_value=True),
+                    ],
+                ),
+            ]
 
         invitations = [
             InvitationSeed(teams[0].slug, teams[0].creator, members[-1], InvitationStatus.PENDING),
             InvitationSeed(teams[1].slug, teams[1].creator, members[1], InvitationStatus.REJECTED),
-            InvitationSeed(teams[1].slug, teams[1].creator, members[-2], InvitationStatus.ACCEPTED),
+            InvitationSeed(teams[2].slug, teams[2].creator, members[-2], InvitationStatus.ACCEPTED),
+            InvitationSeed(
+                teams[3].slug,
+                members[-3],
+                teams[3].creator,
+                InvitationStatus.PENDING,
+                kind=InvitationKind.JOIN_REQUEST,
+            ),
         ]
-        if len(members) >= 6:
-            invitations.append(
-                InvitationSeed(
-                    teams[0].slug,
-                    members[-2],
-                    teams[0].creator,
-                    InvitationStatus.PENDING,
-                    kind=InvitationKind.JOIN_REQUEST,
-                )
-            )
+
+        enforce_team_member_rule_consistency(
+            circle_user_tags=user_tags,
+            circle_base_user_tags=base_user_tags,
+            circle_tags=tags,
+            circle_teams=teams,
+            circle_invitations=invitations,
+        )
 
         circles.append(
             CircleSeed(
@@ -528,20 +1049,15 @@ def build_stress_dataset() -> DatasetSeed:
                 category=category,
                 creator=members[0],
                 members=members,
-                tags=[
-                    TagSeed("Major", TagDataType.SINGLE_SELECT, required=True, options=majors),
-                    TagSeed("Preferred Role", TagDataType.SINGLE_SELECT, options=roles),
-                    TagSeed("Tech Stack", TagDataType.MULTI_SELECT, options=sorted({item for stack in stacks for item in stack}), max_selections=3),
-                    TagSeed("Weekly Hours", TagDataType.INTEGER),
-                    TagSeed("Open To Lead", TagDataType.BOOLEAN),
-                    TagSeed("Focus Track", TagDataType.SINGLE_SELECT, options=["AI Infra", "Campus Ops", "Data Viz", "Community"]),
-                ],
+                tags=tags,
                 user_tags=user_tags,
-                freedom_source_tags=base_user_tags,
                 teams=teams,
                 invitations=invitations,
+                freedom_source_tags=base_user_tags,
+                member_freedom_profiles=member_freedom_profiles,
             )
         )
+
     return DatasetSeed(users=users, circles=circles)
 
 
@@ -702,7 +1218,7 @@ def build_stress2_dataset() -> DatasetSeed:
             "Preferred Role": archetype.preferred_role,
             "Tech Stack": archetype.tech_stack,
             "Weekly Hours": archetype.weekly_hours,
-            "Open To Lead": archetype.open_to_lead,
+            "Willing To Lead": archetype.open_to_lead,
             "Focus Track": archetype.focus_track,
         }
         member_freedom_profiles[slug] = (
@@ -727,7 +1243,7 @@ def build_stress2_dataset() -> DatasetSeed:
             values = dict(base_user_tags[member])
             # Keep some sparsity so the frontend and matching pages show varied completeness.
             if (index + offset) % 4 == 0:
-                values.pop("Open To Lead", None)
+                values.pop("Willing To Lead", None)
             if (index + offset) % 5 == 0:
                 values.pop("Weekly Hours", None)
             if (index + offset) % 6 == 0:
@@ -815,7 +1331,7 @@ def build_stress2_dataset() -> DatasetSeed:
                     TagSeed("Preferred Role", TagDataType.SINGLE_SELECT, options=roles),
                     TagSeed("Tech Stack", TagDataType.MULTI_SELECT, options=all_stack_options, max_selections=3),
                     TagSeed("Weekly Hours", TagDataType.INTEGER),
-                    TagSeed("Open To Lead", TagDataType.BOOLEAN),
+                    TagSeed("Willing To Lead", TagDataType.BOOLEAN),
                     TagSeed("Focus Track", TagDataType.SINGLE_SELECT, options=tracks),
                 ],
                 user_tags=circle_user_tags,

@@ -354,6 +354,120 @@ def test_split_invitations_for_management_keeps_join_request_buckets_separate(mo
     assert [item["id"] for item in processed] == [4]
 
 
+def test_team_requirement_mode_helpers_distinguish_required_only_and_match_value(monkeypatch):
+    _, _, _, team_module = load_team_modules(monkeypatch)
+
+    tag_definitions = [
+        {"name": "Preferred Role", "data_type": "single_select"},
+        {"name": "Weekly Hours", "data_type": "integer"},
+        {"name": "Tech Stack", "data_type": "multi_select"},
+    ]
+    requirement_modes = {
+        "Preferred Role": team_module.TEAM_REQUIREMENT_MODE_REQUIRED_ONLY,
+        "Weekly Hours": team_module.TEAM_REQUIREMENT_MODE_MATCH_VALUE,
+        "Tech Stack": team_module.TEAM_REQUIREMENT_MODE_NOT_REQUIRED,
+    }
+    requirement_values = {
+        "Preferred Role": "",
+        "Weekly Hours": "10",
+        "Tech Stack": [],
+    }
+
+    required_tags = team_module.build_team_required_tags_payload(
+        tag_definitions,
+        requirement_modes,
+        requirement_values,
+    )
+    required_rules = team_module.build_team_required_tag_rules_payload(
+        tag_definitions,
+        requirement_modes,
+        requirement_values,
+    )
+
+    assert required_tags == ["Preferred Role", "Weekly Hours"]
+    assert required_rules == [
+        {
+            "tag_name": "Weekly Hours",
+            "expected_value": {"min": 10, "max": 10},
+        }
+    ]
+
+
+def test_build_team_required_tag_rules_payload_uses_open_numeric_ranges(monkeypatch):
+    _, _, _, team_module = load_team_modules(monkeypatch)
+
+    tag_definitions = [
+        {"name": "Weekly Hours", "data_type": "integer"},
+        {"name": "GPA", "data_type": "float"},
+    ]
+    requirement_modes = {
+        "Weekly Hours": team_module.TEAM_REQUIREMENT_MODE_MATCH_VALUE,
+        "GPA": team_module.TEAM_REQUIREMENT_MODE_MATCH_VALUE,
+    }
+    requirement_values = {
+        "Weekly Hours": {"min": "8", "max": ""},
+        "GPA": {"min": "", "max": "3.8"},
+    }
+
+    required_rules = team_module.build_team_required_tag_rules_payload(
+        tag_definitions,
+        requirement_modes,
+        requirement_values,
+    )
+
+    assert required_rules == [
+        {"tag_name": "Weekly Hours", "expected_value": {"min": 8, "max": None}},
+        {"tag_name": "GPA", "expected_value": {"min": None, "max": 3.8}},
+    ]
+
+
+def test_validate_team_requirement_value_skips_required_only_without_match_value(monkeypatch):
+    _, _, _, team_module = load_team_modules(monkeypatch)
+
+    is_valid, error_message = team_module.validate_team_requirement_value(
+        {"name": "Weekly Hours", "data_type": "integer"},
+        team_module.TEAM_REQUIREMENT_MODE_REQUIRED_ONLY,
+        "",
+    )
+
+    assert is_valid is True
+    assert error_message == ""
+
+
+def test_validate_team_requirement_value_rejects_numeric_range_with_min_above_max(monkeypatch):
+    _, _, _, team_module = load_team_modules(monkeypatch)
+
+    is_valid, error_message = team_module.validate_team_requirement_value(
+        {"name": "Weekly Hours", "data_type": "integer"},
+        team_module.TEAM_REQUIREMENT_MODE_MATCH_VALUE,
+        {"min": "12", "max": "8"},
+    )
+
+    assert is_valid is False
+    assert error_message == "Weekly Hours must use a valid range where min is not greater than max."
+
+
+def test_build_required_rules_summary_formats_numeric_range_rules(monkeypatch):
+    _, _, _, team_module = load_team_modules(monkeypatch)
+
+    summary = team_module.build_required_rules_summary(
+        [
+            {"tag_name": "Weekly Hours", "expected_value": {"min": 8, "max": 12}},
+            {"tag_name": "GPA", "expected_value": {"min": None, "max": 3.8}},
+        ]
+    )
+
+    assert summary == "Weekly Hours=[8 ~ 12], GPA=[-inf ~ 3.8]"
+
+
+def test_should_collect_team_requirement_value_only_for_match_value(monkeypatch):
+    _, _, _, team_module = load_team_modules(monkeypatch)
+
+    assert team_module.should_collect_team_requirement_value(team_module.TEAM_REQUIREMENT_MODE_NOT_REQUIRED) is False
+    assert team_module.should_collect_team_requirement_value(team_module.TEAM_REQUIREMENT_MODE_REQUIRED_ONLY) is False
+    assert team_module.should_collect_team_requirement_value(team_module.TEAM_REQUIREMENT_MODE_MATCH_VALUE) is True
+
+
 def test_mock_forbidden_join_request_response_maps_to_403(monkeypatch):
     fake_streamlit, api_module, _, _ = load_team_modules(monkeypatch)
     fake_streamlit.session_state.logged_in = True
