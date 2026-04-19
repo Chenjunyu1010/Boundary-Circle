@@ -19,6 +19,7 @@ import streamlit as st
 from views import circle_detail as circle_detail_page
 from utils.auth import get_current_user, init_session_state, require_auth
 from utils.api import api_client
+from utils.ui import apply_button_usability_style
 
 # Initialize session state
 init_session_state()
@@ -93,6 +94,8 @@ def view_circle_detail(circle_id: int) -> None:
 
 def main() -> None:
     """Main page content for browsing circles and opening detail views."""
+    apply_button_usability_style()
+
     st.title("Circle Hall")
     st.markdown("Discover and join circles that match your interests")
 
@@ -103,7 +106,7 @@ def main() -> None:
         st.session_state.get("circle_hall_focus_detail")
         and st.session_state.get("selected_circle_id") is not None
     ):
-        if st.button("Back to Circle List", key="back_to_circle_list"):
+        if st.button("⬅️ Back to Circle List", key="back_to_circle_list"):
             st.session_state.circle_hall_focus_detail = False
             st.rerun()
         circle_detail_page.main()
@@ -139,7 +142,7 @@ def main() -> None:
     st.markdown("---")
     col1, col2 = st.columns([1, 9])
     with col1:
-        if st.button("Create Circle", type="primary"):
+        if st.button("➕ Create Circle", type="primary"):
             st.session_state.show_create_form = True
 
     if st.session_state.get("show_create_form", False):
@@ -160,9 +163,9 @@ def main() -> None:
 
             col_submit, col_cancel = st.columns(2)
             with col_submit:
-                submit_btn = st.form_submit_button("Create", type="primary")
+                submit_btn = st.form_submit_button("✅ Create", type="primary")
             with col_cancel:
-                cancel_btn = st.form_submit_button("Cancel")
+                cancel_btn = st.form_submit_button("❌ Cancel")
 
             if submit_btn:
                 if not circle_name:
@@ -213,7 +216,7 @@ def main() -> None:
                 st.write(circle.get("description", "No description"))
 
                 if st.button(
-                    "View Details ->",
+                    "🔍 View Details ->",
                     key=f"view_circle_{circle.get('id')}",
                 ):
                     view_circle_detail(circle.get("id"))
@@ -241,7 +244,7 @@ def main() -> None:
                     )
 
                     if st.button(
-                        "View Details ->",
+                        "🔍 View Details ->",
                         key=f"view_circle_{circle.get('id')}",
                     ):
                         view_circle_detail(circle.get("id"))

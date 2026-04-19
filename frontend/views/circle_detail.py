@@ -17,6 +17,7 @@ import streamlit as st
 
 from utils.api import api_client
 from utils.auth import get_current_user, init_session_state, require_auth
+from utils.ui import apply_button_usability_style
 
 
 init_session_state()
@@ -382,7 +383,7 @@ def render_tag_form(tag_definitions: list, circle_id: int):
             else:
                 tag_data[tag_name] = st.text_input(label, key=widget_key)
 
-        submitted = st.form_submit_button("Submit", type="primary")
+        submitted = st.form_submit_button("📤 Submit", type="primary")
         if submitted:
             missing_fields = [
                 tag["name"]
@@ -410,6 +411,8 @@ def render_tag_form(tag_definitions: list, circle_id: int):
 
 def main():
     """Render the circle detail page."""
+    apply_button_usability_style()
+
     circle_id = resolve_circle_id()
     st.session_state.current_circle_id = circle_id
 
@@ -418,7 +421,7 @@ def main():
     circle = fetch_circle_detail(circle_id)
     if not circle:
         st.error("Circle not found")
-        if st.button("Back to Circle Hall", key="back_to_circle_hall_missing_circle"):
+        if st.button("🏠 Back to Circle Hall", key="back_to_circle_hall_missing_circle"):
             go_to_circle_hall()
         return
 
@@ -434,7 +437,7 @@ def main():
     st.markdown(f"**Description:** {circle.get('description', 'No description')}")
 
     if not st.session_state.get("circle_hall_focus_detail"):
-        if st.button("Back to Circle Hall", key=f"back_to_circle_hall_{circle_id}"):
+        if st.button("🏠 Back to Circle Hall", key=f"back_to_circle_hall_{circle_id}"):
             go_to_circle_hall()
 
     st.markdown("---")
@@ -443,8 +446,8 @@ def main():
     with col1:
         if joined:
             st.success("You are a member")
-            st.page_link("pages/team_management.py", label="Go to Team Management")
-            if st.button("Leave Circle", type="secondary"):
+            st.page_link("pages/team_management.py", label="👥 Go to Team Management")
+            if st.button("🚪 Leave Circle", type="secondary"):
                 success, message = leave_circle(circle_id)
                 if success:
                     st.success(message)
@@ -453,7 +456,7 @@ def main():
                     st.error(message)
         else:
             st.warning("You haven't joined this circle yet")
-            if st.button("Join Circle", type="primary"):
+            if st.button("🤝 Join Circle", type="primary"):
                 st.session_state.show_join_form = True
 
     if not joined and st.session_state.get("show_join_form", False):
@@ -469,7 +472,7 @@ def main():
                 else:
                     st.error(message)
 
-            if st.button("Cancel", key="cancel_join"):
+            if st.button("❌ Cancel", key="cancel_join"):
                 st.session_state.show_join_form = False
                 st.rerun()
 
@@ -515,7 +518,7 @@ def main():
                             else:
                                 tag_data[tag_name] = st.text_input(label, key=widget_key)
 
-                        save_my_tags = st.form_submit_button("Save My Tags", type="primary")
+                        save_my_tags = st.form_submit_button("💾 Save My Tags", type="primary")
                         if save_my_tags:
                             missing_fields = [
                                 tag["name"]
@@ -562,7 +565,7 @@ def main():
                         value=saved_profile.get("freedom_tag_text", ""),
                         key=f"freedom_text_{circle_id}",
                     )
-                    save_freedom = st.form_submit_button("Save Profile", type="primary")
+                    save_freedom = st.form_submit_button("💾 Save Profile", type="primary")
                     if save_freedom:
                         success, message = save_freedom_tag_profile(circle_id, freedom_text)
                         if success:
@@ -590,7 +593,7 @@ def main():
                 with col3:
                     member_id = member.get("id") or member.get("user_id")
                     if member_id is not None and st.button(
-                        "View Profile",
+                        "👤 View Profile",
                         key=f"circle_member_profile_{circle_id}_{member_id}",
                     ):
                         open_public_profile(int(member_id))
@@ -615,7 +618,7 @@ def main():
                 with col3:
                     if is_creator and tag.get("id") is not None:
                         if st.button(
-                            "Delete Tag",
+                            "🗑️ Delete Tag",
                             key=f"delete_tag_definition_{circle_id}_{tag.get('id')}",
                         ):
                             success, message = delete_tag_definition(tag["id"])
@@ -660,7 +663,7 @@ def main():
                 key=_admin_tag_form_key(circle_id, "max_selections"),
             )
 
-            create_tag_submit = st.form_submit_button("Create Tag Definition", type="primary")
+            create_tag_submit = st.form_submit_button("➕ Create Tag Definition", type="primary")
             if create_tag_submit:
                 if not new_tag_name.strip():
                     st.error("name is required")
