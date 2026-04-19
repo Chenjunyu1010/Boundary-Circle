@@ -102,10 +102,10 @@ def test_demo_seed_supports_invitation_and_matching_flow(db_session):
 def test_stress_seed_pending_invitation_can_lock_team(db_session):
     seed_dataset(db_session, "stress")
 
-    hazel_headers = login_seed_user("seed_stress_hazel")
+    nora_headers = login_seed_user("seed_stress_nora")
     amir_headers = login_seed_user("seed_stress_amir")
 
-    inbox_response = client.get("/invitations", headers=hazel_headers)
+    inbox_response = client.get("/invitations", headers=nora_headers)
     assert inbox_response.status_code == 200
     inbox = inbox_response.json()
     pending = next(
@@ -116,7 +116,7 @@ def test_stress_seed_pending_invitation_can_lock_team(db_session):
 
     respond_response = client.post(
         f"/invitations/{pending['id']}/respond",
-        headers=hazel_headers,
+        headers=nora_headers,
         json={"accept": True},
     )
     assert respond_response.status_code == 200
@@ -124,24 +124,24 @@ def test_stress_seed_pending_invitation_can_lock_team(db_session):
 
     circles_response = client.get("/circles/", headers=amir_headers)
     assert circles_response.status_code == 200
-    systems_lab = find_by_name(circles_response.json(), "[SEED STRESS] Systems Lab")
+    ai_factory = find_by_name(circles_response.json(), "[SEED STRESS] AI Factory")
 
     teams_response = client.get(
-        f"/circles/{systems_lab['id']}/teams",
+        f"/circles/{ai_factory['id']}/teams",
         headers=amir_headers,
     )
     assert teams_response.status_code == 200
-    alpha_team = find_by_name(teams_response.json(), "[SEED STRESS] Systems Lab Alpha")
-    assert alpha_team["status"] == "Locked"
-    assert alpha_team["current_members"] == 4
+    core_builders = find_by_name(teams_response.json(), "[SEED STRESS] AI Factory Core Builders")
+    assert core_builders["status"] == "Locked"
+    assert core_builders["current_members"] == 4
 
     matching_response = client.get(
-        f"/matching/teams?circle_id={systems_lab['id']}",
-        headers=hazel_headers,
+        f"/matching/teams?circle_id={ai_factory['id']}",
+        headers=nora_headers,
     )
     assert matching_response.status_code == 200
     team_names = [item["team"]["name"] for item in matching_response.json()]
-    assert "[SEED STRESS] Systems Lab Alpha" not in team_names
+    assert "[SEED STRESS] AI Factory Core Builders" not in team_names
 
 
 def test_stress_seed_matching_scores_are_not_uniform(db_session):
@@ -151,17 +151,17 @@ def test_stress_seed_matching_scores_are_not_uniform(db_session):
 
     circles_response = client.get("/circles/", headers=amir_headers)
     assert circles_response.status_code == 200
-    systems_lab = find_by_name(circles_response.json(), "[SEED STRESS] Systems Lab")
+    ai_factory = find_by_name(circles_response.json(), "[SEED STRESS] AI Factory")
 
     teams_response = client.get(
-        f"/circles/{systems_lab['id']}/teams",
+        f"/circles/{ai_factory['id']}/teams",
         headers=amir_headers,
     )
     assert teams_response.status_code == 200
-    alpha_team = find_by_name(teams_response.json(), "[SEED STRESS] Systems Lab Alpha")
+    core_builders = find_by_name(teams_response.json(), "[SEED STRESS] AI Factory Core Builders")
 
     match_response = client.get(
-        f"/matching/users?team_id={alpha_team['id']}",
+        f"/matching/users?team_id={core_builders['id']}",
         headers=amir_headers,
     )
     assert match_response.status_code == 200
@@ -180,17 +180,17 @@ def test_stress_seed_for_amir_has_non_zero_keyword_overlap_candidates(db_session
 
     circles_response = client.get("/circles/", headers=amir_headers)
     assert circles_response.status_code == 200
-    systems_lab = find_by_name(circles_response.json(), "[SEED STRESS] Systems Lab")
+    ai_factory = find_by_name(circles_response.json(), "[SEED STRESS] AI Factory")
 
     teams_response = client.get(
-        f"/circles/{systems_lab['id']}/teams",
+        f"/circles/{ai_factory['id']}/teams",
         headers=amir_headers,
     )
     assert teams_response.status_code == 200
-    alpha_team = find_by_name(teams_response.json(), "[SEED STRESS] Systems Lab Alpha")
+    core_builders = find_by_name(teams_response.json(), "[SEED STRESS] AI Factory Core Builders")
 
     match_response = client.get(
-        f"/matching/users?team_id={alpha_team['id']}",
+        f"/matching/users?team_id={core_builders['id']}",
         headers=amir_headers,
     )
     assert match_response.status_code == 200
@@ -207,34 +207,34 @@ def test_stress_seed_manual_invite_reaches_diana_and_duplicate_is_blocked(db_ses
 
     circles_response = client.get("/circles/", headers=amir_headers)
     assert circles_response.status_code == 200
-    systems_lab = find_by_name(circles_response.json(), "[SEED STRESS] Systems Lab")
+    ai_factory = find_by_name(circles_response.json(), "[SEED STRESS] AI Factory")
 
     teams_response = client.get(
-        f"/circles/{systems_lab['id']}/teams",
+        f"/circles/{ai_factory['id']}/teams",
         headers=amir_headers,
     )
     assert teams_response.status_code == 200
-    alpha_team = find_by_name(teams_response.json(), "[SEED STRESS] Systems Lab Alpha")
+    core_builders = find_by_name(teams_response.json(), "[SEED STRESS] AI Factory Core Builders")
 
     members_response = client.get(
-        f"/circles/{systems_lab['id']}/members",
+        f"/circles/{ai_factory['id']}/members",
         headers=amir_headers,
     )
     assert members_response.status_code == 200
     diana = find_by_username(members_response.json(), "seed_stress_diana")
 
     first_invite_response = client.post(
-        f"/teams/{alpha_team['id']}/invite",
+        f"/teams/{core_builders['id']}/invite",
         headers=amir_headers,
-        json={"user_id": diana["id"], "team_name": alpha_team["name"]},
+        json={"user_id": diana["id"], "team_name": core_builders["name"]},
     )
     assert first_invite_response.status_code == 201
     invitation = first_invite_response.json()
 
     duplicate_invite_response = client.post(
-        f"/teams/{alpha_team['id']}/invite",
+        f"/teams/{core_builders['id']}/invite",
         headers=amir_headers,
-        json={"user_id": diana["id"], "team_name": alpha_team["name"]},
+        json={"user_id": diana["id"], "team_name": core_builders["name"]},
     )
     assert duplicate_invite_response.status_code == 409
     assert duplicate_invite_response.json()["detail"] == "Invitation already pending"
@@ -380,10 +380,10 @@ def test_demo_seed_member_can_leave_team_and_become_candidate_again(db_session):
 def test_stress_seed_locked_team_unlocks_when_member_leaves(db_session):
     seed_dataset(db_session, "stress")
 
-    hazel_headers = login_seed_user("seed_stress_hazel")
+    nora_headers = login_seed_user("seed_stress_nora")
     amir_headers = login_seed_user("seed_stress_amir")
 
-    inbox_response = client.get("/invitations", headers=hazel_headers)
+    inbox_response = client.get("/invitations", headers=nora_headers)
     assert inbox_response.status_code == 200
     pending = next(
         item
@@ -393,7 +393,7 @@ def test_stress_seed_locked_team_unlocks_when_member_leaves(db_session):
 
     accept_response = client.post(
         f"/invitations/{pending['id']}/respond",
-        headers=hazel_headers,
+        headers=nora_headers,
         json={"accept": True},
     )
     assert accept_response.status_code == 200
@@ -401,30 +401,30 @@ def test_stress_seed_locked_team_unlocks_when_member_leaves(db_session):
 
     leave_response = client.delete(
         f"/teams/{pending['team_id']}/leave",
-        headers=hazel_headers,
+        headers=nora_headers,
     )
     assert leave_response.status_code == 204
 
     circles_response = client.get("/circles/", headers=amir_headers)
     assert circles_response.status_code == 200
-    systems_lab = find_by_name(circles_response.json(), "[SEED STRESS] Systems Lab")
+    ai_factory = find_by_name(circles_response.json(), "[SEED STRESS] AI Factory")
 
     teams_response = client.get(
-        f"/circles/{systems_lab['id']}/teams",
+        f"/circles/{ai_factory['id']}/teams",
         headers=amir_headers,
     )
     assert teams_response.status_code == 200
-    alpha_team = find_by_name(teams_response.json(), "[SEED STRESS] Systems Lab Alpha")
-    assert alpha_team["status"] == "Recruiting"
-    assert alpha_team["current_members"] == 3
+    core_builders = find_by_name(teams_response.json(), "[SEED STRESS] AI Factory Core Builders")
+    assert core_builders["status"] == "Recruiting"
+    assert core_builders["current_members"] == 3
 
     matching_response = client.get(
-        f"/matching/teams?circle_id={systems_lab['id']}",
-        headers=hazel_headers,
+        f"/matching/teams?circle_id={ai_factory['id']}",
+        headers=nora_headers,
     )
     assert matching_response.status_code == 200
     team_names = [item["team"]["name"] for item in matching_response.json()]
-    assert "[SEED STRESS] Systems Lab Alpha" in team_names
+    assert "[SEED STRESS] AI Factory Core Builders" in team_names
 
 
 def test_seed_join_request_is_visible_to_creator_and_can_be_approved(db_session):

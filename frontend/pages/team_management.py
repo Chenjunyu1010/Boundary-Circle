@@ -1,4 +1,4 @@
-﻿"""    
+"""    
 Team management page.
 
 Provides team listing, creation, invitation sending, invitation handling,
@@ -211,6 +211,17 @@ def fetch_member_tags(circle_id: int, user_id: int) -> list[dict]:
     except Exception as exc:  # pragma: no cover - defensive
         st.error(f"Error loading member tags: {exc}")
     return []
+
+
+def get_cached_member_tags(
+    tag_cache: dict[int, list[dict]],
+    circle_id: int,
+    user_id: int,
+) -> list[dict]:
+    """Return member tags using a page-local cache to avoid repeated requests."""
+    if user_id not in tag_cache:
+        tag_cache[user_id] = fetch_member_tags(circle_id, user_id)
+    return tag_cache[user_id]
 
 
 def build_match_explanation(match: dict) -> str:
@@ -668,6 +679,7 @@ def render_team_detail() -> None:
         for user_id in team.get("member_ids", []) or []
         if user_id in member_lookup
     ]
+    member_tag_cache: dict[int, list[dict]] = {}
 
     if st.button("\u2B05\uFE0F Back to Team Overview", key=f"back_team_detail_{team.get('id')}"):
         close_team_detail()
@@ -716,7 +728,11 @@ def render_team_detail() -> None:
                     st.markdown(f"**{member.get('username', 'Unknown')}**{suffix}")
                     st.caption(member.get("email", ""))
                     if member_id is not None:
-                        member_tags = fetch_member_tags(circle_id, int(member_id))
+                        member_tags = get_cached_member_tags(
+                            member_tag_cache,
+                            circle_id,
+                            int(member_id),
+                        )
                         if member_tags:
                             formatted_tags = [
                                 f"{tag.get('tag_name', 'Tag')}: {format_member_tag_value(tag)}"
@@ -748,7 +764,11 @@ def render_team_detail() -> None:
                     st.caption(invitee.get("email", ""))
                     invitee_id = invite.get("invitee_id")
                     if invitee_id is not None:
-                        invitee_tags = fetch_member_tags(circle_id, int(invitee_id))
+                        invitee_tags = get_cached_member_tags(
+                            member_tag_cache,
+                            circle_id,
+                            int(invitee_id),
+                        )
                         if invitee_tags:
                             formatted_tags = [
                                 f"{tag.get('tag_name', 'Tag')}: {format_member_tag_value(tag)}"

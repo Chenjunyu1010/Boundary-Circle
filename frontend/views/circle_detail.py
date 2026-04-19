@@ -71,6 +71,17 @@ def fetch_member_tags(circle_id: int, user_id: int) -> list[dict]:
         return []
 
 
+def get_cached_member_tags(
+    tag_cache: dict[int, list[dict]],
+    circle_id: int,
+    user_id: int,
+) -> list[dict]:
+    """Return member tags using a page-local cache to avoid repeated requests."""
+    if user_id not in tag_cache:
+        tag_cache[user_id] = fetch_member_tags(circle_id, user_id)
+    return tag_cache[user_id]
+
+
 def format_member_tag_value(tag: dict) -> str:
     """Render stored tag values into a compact human-readable string."""
     raw_value = tag.get("value", "")
@@ -672,6 +683,7 @@ def main():
     st.markdown("---")
     st.markdown("### Members")
     members = fetch_circle_members(circle_id)
+    member_tag_cache: dict[int, list[dict]] = {}
 
     if members:
         for member in members:
@@ -689,7 +701,7 @@ def main():
                     st.caption(member.get("email", ""))
                     if member_id is not None:
                         tag_summary = build_member_tags_summary(
-                            fetch_member_tags(circle_id, int(member_id))
+                            get_cached_member_tags(member_tag_cache, circle_id, int(member_id))
                         )
                         if tag_summary:
                             st.caption(f"Tags: {tag_summary}")

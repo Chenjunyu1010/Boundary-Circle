@@ -120,7 +120,7 @@ uvicorn src.main:app --reload
 另开一个终端，在仓库根目录执行：
 
 ```bash
-streamlit run frontend/home.py
+streamlit run frontend/Home.py
 ```
 
 前端默认访问后端地址：
@@ -133,7 +133,7 @@ http://127.0.0.1:8000
 
 ```powershell
 $env:API_BASE_URL="http://127.0.0.1:8000"
-streamlit run frontend/home.py
+streamlit run frontend/Home.py
 ```
 
 正常联调建议：

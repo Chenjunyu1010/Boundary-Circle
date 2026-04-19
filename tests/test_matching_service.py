@@ -1,5 +1,10 @@
 from src.models.teams import TeamRequirementRule
-from src.services.matching import describe_matched_rules, rule_matches_user_value
+from src.models.teams import Team, encode_required_tags, encode_required_tag_rules
+from src.services.matching import (
+    describe_matched_rules,
+    get_team_required_tag_names,
+    rule_matches_user_value,
+)
 
 
 def test_rule_matches_user_value_matches_integer_inside_closed_range() -> None:
@@ -44,3 +49,27 @@ def test_describe_matched_rules_uses_actual_numeric_value_for_range_rule() -> No
     matched = describe_matched_rules(rules, {"Budget Level": 2})
 
     assert matched == ["Budget Level=2"]
+
+
+def test_get_team_required_tag_names_unions_presence_only_and_structured_rules() -> None:
+    team = Team(
+        name="Core Team",
+        circle_id=1,
+        creator_id=1,
+        max_members=4,
+        required_tags_json=encode_required_tags(["Preferred Role", "Focus Track"]),
+        required_tag_rules_json=encode_required_tag_rules(
+            [
+                TeamRequirementRule(
+                    tag_name="Weekly Hours",
+                    expected_value={"min": 8, "max": 12},
+                )
+            ]
+        ),
+    )
+
+    assert get_team_required_tag_names(team) == {
+        "Preferred Role",
+        "Focus Track",
+        "Weekly Hours",
+    }

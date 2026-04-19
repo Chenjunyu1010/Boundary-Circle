@@ -108,11 +108,11 @@ def build_team_profile(session: Session, team: Team) -> Set[str]:
 
 
 def get_team_required_tag_names(team: Team) -> Set[str]:
-    """Return team requirement names, preferring structured rules when present."""
+    """Return the union of presence-only and structured team requirement names."""
     structured_rules = decode_required_tag_rules(team.required_tag_rules_json)
-    if structured_rules:
-        return {rule.tag_name for rule in structured_rules}
-    return set(decode_required_tags(team.required_tags_json))
+    required_tag_names = set(decode_required_tags(team.required_tags_json))
+    required_tag_names |= {rule.tag_name for rule in structured_rules}
+    return required_tag_names
 
 
 def rule_matches_user_value(rule: TeamRequirementRule, user_value: Any) -> bool:
