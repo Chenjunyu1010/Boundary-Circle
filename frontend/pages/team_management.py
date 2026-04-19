@@ -21,6 +21,7 @@ if parent_dir not in sys.path:
 
 from utils.api import api_client
 from utils.auth import get_current_user, init_session_state, require_auth
+from utils.ui import apply_button_usability_style
 
 
 init_session_state()
@@ -537,7 +538,7 @@ def render_team_detail() -> None:
     team = get_selected_team(teams)
     if team is None:
         st.warning("Selected team was not found.")
-        if st.button("Back to Team Overview", key="back_missing_team_detail"):
+        if st.button("⬅️ Back to Team Overview", key="back_missing_team_detail"):
             close_team_detail()
         return
 
@@ -556,7 +557,7 @@ def render_team_detail() -> None:
         if user_id in member_lookup
     ]
 
-    if st.button("Back to Team Overview", key=f"back_team_detail_{team.get('id')}"):
+    if st.button("⬅️ Back to Team Overview", key=f"back_team_detail_{team.get('id')}"):
         close_team_detail()
 
     st.title(team.get("name", "Team Detail"))
@@ -602,7 +603,7 @@ def render_team_detail() -> None:
                     st.caption(member.get("email", ""))
                 with action_col:
                     if member_id is not None and st.button(
-                        "View Profile",
+                        "👤 View Profile",
                         key=f"team_member_profile_{team.get('id')}_{member_id}",
                     ):
                         open_public_profile(int(member_id))
@@ -624,7 +625,7 @@ def render_team_detail() -> None:
                 with action_col:
                     invitee_id = invite.get("invitee_id")
                     if invitee_id is not None and st.button(
-                        "View Profile",
+                        "👤 View Profile",
                         key=f"pending_invitee_profile_{team.get('id')}_{invitee_id}",
                     ):
                         open_public_profile(int(invitee_id))
@@ -659,7 +660,7 @@ def render_team_detail() -> None:
             "Invite a circle member",
             options=list(options.keys()),
         )
-        invite_submitted = st.form_submit_button("Send Invitation", type="primary")
+        invite_submitted = st.form_submit_button("✉️ Send Invitation", type="primary")
         if invite_submitted:
             selected_user_id = options[selected_member]
             team_id = team.get("id")
@@ -687,7 +688,7 @@ def render_team_list() -> None:
     circle_id = st.session_state.get("current_circle_id")
     if not circle_id:
         st.warning("Join a circle first to view teams.")
-        if st.button("Go to Circle Hall", key="go_circle_hall_list"):
+        if st.button("🏛️ Go to Circle Hall", key="go_circle_hall_list"):
             st.switch_page("pages/circles.py")
         return
 
@@ -718,7 +719,7 @@ def render_team_list() -> None:
                     st.error(status)
                 st.caption(f"Members: {members}/{max_members}")
             with col_action:
-                if st.button("View Details", key=f"team_list_detail_{team.get('id')}"):
+                if st.button("🔍 View Details", key=f"team_list_detail_{team.get('id')}"):
                     team_id = team.get("id")
                     if team_id is not None:
                         open_team_detail(int(team_id))
@@ -743,7 +744,7 @@ def render_create_team() -> None:
     circle_id = st.session_state.get("current_circle_id")
     if not circle_id:
         st.warning("Join a circle first to create a team.")
-        if st.button("Go to Circle Hall", key="go_circle_hall_create"):
+        if st.button("🏛️ Go to Circle Hall", key="go_circle_hall_create"):
             st.switch_page("pages/circles.py")
         return
 
@@ -813,7 +814,7 @@ def render_create_team() -> None:
             key=f"freedom_requirement_{circle_id}",
         )
 
-        submitted = st.form_submit_button("Create Team", type="primary")
+        submitted = st.form_submit_button("➕ Create Team", type="primary")
 
         if submitted:
             if not team_name.strip():
@@ -886,7 +887,7 @@ def render_my_teams() -> None:
                 st.write(
                     f"Members: {team.get('current_members', 0)}/{team.get('max_members', 0)}"
                 )
-                if st.button("View Details", key=f"my_created_team_detail_{team.get('id')}"):
+                if st.button("🔍 View Details", key=f"my_created_team_detail_{team.get('id')}"):
                     team_id = team.get("id")
                     if team_id is not None:
                         open_team_detail(int(team_id))
@@ -905,7 +906,7 @@ def render_my_teams() -> None:
                 st.write(
                     f"Members: {team.get('current_members', 0)}/{team.get('max_members', 0)}"
                 )
-                if st.button("View Details", key=f"my_joined_team_detail_{team.get('id')}"):
+                if st.button("🔍 View Details", key=f"my_joined_team_detail_{team.get('id')}"):
                     team_id = team.get("id")
                     if team_id is not None:
                         open_team_detail(int(team_id))
@@ -940,7 +941,7 @@ def render_invitation_management() -> None:
                 accept_col, reject_col = st.columns(2)
                 with accept_col:
                     if st.button(
-                        "Accept",
+                        "✅ Accept",
                         key=f"accept_invitation_{invite.get('id')}",
                         type="primary",
                     ):
@@ -955,7 +956,7 @@ def render_invitation_management() -> None:
                         else:
                             st.error(message)
                 with reject_col:
-                    if st.button("Reject", key=f"reject_invitation_{invite.get('id')}"):
+                    if st.button("❌ Reject", key=f"reject_invitation_{invite.get('id')}"):
                         invite_id = invite.get("id")
                         if invite_id is None:
                             st.error("Unable to respond because invitation data is incomplete.")
@@ -993,13 +994,13 @@ def render_invitation_management() -> None:
                 profile_col, approve_col, reject_col = st.columns(3)
                 with profile_col:
                     if requester_id is not None and st.button(
-                        "View Profile",
+                        "👤 View Profile",
                         key=f"view_join_request_profile_{invite.get('id')}",
                     ):
                         open_public_profile(int(requester_id))
                 with approve_col:
                     if st.button(
-                        "Approve",
+                        "✅ Approve",
                         key=f"approve_join_request_{invite.get('id')}",
                         type="primary",
                     ):
@@ -1014,7 +1015,7 @@ def render_invitation_management() -> None:
                         else:
                             st.error(message)
                 with reject_col:
-                    if st.button("Reject", key=f"reject_join_request_{invite.get('id')}"):
+                    if st.button("❌ Reject", key=f"reject_join_request_{invite.get('id')}"):
                         invite_id = invite.get("id")
                         if invite_id is None:
                             st.error("Unable to respond because request data is incomplete.")
@@ -1097,7 +1098,7 @@ def render_matching_section() -> None:
         matches = get_stored_user_matches(selected_team["id"])
         has_requested_matches = st.session_state.get("matching_requested", False)
 
-        if st.button("Get user recommendations", type="primary"):
+        if st.button("👥 Get user recommendations", type="primary"):
             matches = fetch_matching_users(selected_team["id"])
             has_requested_matches = True
             st.session_state.matching_requested = True
@@ -1138,13 +1139,13 @@ def render_matching_section() -> None:
                         st.caption(build_match_explanation(match))
                     with profile_col:
                         if st.button(
-                            "View Profile",
+                            "👤 View Profile",
                             key=f"matching_profile_{selected_team['id']}_{match['user_id']}",
                         ):
                             open_public_profile(int(match["user_id"]))
                     with invite_col:
                         if st.button(
-                            "Invite to team",
+                            "✉️ Invite to team",
                             key=f"invite_match_{selected_team['id']}_{match['user_id']}",
                         ):
                             success, message = send_invitation(
@@ -1161,7 +1162,7 @@ def render_matching_section() -> None:
     st.subheader("Recommend teams for me")
     st.caption("You can send a join request directly to the team creator from here.")
 
-    if st.button("Find teams for me", key="find_matching_teams", type="primary"):
+    if st.button("🤝 Find teams for me", key="find_matching_teams", type="primary"):
         matches = fetch_matching_teams(circle_id)
         if not matches:
             st.info("No matching teams found yet.")
@@ -1221,6 +1222,8 @@ def render_matching_section() -> None:
 
 def main() -> None:
     """Render the team management page."""
+    apply_button_usability_style()
+
     st.title("Team Management")
     st.markdown("Create teams, invite members, and manage invitations.")
 
@@ -1228,21 +1231,21 @@ def main() -> None:
 
     if not st.session_state.get("current_circle_id"):
         st.warning("Join a circle first to access team management.")
-        if st.button("Go to Circle Hall", key="go_circle_hall_main"):
+        if st.button("🏛️ Go to Circle Hall", key="go_circle_hall_main"):
             go_to_circle_hall()
         return
 
     if not can_access_current_circle(st.session_state["current_circle_id"]):
-        if st.button("Go to Circle Hall", key="go_circle_hall_forbidden"):
+        if st.button("🏛️ Go to Circle Hall", key="go_circle_hall_forbidden"):
             go_to_circle_hall()
         return
 
     nav_col1, nav_col2 = st.columns(2)
     with nav_col1:
-        if st.button("Back to Circle Detail", key="back_to_circle_detail_from_team"):
+        if st.button("🏠 Back to Circle Detail", key="back_to_circle_detail_from_team"):
             go_to_circle_detail()
     with nav_col2:
-        if st.button("Back to Circle Hall", key="back_to_circle_hall_from_team"):
+        if st.button("🏠 Back to Circle Hall", key="back_to_circle_hall_from_team"):
             go_to_circle_hall()
 
     if st.session_state.get("team_management_focus_detail"):

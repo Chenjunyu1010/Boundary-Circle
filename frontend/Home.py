@@ -15,6 +15,7 @@ if parent_dir not in sys.path:
 
 from utils.auth import get_current_user, init_session_state, is_authenticated, logout
 from utils.api import api_client
+from utils.ui import apply_button_usability_style
 
 
 init_session_state()
@@ -79,6 +80,8 @@ def format_account_summary_row(label: str, value: str, visibility: Optional[str]
 
 def main():
     """Main page content."""
+    apply_button_usability_style()
+
     st.title("Boundary Circle")
     st.markdown("Your social circle management platform")
 
@@ -93,9 +96,9 @@ def main():
             st.info("This looks like your first login. Complete your personal profile now, or skip it and return later.")
             prompt_col1, prompt_col2 = st.columns(2)
             with prompt_col1:
-                st.page_link("pages/profile.py", label="Complete Profile")
+                st.page_link("pages/profile.py", label="📝 Complete Profile")
             with prompt_col2:
-                if st.button("Skip for now"):
+                if st.button("⏭️ Skip for now"):
                     response = api_client.post("/profile/me/dismiss-prompt")
                     if response.ok:
                         st.session_state.show_profile_completion_prompt = False
@@ -105,14 +108,14 @@ def main():
         col1, col2, col3 = st.columns(3)
 
         with col1:
-            st.page_link("pages/auth.py", label="Login/Register")
-            st.page_link("pages/circles.py", label="Circle Hall")
+            st.page_link("pages/auth.py", label="🔐 Login/Register")
+            st.page_link("pages/circles.py", label="🌐 Circle Hall")
 
         with col2:
-            st.page_link("pages/profile.py", label="My Profile")
+            st.page_link("pages/profile.py", label="👤 My Profile")
 
         with col3:
-            if st.button("Logout"):
+            if st.button("🚪 Logout"):
                 logout()
                 st.rerun()
 
@@ -124,7 +127,7 @@ def main():
 
     else:
         st.warning("Please login to access all features")
-        st.page_link("pages/auth.py", label="Login / Register")
+        st.page_link("pages/auth.py", label="🔐 Login / Register")
         st.markdown("---")
         st.info("This is the home page. Use the link above to login or register an account.")
 

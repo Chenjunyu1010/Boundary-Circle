@@ -15,6 +15,7 @@ if parent_dir not in sys.path:
     sys.path.insert(0, parent_dir)
 
 from utils.auth import login, register, is_authenticated, init_session_state
+from utils.ui import apply_button_usability_style
 from utils.validation import validate_email, validate_password, validate_username
 
 # Initialize session state
@@ -81,6 +82,8 @@ def handle_register(username: str, email: str, password: str, confirm_password: 
 
 def main():
     """Main page content."""
+    apply_button_usability_style()
+
     st.title("Login / Register")
     st.markdown("Welcome to Boundary Circle")
 
@@ -98,7 +101,7 @@ def main():
             email = st.text_input("Email", placeholder="your@email.com")
             password = st.text_input("Password", type="password")
 
-            submit_login = st.form_submit_button("Login", type="primary")
+            submit_login = st.form_submit_button("🔑 Login", type="primary")
 
             if submit_login:
                 handle_login(email, password)
@@ -115,7 +118,7 @@ def main():
 
             st.caption("Password must be at least 6 characters")
 
-            submit_register = st.form_submit_button("Register", type="primary")
+            submit_register = st.form_submit_button("📝 Register", type="primary")
 
             if submit_register:
                 handle_register(username, email, password, confirm_password)

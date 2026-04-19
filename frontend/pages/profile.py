@@ -109,7 +109,7 @@ def main():
         show_email = st.checkbox("Show email", value=profile.get("show_email", True))
         show_bio = st.checkbox("Show bio", value=profile.get("show_bio", True))
 
-        submitted = st.form_submit_button("Save profile")
+        submitted = st.form_submit_button("💾 Save profile")
 
     if not submitted:
         return
