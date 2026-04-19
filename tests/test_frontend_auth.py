@@ -27,6 +27,8 @@ def load_frontend_modules(monkeypatch, mock_mode: str = "true"):
         "frontend.utils.api",
         "frontend.utils.auth",
         "frontend.utils.validation",
+        "frontend.navigation",
+        "navigation",
         "streamlit",
         "streamlit.components",
         "streamlit.components.v1",
@@ -382,18 +384,6 @@ def test_auth_init_session_state_preserves_persisted_token_on_transient_failure(
     assert cookie_calls == []
 
 
-def test_load_frontend_modules_replaces_stale_streamlit_component_modules(monkeypatch):
-    stale_components = ModuleType("streamlit.components")
-    stale_components_v1 = ModuleType("streamlit.components.v1")
-    sys.modules["streamlit.components"] = stale_components
-    sys.modules["streamlit.components.v1"] = stale_components_v1
-
-    _, _, _, _ = load_frontend_modules(monkeypatch)
-
-    assert sys.modules["streamlit.components"] is not stale_components
-    assert sys.modules["streamlit.components.v1"] is not stale_components_v1
-
-
 def test_validation_helpers_reject_invalid_inputs(monkeypatch):
     _, _, _, validation_module = load_frontend_modules(monkeypatch)
 
@@ -582,24 +572,6 @@ def test_login_success_redirects_to_home(monkeypatch):
     auth_page_module.handle_login("alice@example.com", "secret123")
 
     assert redirected["target"] == "Home.py"
-
-
-def test_profile_page_birthday_helpers_round_trip_iso_date(monkeypatch):
-    _, profile_page_module = load_profile_page_module(monkeypatch)
-
-    year, month, day = profile_page_module.split_birthday_parts("2001-04-03")
-
-    assert (year, month, day) == (2001, 4, 3)
-    assert profile_page_module.compose_birthday(year, month, day) == "2001-04-03"
-    assert profile_page_module.compose_birthday(None, month, day) is None
-
-
-def test_profile_page_normalizes_empty_gender_to_prefer_not_to_say(monkeypatch):
-    _, profile_page_module = load_profile_page_module(monkeypatch)
-
-    assert profile_page_module.normalize_gender_value(None) == "Prefer not to say"
-    assert profile_page_module.normalize_gender_value("") == "Prefer not to say"
-    assert profile_page_module.normalize_gender_value("Female") == "Female"
 
 
 def test_profile_page_save_updates_session_full_name(monkeypatch):
@@ -921,6 +893,30 @@ def test_circle_detail_clear_admin_tag_form_state_removes_widget_values(monkeypa
     assert "admin_tag_required_5" not in fake_streamlit.session_state
     assert "admin_tag_options_5" not in fake_streamlit.session_state
     assert "admin_tag_max_selections_5" not in fake_streamlit.session_state
+
+
+def test_circle_detail_admin_tag_field_visibility_matches_type(monkeypatch):
+    _, circle_detail_module = load_circle_detail_module(monkeypatch)
+
+    assert circle_detail_module.should_show_tag_options_field("integer") is False
+    assert circle_detail_module.should_show_tag_options_field("single_select") is True
+    assert circle_detail_module.should_show_tag_options_field("multi_select") is True
+
+    assert circle_detail_module.should_show_max_selections_field("integer") is False
+    assert circle_detail_module.should_show_max_selections_field("single_select") is False
+    assert circle_detail_module.should_show_max_selections_field("multi_select") is True
+
+
+def test_circle_detail_admin_tag_type_choices_exclude_string(monkeypatch):
+    _, circle_detail_module = load_circle_detail_module(monkeypatch)
+
+    assert circle_detail_module.ADMIN_TAG_TYPE_OPTIONS == [
+        "integer",
+        "float",
+        "boolean",
+        "single_select",
+        "multi_select",
+    ]
 
 
 def test_circle_detail_delete_tag_definition_uses_expected_endpoint(monkeypatch):

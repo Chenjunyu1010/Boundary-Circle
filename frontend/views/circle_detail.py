@@ -22,6 +22,8 @@ from utils.ui import apply_button_usability_style
 
 init_session_state()
 
+ADMIN_TAG_TYPE_OPTIONS = ["integer", "float", "boolean", "single_select", "multi_select"]
+
 
 def fetch_circle_detail(circle_id: int):
     """Fetch circle details from API."""
@@ -202,6 +204,16 @@ def clear_admin_tag_form_state(circle_id: int) -> None:
     """Clear admin tag form widget state after a successful create."""
     for field_name in ["name", "type", "required", "options", "max_selections"]:
         st.session_state.pop(_admin_tag_form_key(circle_id, field_name), None)
+
+
+def should_show_tag_options_field(tag_type: str) -> bool:
+    """Return whether admin tag creation should show the options field."""
+    return tag_type in {"single_select", "multi_select"}
+
+
+def should_show_max_selections_field(tag_type: str) -> bool:
+    """Return whether admin tag creation should show the max selections field."""
+    return tag_type == "multi_select"
 
 
 def resolve_circle_id(query_params=None) -> int:
@@ -581,7 +593,7 @@ def main():
     if members:
         for member in members:
             with st.container(border=True):
-                col1, col2, col3 = st.columns([1, 4, 1])
+                col1, col2, col3 = st.columns([1.5, 4, 1.5])
                 with col1:
                     st.markdown(
                         "<div style='font-size:24px;text-align:center;'>User</div>",
@@ -618,7 +630,7 @@ def main():
                 with col3:
                     if is_creator and tag.get("id") is not None:
                         if st.button(
-                            "🗑️ Delete Tag",
+                            "Delete",
                             key=f"delete_tag_definition_{circle_id}_{tag.get('id')}",
                         ):
                             success, message = delete_tag_definition(tag["id"])
@@ -633,35 +645,40 @@ def main():
     if is_creator:
         st.markdown("---")
         st.markdown("### Admin Tag Management")
+        st.markdown("#### Add New Tag Definition")
+        new_tag_type = st.selectbox(
+            "data_type",
+            ADMIN_TAG_TYPE_OPTIONS,
+            key=_admin_tag_form_key(circle_id, "type"),
+        )
         with st.form(f"add_tag_definition_form_{circle_id}"):
-            st.markdown("#### Add New Tag Definition")
             new_tag_name = st.text_input(
                 "name",
                 placeholder="e.g. Major",
                 key=_admin_tag_form_key(circle_id, "name"),
-            )
-            new_tag_type = st.selectbox(
-                "data_type",
-                ["string", "integer", "float", "boolean", "single_select", "multi_select"],
-                key=_admin_tag_form_key(circle_id, "type"),
             )
             new_tag_required = st.checkbox(
                 "required",
                 value=False,
                 key=_admin_tag_form_key(circle_id, "required"),
             )
-            new_tag_options = st.text_input(
-                "options",
-                placeholder='When type is selection-based, input JSON array like ["A", "B"]',
-                key=_admin_tag_form_key(circle_id, "options"),
-            )
-            new_tag_max_selections = st.number_input(
-                "max_selections",
-                min_value=1,
-                step=1,
-                value=1,
-                key=_admin_tag_form_key(circle_id, "max_selections"),
-            )
+            new_tag_options = ""
+            if should_show_tag_options_field(new_tag_type):
+                new_tag_options = st.text_input(
+                    "options",
+                    placeholder='Input JSON array like ["A", "B"]',
+                    key=_admin_tag_form_key(circle_id, "options"),
+                )
+
+            new_tag_max_selections = 1
+            if should_show_max_selections_field(new_tag_type):
+                new_tag_max_selections = st.number_input(
+                    "max_selections",
+                    min_value=1,
+                    step=1,
+                    value=1,
+                    key=_admin_tag_form_key(circle_id, "max_selections"),
+                )
 
             create_tag_submit = st.form_submit_button("➕ Create Tag Definition", type="primary")
             if create_tag_submit:
@@ -687,9 +704,6 @@ def main():
                                 options_payload = None
                         if new_tag_type == "multi_select" and options_payload is not None:
                             max_selections_payload = int(new_tag_max_selections)
-                    elif new_tag_options.strip():
-                        options_payload = new_tag_options.strip()
-
                     if new_tag_type not in {"single_select", "multi_select"} or options_payload is not None:
                         success, message = create_tag_definition(
                             circle_id,

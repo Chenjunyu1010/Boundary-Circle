@@ -438,3 +438,90 @@ def test_build_team_freedom_summary_returns_empty_when_absent(monkeypatch):
     )
 
     assert summary == ""
+
+
+def test_render_team_detail_hides_member_only_sections_for_non_team_member(monkeypatch):
+    """Circle members outside the selected team should not see member-only team detail sections."""
+    fake_streamlit, _, _, team_module = load_team_management_module(monkeypatch)
+
+    warnings: list[str] = []
+    subheaders: list[str] = []
+    fetch_team_invitations_called = {"value": False}
+
+    fake_streamlit.warning = lambda message, *args, **kwargs: warnings.append(message)
+    fake_streamlit.subheader = lambda message, *args, **kwargs: subheaders.append(message)
+    fake_streamlit.columns = lambda spec: tuple(DummyContext() for _ in range(len(spec) if isinstance(spec, list) else spec))
+    fake_streamlit.container = lambda *args, **kwargs: DummyContext()
+    fake_streamlit.button = lambda *args, **kwargs: False
+
+    fake_streamlit.session_state.current_circle_id = 5
+    fake_streamlit.session_state.selected_team_id = 11
+
+    monkeypatch.setattr(team_module, "get_current_user", lambda: {"id": 7, "username": "outsider"})
+    monkeypatch.setattr(
+        team_module,
+        "fetch_teams",
+        lambda circle_id: [
+            {
+                "id": 11,
+                "name": "Core Team",
+                "creator_id": 2,
+                "creator_username": "creator",
+                "description": "Private details",
+                "status": "Recruiting",
+                "current_members": 2,
+                "max_members": 5,
+                "member_ids": [2, 3],
+            }
+        ],
+    )
+    monkeypatch.setattr(
+        team_module,
+        "fetch_circle_members",
+        lambda circle_id: [
+            {"id": 2, "username": "creator", "email": "creator@example.com"},
+            {"id": 3, "username": "member", "email": "member@example.com"},
+            {"id": 7, "username": "outsider", "email": "outsider@example.com"},
+        ],
+    )
+
+    def fake_fetch_team_invitations(team_id: int):
+        fetch_team_invitations_called["value"] = True
+        raise AssertionError("Non-members should not load team invitations.")
+
+    monkeypatch.setattr(team_module, "fetch_team_invitations", fake_fetch_team_invitations)
+
+    team_module.render_team_detail()
+
+    assert fetch_team_invitations_called["value"] is False
+    assert any("join this team" in message.lower() for message in warnings)
+    assert "Members" not in subheaders
+    assert "Invite Members" not in subheaders
+
+
+def test_team_management_main_hides_circle_hall_button_in_normal_state(monkeypatch):
+    """The normal team management page should only show the back-to-circle-detail action."""
+    fake_streamlit, _, _, team_module = load_team_management_module(monkeypatch)
+
+    button_labels: list[str] = []
+
+    fake_streamlit.session_state.current_circle_id = 5
+    fake_streamlit.session_state.team_management_focus_detail = False
+    fake_streamlit.button = lambda label, *args, **kwargs: button_labels.append(label) or False
+    fake_streamlit.tabs = lambda labels: [DummyContext() for _ in labels]
+    fake_streamlit.columns = lambda spec: tuple(
+        DummyContext() for _ in range(len(spec) if isinstance(spec, list) else spec)
+    )
+
+    monkeypatch.setattr(team_module, "require_auth", lambda: None)
+    monkeypatch.setattr(team_module, "can_access_current_circle", lambda circle_id: True)
+    monkeypatch.setattr(team_module, "render_team_list", lambda: None)
+    monkeypatch.setattr(team_module, "render_create_team", lambda: None)
+    monkeypatch.setattr(team_module, "render_my_teams", lambda: None)
+    monkeypatch.setattr(team_module, "render_invitation_management", lambda: None)
+    monkeypatch.setattr(team_module, "render_matching_section", lambda: None)
+
+    team_module.main()
+
+    assert any("Back to Circle Detail" in label for label in button_labels)
+    assert all("Back to Circle Hall" not in label for label in button_labels)

@@ -16,6 +16,7 @@ if parent_dir not in sys.path:
 from utils.auth import get_current_user, init_session_state, is_authenticated, logout
 from utils.api import api_client
 from utils.ui import apply_button_usability_style
+from navigation import register_navigation
 
 
 init_session_state()
@@ -24,6 +25,10 @@ st.set_page_config(
     page_title="Boundary Circle",
     page_icon="BC",
 )
+
+def build_navigation_pages() -> list:
+    """Return the page registry for Streamlit navigation."""
+    return register_navigation(main)
 
 
 def load_profile_summary() -> dict:
@@ -133,4 +138,5 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    navigation = st.navigation(build_navigation_pages())
+    navigation.run()

@@ -387,6 +387,15 @@ def build_team_requirement_widget_key(circle_id: int, tag: dict) -> str:
     return f"team_requirement_{circle_id}_{tag.get('name', 'unknown')}"
 
 
+def can_view_team_member_sections(team: dict, user_id: Optional[int]) -> bool:
+    """Return whether the user can see member-only sections in team detail."""
+    if user_id is None:
+        return False
+    if team.get("creator_id") == user_id:
+        return True
+    return user_id in (team.get("member_ids", []) or [])
+
+
 def send_invitation(team_id: int, user_id: int, team_name: str) -> tuple[bool, str]:
     """Send an invitation to a circle member."""
     try:
@@ -550,7 +559,7 @@ def render_team_detail() -> None:
         for member in circle_members
         if member.get("id") is not None
     }
-    team_invitations = fetch_team_invitations(team["id"])
+    can_view_member_sections = can_view_team_member_sections(team, current_user_id)
     team_members = [
         member_lookup[user_id]
         for user_id in team.get("member_ids", []) or []
@@ -583,6 +592,12 @@ def render_team_detail() -> None:
     if freedom_summary:
         st.caption(f"Freedom requirement: {freedom_summary}")
 
+    if not can_view_member_sections:
+        st.warning("You must join this team before viewing its members or invitations.")
+        return
+
+    team_invitations = fetch_team_invitations(team["id"])
+
     st.markdown("---")
     st.subheader("Members")
     if not team_members:
@@ -597,13 +612,13 @@ def render_team_detail() -> None:
                 if member_id == current_user_id:
                     labels.append("You")
                 suffix = f" ({', '.join(labels)})" if labels else ""
-                info_col, action_col = st.columns([4, 1])
+                info_col, action_col = st.columns([4, 1.4])
                 with info_col:
                     st.markdown(f"**{member.get('username', 'Unknown')}**{suffix}")
                     st.caption(member.get("email", ""))
                 with action_col:
                     if member_id is not None and st.button(
-                        "👤 View Profile",
+                        "Profile",
                         key=f"team_member_profile_{team.get('id')}_{member_id}",
                     ):
                         open_public_profile(int(member_id))
@@ -618,14 +633,14 @@ def render_team_detail() -> None:
             invitee = member_lookup.get(invite.get("invitee_id"), {})
             invitee_label = invitee.get("username") or f"User #{invite.get('invitee_id')}"
             with st.container(border=True):
-                info_col, action_col = st.columns([4, 1])
+                info_col, action_col = st.columns([4, 1.4])
                 with info_col:
                     st.markdown(f"**{invitee_label}**")
                     st.caption(invitee.get("email", ""))
                 with action_col:
                     invitee_id = invite.get("invitee_id")
                     if invitee_id is not None and st.button(
-                        "👤 View Profile",
+                        "Profile",
                         key=f"pending_invitee_profile_{team.get('id')}_{invitee_id}",
                     ):
                         open_public_profile(int(invitee_id))
@@ -1139,13 +1154,13 @@ def render_matching_section() -> None:
                         st.caption(build_match_explanation(match))
                     with profile_col:
                         if st.button(
-                            "👤 View Profile",
+                            "Profile",
                             key=f"matching_profile_{selected_team['id']}_{match['user_id']}",
                         ):
                             open_public_profile(int(match["user_id"]))
                     with invite_col:
                         if st.button(
-                            "✉️ Invite to team",
+                            "Invite",
                             key=f"invite_match_{selected_team['id']}_{match['user_id']}",
                         ):
                             success, message = send_invitation(
@@ -1240,14 +1255,10 @@ def main() -> None:
             go_to_circle_hall()
         return
 
-    nav_col1, nav_col2 = st.columns(2)
+    nav_col1 = st.columns(1)[0]
     with nav_col1:
         if st.button("🏠 Back to Circle Detail", key="back_to_circle_detail_from_team"):
             go_to_circle_detail()
-    with nav_col2:
-        if st.button("🏠 Back to Circle Hall", key="back_to_circle_hall_from_team"):
-            go_to_circle_hall()
-
     if st.session_state.get("team_management_focus_detail"):
         render_team_detail()
         return
