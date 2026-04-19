@@ -42,8 +42,18 @@ def load_frontend_modules(monkeypatch, mock_mode: str = "true"):
     fake_streamlit.balloons = lambda *args, **kwargs: None
     fake_streamlit.rerun = lambda: None
     fake_streamlit.switch_page = lambda *args, **kwargs: None
+    fake_streamlit.context = ModuleType("context")
+    fake_streamlit.context.cookies = {}
+
+    components_module = ModuleType("streamlit.components")
+    components_v1_module = ModuleType("streamlit.components.v1")
+    components_v1_module.html = lambda *args, **kwargs: None
+    components_module.v1 = components_v1_module
+    fake_streamlit.components = components_module
 
     monkeypatch.setitem(sys.modules, "streamlit", fake_streamlit)
+    monkeypatch.setitem(sys.modules, "streamlit.components", components_module)
+    monkeypatch.setitem(sys.modules, "streamlit.components.v1", components_v1_module)
     monkeypatch.setenv("MOCK_MODE", mock_mode)
     monkeypatch.setenv("API_BASE_URL", "http://127.0.0.1:8000")
 
@@ -250,6 +260,58 @@ def test_auth_logout_when_called_clears_authentication_state(monkeypatch):
     assert fake_streamlit.session_state.user_id is None
     assert fake_streamlit.session_state.username is None
     assert fake_streamlit.session_state.email is None
+
+
+def test_auth_init_session_state_restores_user_from_persisted_token(monkeypatch):
+    fake_streamlit, _, auth_module, _ = load_frontend_modules(
+        monkeypatch,
+        mock_mode="false",
+    )
+    fake_streamlit.context.cookies["boundary_circle_access_token"] = "persisted-token"
+
+    class Response:
+        def __init__(self, payload: dict, ok: bool = True):
+            self._payload = payload
+            self.ok = ok
+            self.reason = "OK" if ok else "Unauthorized"
+
+        def json(self):
+            return self._payload
+
+    def fake_get(endpoint, params=None):
+        if endpoint == "/auth/me":
+            return Response(
+                {
+                    "id": 11,
+                    "username": "alice",
+                    "email": "alice@example.com",
+                    "full_name": "Alice Chen",
+                }
+            )
+        if endpoint == "/profile/me":
+            return Response(
+                {
+                    "id": 11,
+                    "username": "alice",
+                    "email": "alice@example.com",
+                    "full_name": "Alice Chen",
+                    "gender": "Female",
+                    "birthday": None,
+                    "bio": "SE student",
+                    "profile_prompt_dismissed": True,
+                }
+            )
+        raise AssertionError(endpoint)
+
+    monkeypatch.setattr(auth_module.api_client, "get", fake_get)
+
+    auth_module.init_session_state()
+
+    assert fake_streamlit.session_state.logged_in is True
+    assert fake_streamlit.session_state.access_token == "persisted-token"
+    assert fake_streamlit.session_state.user_id == 11
+    assert fake_streamlit.session_state.username == "alice"
+    assert fake_streamlit.session_state.email == "alice@example.com"
 
 
 def test_validation_helpers_reject_invalid_inputs(monkeypatch):
