@@ -31,6 +31,11 @@ st.set_page_config(
 )
 
 
+def get_create_circle_button_columns() -> list[int]:
+    """Return the column split used for the create-circle action row."""
+    return [3, 7]
+
+
 def fetch_circles() -> list[dict]:
     """Fetch all circles from API."""
     try:
@@ -140,7 +145,7 @@ def main() -> None:
         circles = [c for c in circles if c.get("category") == category_filter]
 
     st.markdown("---")
-    col1, col2 = st.columns([1, 9])
+    col1, col2 = st.columns(get_create_circle_button_columns())
     with col1:
         if st.button("➕ Create Circle", type="primary"):
             st.session_state.show_create_form = True
@@ -216,7 +221,7 @@ def main() -> None:
                 st.write(circle.get("description", "No description"))
 
                 if st.button(
-                    "🔍 View Details ->",
+                    "Details",
                     key=f"view_circle_{circle.get('id')}",
                 ):
                     view_circle_detail(circle.get("id"))
@@ -244,7 +249,7 @@ def main() -> None:
                     )
 
                     if st.button(
-                        "🔍 View Details ->",
+                        "Details",
                         key=f"view_circle_{circle.get('id')}",
                     ):
                         view_circle_detail(circle.get("id"))

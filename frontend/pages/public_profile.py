@@ -16,6 +16,7 @@ if parent_dir not in sys.path:
 
 from utils.api import api_client
 from utils.auth import require_auth
+from navigation import get_navigation_page
 
 
 def build_avatar_text(username: Optional[str]) -> str:
@@ -108,7 +109,7 @@ def restore_return_context() -> None:
 
 
 def go_back() -> None:
-    return_page = st.session_state.get("public_profile_return_page", "Home.py")
+    return_page = st.session_state.get("public_profile_return_page", get_navigation_page("home"))
     restore_return_context()
     st.switch_page(return_page)
 
@@ -119,12 +120,12 @@ def main() -> None:
     user_id = get_target_user_id()
     if user_id is None:
         st.error("Invalid profile link.")
-        st.page_link("Home.py", label="🏠 Back to Home")
+        st.page_link(get_navigation_page("home"), label="🏠 Back to Home")
         return
 
     profile = load_public_profile(user_id)
     if profile is None:
-        st.page_link("Home.py", label="🏠 Back to Home")
+        st.page_link(get_navigation_page("home"), label="🏠 Back to Home")
         return
 
     st.title(f"{profile.get('username', 'User')}'s Profile")

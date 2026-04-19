@@ -17,6 +17,7 @@ if parent_dir not in sys.path:
 from utils.auth import login, register, is_authenticated, init_session_state
 from utils.ui import apply_button_usability_style
 from utils.validation import validate_email, validate_password, validate_username
+from navigation import get_navigation_page
 
 # Initialize session state
 init_session_state()
@@ -44,7 +45,7 @@ def handle_login(email: str, password: str):
     if success:
         st.balloons()
         st.success(message)
-        st.switch_page("Home.py")
+        st.switch_page(get_navigation_page("home"))
     else:
         st.error(message)
 
@@ -91,7 +92,7 @@ def main():
         from utils.auth import get_current_user
         user = get_current_user()
         st.info(f"You are logged in as: {user.get('username', 'User')}")
-        st.page_link("Home.py", label="Go to Home", icon="🏠")
+        st.page_link(get_navigation_page("home"), label="Go to Home", icon="🏠")
         return
 
     tab_login, tab_register = st.tabs(["Login", "Register"])

@@ -16,6 +16,7 @@ if parent_dir not in sys.path:
 
 from utils.api import api_client
 from utils.auth import require_auth
+from navigation import get_navigation_page
 
 
 GENDER_OPTIONS = ["Male", "Female", "Other", "Prefer not to say"]
@@ -132,7 +133,7 @@ def main():
         st.session_state.full_name = updated_profile.get("full_name")
         st.session_state.show_profile_completion_prompt = False
         st.success("Profile updated.")
-        st.switch_page("Home.py")
+        st.switch_page(get_navigation_page("home"))
         return
 
     detail = getattr(response, "reason", "Unknown error")
