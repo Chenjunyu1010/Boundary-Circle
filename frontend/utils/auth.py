@@ -6,6 +6,7 @@ Provides session management and authentication state handling.
 
 import streamlit as st
 import logging
+from typing import Optional
 
 from .api import api_client
 
@@ -24,7 +25,7 @@ def _clear_auth_session() -> None:
     st.session_state.show_profile_completion_prompt = False
 
 
-def _sync_auth_cookie(access_token: str | None) -> None:
+def _sync_auth_cookie(access_token: Optional[str]) -> None:
     try:
         from streamlit.components.v1 import html
     except Exception:
@@ -52,7 +53,7 @@ def _sync_auth_cookie(access_token: str | None) -> None:
     )
 
 
-def _get_persisted_access_token() -> str | None:
+def _get_persisted_access_token() -> Optional[str]:
     cookies = getattr(getattr(st, "context", None), "cookies", None)
     if not cookies:
         return None
