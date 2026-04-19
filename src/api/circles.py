@@ -248,3 +248,29 @@ def update_circle_profile(
         freedom_tag_text=membership.freedom_tag_text,
         freedom_tag_profile=decoded_profile,
     )
+
+
+@router.get("/{circle_id}/profile", response_model=CircleProfileRead, status_code=status.HTTP_200_OK)
+def read_circle_profile(
+    circle_id: int,
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+):
+    """Read the authenticated user's saved freedom tag profile in the specified circle."""
+    if current_user.id is None:
+        raise HTTPException(status_code=500, detail="Current user ID missing")
+
+    membership = session.exec(
+        select(CircleMember).where(
+            CircleMember.circle_id == circle_id,
+            CircleMember.user_id == current_user.id,
+        )
+    ).first()
+    if membership is None:
+        raise HTTPException(status_code=403, detail="User must join the circle first")
+
+    decoded_profile = decode_freedom_profile(membership.freedom_tag_profile_json)
+    return CircleProfileRead(
+        freedom_tag_text=membership.freedom_tag_text,
+        freedom_tag_profile=decoded_profile,
+    )

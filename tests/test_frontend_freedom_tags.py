@@ -221,6 +221,55 @@ def test_save_freedom_tag_profile_requires_login(monkeypatch):
     assert "login" in message.lower()
 
 
+def test_fetch_freedom_tag_profile_uses_get_endpoint(monkeypatch):
+    """Frontend should fetch the saved freedom tag profile from the circle profile endpoint."""
+    _, detail_module = load_circle_detail_module(monkeypatch)
+
+    class Response:
+        ok = True
+        reason = "OK"
+
+        def json(self):
+            return {
+                "freedom_tag_text": "Python FastAPI Docker",
+                "freedom_tag_profile": {"keywords": ["Python", "FastAPI", "Docker"]},
+            }
+
+    captured = {}
+
+    def fake_get(endpoint, params=None):
+        captured["endpoint"] = endpoint
+        captured["params"] = params
+        return Response()
+
+    monkeypatch.setattr(detail_module.api_client, "get", fake_get)
+
+    payload = detail_module.fetch_freedom_tag_profile(circle_id=5)
+
+    assert captured["endpoint"] == "/circles/5/profile"
+    assert captured["params"] is None
+    assert payload["freedom_tag_text"] == "Python FastAPI Docker"
+    assert payload["freedom_tag_profile"]["keywords"] == ["Python", "FastAPI", "Docker"]
+
+
+def test_fetch_freedom_tag_profile_falls_back_to_empty(monkeypatch):
+    """Frontend should gracefully fall back when the saved profile cannot be fetched."""
+    _, detail_module = load_circle_detail_module(monkeypatch)
+
+    class Response:
+        ok = False
+        reason = "Forbidden"
+
+        def json(self):
+            return {"detail": "User must join the circle first"}
+
+    monkeypatch.setattr(detail_module.api_client, "get", lambda endpoint, params=None: Response())
+
+    payload = detail_module.fetch_freedom_tag_profile(circle_id=5)
+
+    assert payload == {"freedom_tag_text": "", "freedom_tag_profile": {"keywords": []}}
+
+
 def test_create_team_includes_freedom_requirement_text(monkeypatch):
     """Test that create_team helper includes freedom_requirement_text in API payload."""
     _, _, _, team_module = load_team_management_module(monkeypatch)
@@ -323,3 +372,69 @@ def test_create_team_default_freedom_requirement_text(monkeypatch):
 
     assert success is True
     assert captured["data"]["freedom_requirement_text"] == ""
+
+
+def test_build_match_explanation_prefers_keyword_and_tag_signals(monkeypatch):
+    """Explanation should summarize non-duplicate keyword/final-score signals without calling an LLM."""
+    _, _, _, team_module = load_team_management_module(monkeypatch)
+
+    explanation = team_module.build_match_explanation(
+        {
+            "matched_tags": ["role=backend"],
+            "matched_freedom_keywords": ["Python", "FastAPI"],
+            "final_score": 0.91,
+            "keyword_overlap_score": 0.8,
+        }
+    )
+
+    assert "Python" in explanation
+    assert "FastAPI" in explanation
+    assert "0.91" in explanation
+    assert "Matched tags" not in explanation
+
+
+def test_build_match_explanation_handles_missing_signals(monkeypatch):
+    """Explanation should degrade gracefully when keyword/tag matches are absent."""
+    _, _, _, team_module = load_team_management_module(monkeypatch)
+
+    explanation = team_module.build_match_explanation(
+        {
+            "matched_tags": [],
+            "matched_freedom_keywords": [],
+            "final_score": 0.7,
+            "keyword_overlap_score": 0.0,
+        }
+    )
+
+    assert "Final score" in explanation
+    assert "Keyword overlap" not in explanation
+
+
+def test_build_team_freedom_summary_includes_text_and_keywords(monkeypatch):
+    """Team freedom summary should surface saved free-text requirements and extracted keywords."""
+    _, _, _, team_module = load_team_management_module(monkeypatch)
+
+    summary = team_module.build_team_freedom_summary(
+        {
+            "freedom_requirement_text": "Looking for Python backend teammates who communicate directly.",
+            "freedom_requirement_profile_keywords": ["Python", "backend", "direct communication"],
+        }
+    )
+
+    assert "Looking for Python backend teammates" in summary
+    assert "Python" in summary
+    assert "backend" in summary
+
+
+def test_build_team_freedom_summary_returns_empty_when_absent(monkeypatch):
+    """Team freedom summary should be empty when no free-text requirement exists."""
+    _, _, _, team_module = load_team_management_module(monkeypatch)
+
+    summary = team_module.build_team_freedom_summary(
+        {
+            "freedom_requirement_text": "",
+            "freedom_requirement_profile_keywords": [],
+        }
+    )
+
+    assert summary == ""

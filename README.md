@@ -175,6 +175,10 @@ streamlit run frontend/Home.py
 
 The backend creates a local SQLite database file automatically under `data/boundary_circle.db` when needed.
 
+For the full local demo flow, including `.env` setup, LLM API configuration, backend/frontend startup, `stress2` seed usage, test accounts, and recommended end-to-end scenarios, see:
+
+- `00_local-llm-demo-guide.md`
+
 On startup, the app also applies a small SQLite-only compatibility upgrade for known
 missing columns in older local database files. This currently covers:
 
@@ -192,6 +196,7 @@ deterministic sample data:
 ```bash
 python scripts/seed_data.py demo
 python scripts/seed_data.py stress
+python scripts/seed_data.py stress2
 ```
 
 Reset one dataset without touching the other seed set or unrelated local records:
@@ -199,12 +204,14 @@ Reset one dataset without touching the other seed set or unrelated local records
 ```bash
 python scripts/seed_data.py demo --reset
 python scripts/seed_data.py stress --reset
+python scripts/seed_data.py stress2 --reset
 ```
 
 Recommended usage:
 
 - `demo`: smaller, presentation-friendly data for report walkthroughs
 - `stress`: larger, more varied data for matching, invitation, leave-team, and lock/unlock testing
+- `stress2`: the most complete local demo dataset for frontend walkthroughs, LLM-assisted freedom-tag scenarios, and richer matching/invitation cases
 
 ## Tests
 

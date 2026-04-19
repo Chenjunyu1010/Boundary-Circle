@@ -80,3 +80,8 @@ def test_demo_seed_dataset_is_consistent(db_session):
 def test_stress_seed_dataset_is_consistent(db_session):
     seed_dataset(db_session, "stress")
     _seed_datasets_have_internal_consistency(db_session)
+
+
+def test_stress2_seed_dataset_is_consistent(db_session):
+    seed_dataset(db_session, "stress2")
+    _seed_datasets_have_internal_consistency(db_session)

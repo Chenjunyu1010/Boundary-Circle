@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 from typing import Any, Optional
 
 import httpx
@@ -155,6 +156,40 @@ def _normalize_keywords(keywords: list[str]) -> dict[str, list[str]]:
     return {"keywords": deduped}
 
 
+_ASCII_TOKEN_PATTERN = re.compile(r"[A-Za-z][A-Za-z0-9+#.-]{1,31}")
+
+
+def _extract_ascii_keyword_fallback(text: str) -> list[str]:
+    """Salvage a small set of obvious ASCII tech tokens from noisy text.
+
+    This fallback is intentionally conservative:
+    - keep short uppercase tech-like acronyms such as AI, SQL, LLM
+    - ignore ordinary words, capitalized sentence words, and lowercase gibberish
+    """
+    fallback_keywords: list[str] = []
+    seen: set[str] = set()
+    for token in _ASCII_TOKEN_PATTERN.findall(text):
+        normalized = token.strip()
+        if not normalized:
+            continue
+        uppercase_letters = [ch for ch in normalized if ch.isupper()]
+        lowercase_letters = [ch for ch in normalized if ch.islower()]
+        if lowercase_letters:
+            continue
+        if len(uppercase_letters) < 2:
+            continue
+        if len(normalized) > 8:
+            continue
+        lowered = normalized.lower()
+        if lowered in seen:
+            continue
+        seen.add(lowered)
+        fallback_keywords.append(normalized)
+        if len(fallback_keywords) >= 5:
+            break
+    return fallback_keywords
+
+
 def extract_freedom_profile(
     text: Optional[str],
     extractor: Optional[FreedomProfileExtractor] = None,
@@ -177,21 +212,26 @@ def extract_freedom_profile(
     if extractor is None:
         return {"keywords": []}
 
+    fallback_profile = _normalize_keywords(_extract_ascii_keyword_fallback(text))
+
     try:
         result = extractor.extract_keywords(text)
     except Exception:
-        return {"keywords": []}
+        return fallback_profile
 
     # Validate output structure
     if not isinstance(result, dict):
-        return {"keywords": []}
+        return fallback_profile
 
     keywords = result.get("keywords")
     if not isinstance(keywords, list):
-        return {"keywords": []}
+        return fallback_profile
 
     # Normalize keywords
-    return _normalize_keywords(keywords)
+    normalized = _normalize_keywords(keywords)
+    if normalized["keywords"]:
+        return normalized
+    return fallback_profile
 
 
 def build_freedom_profile_extractor() -> Optional[FreedomProfileExtractor]:
