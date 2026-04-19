@@ -60,6 +60,30 @@ def _get_persisted_access_token() -> Optional[str]:
     return cookies.get(AUTH_COOKIE_NAME)
 
 
+def _restore_session_from_persisted_token(persisted_token: str) -> None:
+    st.session_state.access_token = persisted_token
+
+    try:
+        response = api_client.get("/auth/me")
+    except Exception:
+        logging.exception("Failed to restore user info from persisted token")
+        return
+
+    if response.ok:
+        data = response.json()
+        st.session_state.user_id = data.get("id")
+        st.session_state.username = data.get("username")
+        st.session_state.email = data.get("email")
+        st.session_state.full_name = data.get("full_name")
+        st.session_state.logged_in = True
+        _load_profile_prompt_state()
+        return
+
+    if getattr(response, "status_code", None) in (401, 403):
+        _clear_auth_session()
+        _sync_auth_cookie(None)
+
+
 def init_session_state():
     """Initialize session state variables for authentication."""
     defaults = {
@@ -84,13 +108,7 @@ def init_session_state():
         st.session_state["_auth_restore_attempted"] = True
         persisted_token = _get_persisted_access_token()
         if persisted_token:
-            st.session_state.access_token = persisted_token
-            if _fetch_user_info():
-                st.session_state.logged_in = True
-                _load_profile_prompt_state()
-            else:
-                _clear_auth_session()
-                _sync_auth_cookie(None)
+            _restore_session_from_persisted_token(persisted_token)
 
 
 def is_authenticated() -> bool:
