@@ -6,8 +6,82 @@ Provides session management and authentication state handling.
 
 import streamlit as st
 import logging
+from typing import Optional
 
 from .api import api_client
+
+
+AUTH_COOKIE_NAME = "boundary_circle_access_token"
+AUTH_COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24 * 7
+
+
+def _clear_auth_session() -> None:
+    st.session_state.logged_in = False
+    st.session_state.access_token = None
+    st.session_state.user_id = None
+    st.session_state.username = None
+    st.session_state.email = None
+    st.session_state.full_name = None
+    st.session_state.show_profile_completion_prompt = False
+
+
+def _sync_auth_cookie(access_token: Optional[str]) -> None:
+    try:
+        from streamlit.components.v1 import html
+    except Exception:
+        logging.exception("Failed to import Streamlit components for auth cookie sync")
+        return
+
+    if access_token:
+        cookie_value = (
+            f"{AUTH_COOKIE_NAME}={access_token}; "
+            f"Max-Age={AUTH_COOKIE_MAX_AGE_SECONDS}; Path=/; SameSite=Lax"
+        )
+    else:
+        cookie_value = (
+            f"{AUTH_COOKIE_NAME}=; Max-Age=0; Path=/; SameSite=Lax"
+        )
+
+    html(
+        (
+            "<script>"
+            f"document.cookie = {cookie_value!r};"
+            "</script>"
+        ),
+        height=0,
+        width=0,
+    )
+
+
+def _get_persisted_access_token() -> Optional[str]:
+    cookies = getattr(getattr(st, "context", None), "cookies", None)
+    if not cookies:
+        return None
+    return cookies.get(AUTH_COOKIE_NAME)
+
+
+def _restore_session_from_persisted_token(persisted_token: str) -> None:
+    st.session_state.access_token = persisted_token
+
+    try:
+        response = api_client.get("/auth/me")
+    except Exception:
+        logging.exception("Failed to restore user info from persisted token")
+        return
+
+    if response.ok:
+        data = response.json()
+        st.session_state.user_id = data.get("id")
+        st.session_state.username = data.get("username")
+        st.session_state.email = data.get("email")
+        st.session_state.full_name = data.get("full_name")
+        st.session_state.logged_in = True
+        _load_profile_prompt_state()
+        return
+
+    if getattr(response, "status_code", None) in (401, 403):
+        _clear_auth_session()
+        _sync_auth_cookie(None)
 
 
 def init_session_state():
@@ -20,10 +94,21 @@ def init_session_state():
         "email": None,
         "full_name": None,
         "show_profile_completion_prompt": False,
+        "_auth_restore_attempted": False,
     }
     for key, value in defaults.items():
         if key not in st.session_state:
             st.session_state[key] = value
+
+    if (
+        not st.session_state.get("_auth_restore_attempted")
+        and not st.session_state.get("logged_in")
+        and not st.session_state.get("access_token")
+    ):
+        st.session_state["_auth_restore_attempted"] = True
+        persisted_token = _get_persisted_access_token()
+        if persisted_token:
+            _restore_session_from_persisted_token(persisted_token)
 
 
 def is_authenticated() -> bool:
@@ -100,14 +185,11 @@ def login(email: str, password: str) -> tuple[bool, str]:
             access_token = data.get("access_token")
             if not access_token:
                 # Treat missing or empty access token as a login failure
-                st.session_state.access_token = None
-                st.session_state.logged_in = False
-                st.session_state.user_id = None
-                st.session_state.username = None
-                st.session_state.email = None
+                _clear_auth_session()
                 return False, "Login failed: invalid authentication response from server."
 
             st.session_state.access_token = access_token
+            _sync_auth_cookie(access_token)
 
             if api_client.mock_mode:
                 user = data.get("user", {})
@@ -118,12 +200,8 @@ def login(email: str, password: str) -> tuple[bool, str]:
                 st.session_state.logged_in = True
             else:
                 if not _fetch_user_info():
-                    st.session_state.access_token = None
-                    st.session_state.logged_in = False
-                    st.session_state.user_id = None
-                    st.session_state.username = None
-                    st.session_state.email = None
-                    st.session_state.full_name = None
+                    _clear_auth_session()
+                    _sync_auth_cookie(None)
                     return False, "Login failed: unable to load user profile."
                 st.session_state.logged_in = True
                 _load_profile_prompt_state()
@@ -167,13 +245,8 @@ def register(username: str, email: str, password: str) -> tuple[bool, str]:
 
 def logout():
     """Log out current user and clear session state."""
-    st.session_state.logged_in = False
-    st.session_state.access_token = None
-    st.session_state.user_id = None
-    st.session_state.username = None
-    st.session_state.email = None
-    st.session_state.full_name = None
-    st.session_state.show_profile_completion_prompt = False
+    _clear_auth_session()
+    _sync_auth_cookie(None)
 
 
 def require_auth():

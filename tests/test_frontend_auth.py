@@ -28,6 +28,8 @@ def load_frontend_modules(monkeypatch, mock_mode: str = "true"):
         "frontend.utils.auth",
         "frontend.utils.validation",
         "streamlit",
+        "streamlit.components",
+        "streamlit.components.v1",
     ]:
         sys.modules.pop(name, None)
 
@@ -42,8 +44,18 @@ def load_frontend_modules(monkeypatch, mock_mode: str = "true"):
     fake_streamlit.balloons = lambda *args, **kwargs: None
     fake_streamlit.rerun = lambda: None
     fake_streamlit.switch_page = lambda *args, **kwargs: None
+    fake_streamlit.context = ModuleType("context")
+    fake_streamlit.context.cookies = {}
+
+    components_module = ModuleType("streamlit.components")
+    components_v1_module = ModuleType("streamlit.components.v1")
+    components_v1_module.html = lambda *args, **kwargs: None
+    components_module.v1 = components_v1_module
+    fake_streamlit.components = components_module
 
     monkeypatch.setitem(sys.modules, "streamlit", fake_streamlit)
+    monkeypatch.setitem(sys.modules, "streamlit.components", components_module)
+    monkeypatch.setitem(sys.modules, "streamlit.components.v1", components_v1_module)
     monkeypatch.setenv("MOCK_MODE", mock_mode)
     monkeypatch.setenv("API_BASE_URL", "http://127.0.0.1:8000")
 
@@ -250,6 +262,136 @@ def test_auth_logout_when_called_clears_authentication_state(monkeypatch):
     assert fake_streamlit.session_state.user_id is None
     assert fake_streamlit.session_state.username is None
     assert fake_streamlit.session_state.email is None
+
+
+def test_auth_init_session_state_restores_user_from_persisted_token(monkeypatch):
+    fake_streamlit, _, auth_module, _ = load_frontend_modules(
+        monkeypatch,
+        mock_mode="false",
+    )
+    fake_streamlit.context.cookies["boundary_circle_access_token"] = "persisted-token"
+
+    class Response:
+        def __init__(self, payload: dict, ok: bool = True):
+            self._payload = payload
+            self.ok = ok
+            self.reason = "OK" if ok else "Unauthorized"
+
+        def json(self):
+            return self._payload
+
+    def fake_get(endpoint, params=None):
+        if endpoint == "/auth/me":
+            return Response(
+                {
+                    "id": 11,
+                    "username": "alice",
+                    "email": "alice@example.com",
+                    "full_name": "Alice Chen",
+                }
+            )
+        if endpoint == "/profile/me":
+            return Response(
+                {
+                    "id": 11,
+                    "username": "alice",
+                    "email": "alice@example.com",
+                    "full_name": "Alice Chen",
+                    "gender": "Female",
+                    "birthday": None,
+                    "bio": "SE student",
+                    "profile_prompt_dismissed": True,
+                }
+            )
+        raise AssertionError(endpoint)
+
+    monkeypatch.setattr(auth_module.api_client, "get", fake_get)
+
+    auth_module.init_session_state()
+
+    assert fake_streamlit.session_state.logged_in is True
+    assert fake_streamlit.session_state.access_token == "persisted-token"
+    assert fake_streamlit.session_state.user_id == 11
+    assert fake_streamlit.session_state.username == "alice"
+    assert fake_streamlit.session_state.email == "alice@example.com"
+
+
+def test_auth_init_session_state_clears_invalid_persisted_token(monkeypatch):
+    fake_streamlit, _, auth_module, _ = load_frontend_modules(
+        monkeypatch,
+        mock_mode="false",
+    )
+    cookie_calls = []
+    fake_streamlit.context.cookies["boundary_circle_access_token"] = "stale-token"
+
+    class Response:
+        def __init__(self, payload: dict, ok: bool = True, reason: str = "OK", status_code: int = 200):
+            self._payload = payload
+            self.ok = ok
+            self.reason = reason
+            self.status_code = status_code
+
+        def json(self):
+            return self._payload
+
+    def fake_get(endpoint, params=None):
+        if endpoint == "/auth/me":
+            return Response({}, ok=False, reason="Unauthorized", status_code=401)
+        if endpoint == "/profile/me":
+            raise AssertionError("/profile/me should not be called after auth rejection")
+        raise AssertionError(endpoint)
+
+    monkeypatch.setattr(auth_module.api_client, "get", fake_get)
+    monkeypatch.setattr(auth_module, "_sync_auth_cookie", lambda access_token: cookie_calls.append(access_token))
+
+    auth_module.init_session_state()
+
+    assert auth_module.is_authenticated() is False
+    assert fake_streamlit.session_state.logged_in is False
+    assert fake_streamlit.session_state.access_token is None
+    assert fake_streamlit.session_state.user_id is None
+    assert fake_streamlit.session_state.username is None
+    assert fake_streamlit.session_state.email is None
+    assert cookie_calls == [None]
+
+
+def test_auth_init_session_state_preserves_persisted_token_on_transient_failure(monkeypatch):
+    fake_streamlit, _, auth_module, _ = load_frontend_modules(
+        monkeypatch,
+        mock_mode="false",
+    )
+    cookie_calls = []
+    fake_streamlit.context.cookies["boundary_circle_access_token"] = "persisted-token"
+
+    def fake_get(endpoint, params=None):
+        if endpoint == "/auth/me":
+            raise RuntimeError("temporary network error")
+        raise AssertionError(endpoint)
+
+    monkeypatch.setattr(auth_module.api_client, "get", fake_get)
+    monkeypatch.setattr(auth_module, "_sync_auth_cookie", lambda access_token: cookie_calls.append(access_token))
+
+    auth_module.init_session_state()
+
+    assert auth_module.is_authenticated() is False
+    assert fake_streamlit.session_state.logged_in is False
+    assert fake_streamlit.session_state.access_token == "persisted-token"
+    assert fake_streamlit.session_state.user_id is None
+    assert fake_streamlit.session_state.username is None
+    assert fake_streamlit.session_state.email is None
+    assert cookie_calls == []
+
+
+def test_load_frontend_modules_replaces_stale_streamlit_component_modules(monkeypatch):
+    stale_components = ModuleType("streamlit.components")
+    stale_components_v1 = ModuleType("streamlit.components.v1")
+    sys.modules["streamlit.components"] = stale_components
+    sys.modules["streamlit.components.v1"] = stale_components_v1
+
+    _, _, _, _ = load_frontend_modules(monkeypatch)
+
+    assert sys.modules["streamlit.components"] is not stale_components
+    assert sys.modules["streamlit.components.v1"] is not stale_components_v1
 
 
 def test_validation_helpers_reject_invalid_inputs(monkeypatch):
