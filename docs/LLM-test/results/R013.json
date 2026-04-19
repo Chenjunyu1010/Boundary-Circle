@@ -1,0 +1,31 @@
+{
+  "run_id": "R013",
+  "sample_id": "S004",
+  "sample_name": "zh_negation_mixed",
+  "language": "zh",
+  "provider": "openai_compatible",
+  "model": "qwen3-coder-next",
+  "base_url": "https://coding.dashscope.aliyuncs.com/v1",
+  "status": "PARTIAL",
+  "input": "鎴戜細 Python 鍜?SQL锛屼絾涓嶅枩娆㈠墠绔紝涔熶笉鎯冲仛绾繍钀ュ伐浣溿€?",
+  "expected": [
+    "Python",
+    "SQL"
+  ],
+  "actual": [
+    "Python",
+    "SQL",
+    "涓嶅枩娆㈠墠绔?",
+    "涓嶆兂鍋氱函杩愯惀宸ヤ綔"
+  ],
+  "matched_expected": [
+    "python",
+    "sql"
+  ],
+  "metrics": {
+    "precision": 0.5,
+    "recall": 1.0
+  },
+  "notes": "Chinese negation sample. Corpus input was corrupted during this run, so this result should not be used as a clean accuracy reference.",
+  "timestamp_utc": "2026-04-18T17:08:44.293610+00:00"
+}

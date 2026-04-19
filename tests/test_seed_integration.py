@@ -168,6 +168,9 @@ def test_stress_seed_matching_scores_are_not_uniform(db_session):
     matches = match_response.json()
     assert matches
     assert any(item["coverage_score"] < 1.0 or item["jaccard_score"] < 1.0 for item in matches)
+    assert all("freedom_score" in item for item in matches)
+    assert all("matched_freedom_keywords" in item for item in matches)
+    assert all(item["freedom_score"] >= 0.0 for item in matches)
 
 
 def test_stress_seed_manual_invite_reaches_diana_and_duplicate_is_blocked(db_session):

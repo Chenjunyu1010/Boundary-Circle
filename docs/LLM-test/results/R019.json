@@ -1,0 +1,29 @@
+{
+  "run_id": "R019",
+  "sample_id": "S002",
+  "sample_name": "en_negation_short",
+  "language": "en",
+  "provider": "openai_compatible",
+  "model": "qwen3-coder-next",
+  "base_url": "https://coding.dashscope.aliyuncs.com/v1",
+  "status": "PASS",
+  "input": "I know Python and SQL, but I do not like frontend.",
+  "expected": [
+    "Python",
+    "SQL"
+  ],
+  "actual": [
+    "Python",
+    "SQL"
+  ],
+  "matched_expected": [
+    "python",
+    "sql"
+  ],
+  "metrics": {
+    "precision": 1.0,
+    "recall": 1.0
+  },
+  "notes": "Negation should exclude disliked items.",
+  "timestamp_utc": "2026-04-18T17:22:05.885797+00:00"
+}

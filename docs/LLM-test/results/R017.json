@@ -1,0 +1,38 @@
+{
+  "run_id": "R017",
+  "sample_id": "S001",
+  "sample_name": "en_backend",
+  "language": "en",
+  "provider": "openai_compatible",
+  "model": "qwen3-coder-next",
+  "base_url": "https://coding.dashscope.aliyuncs.com/v1",
+  "status": "PASS",
+  "input": "I enjoy Python, FastAPI, backend systems, distributed systems, and API design.",
+  "expected": [
+    "Python",
+    "FastAPI",
+    "backend systems",
+    "distributed systems",
+    "API design"
+  ],
+  "actual": [
+    "Python",
+    "FastAPI",
+    "backend systems",
+    "distributed systems",
+    "API design"
+  ],
+  "matched_expected": [
+    "api design",
+    "backend systems",
+    "distributed systems",
+    "fastapi",
+    "python"
+  ],
+  "metrics": {
+    "precision": 1.0,
+    "recall": 1.0
+  },
+  "notes": "English technical baseline.",
+  "timestamp_utc": "2026-04-18T17:16:16.534426+00:00"
+}

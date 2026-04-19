@@ -51,6 +51,8 @@ class CircleMember(SQLModel, table=True):
     circle_id: int = Field(foreign_key="circle.id", index=True)
     joined_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     role: CircleRole = Field(default=CircleRole.MEMBER)
+    freedom_tag_text: str = ""
+    freedom_tag_profile_json: str = '{"keywords": []}'
 
 
 class TagDefinitionCreate(SQLModel):

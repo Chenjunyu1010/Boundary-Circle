@@ -55,6 +55,32 @@ def run_sqlite_schema_upgrades(db_engine: Engine) -> None:
         "profile_prompt_dismissed",
         "profile_prompt_dismissed BOOLEAN NOT NULL DEFAULT 0",
     )
+    # Freedom tag columns for circlemember
+    _add_column_if_missing(
+        db_engine,
+        "circlemember",
+        "freedom_tag_text",
+        "freedom_tag_text VARCHAR NOT NULL DEFAULT ''",
+    )
+    _add_column_if_missing(
+        db_engine,
+        "circlemember",
+        "freedom_tag_profile_json",
+        "freedom_tag_profile_json VARCHAR NOT NULL DEFAULT '{\"keywords\": []}'",
+    )
+    # Freedom tag columns for team
+    _add_column_if_missing(
+        db_engine,
+        "team",
+        "freedom_requirement_text",
+        "freedom_requirement_text VARCHAR NOT NULL DEFAULT ''",
+    )
+    _add_column_if_missing(
+        db_engine,
+        "team",
+        "freedom_requirement_profile_json",
+        "freedom_requirement_profile_json VARCHAR NOT NULL DEFAULT '{\"keywords\": []}'",
+    )
 
 
 def create_db_and_tables():

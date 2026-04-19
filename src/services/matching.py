@@ -10,17 +10,14 @@ from src.models.teams import (
     Team,
     TeamMember,
     TeamRequirementRule,
+    decode_freedom_profile,
     decode_required_tag_rules,
     decode_required_tags,
 )
 
 
 def get_user_tag_names_for_circle(session: Session, user_id: int, circle_id: int) -> Set[str]:
-    """Return the set of tag *names* this user has submitted in a given circle.
-
-    The result is based on TagDefinition.name joined through UserTag for the
-    specified user and circle.
-    """
+    """Return the set of tag names this user has submitted in a given circle."""
     statement = (
         select(TagDefinition.name)
         .join(UserTag, TagDefinition.id == UserTag.tag_definition_id)
@@ -165,3 +162,30 @@ def jaccard_score(left: Set[str], right: Set[str]) -> float:
         return 0.0
     intersection_size = len(left & right)
     return intersection_size / float(len(union))
+
+
+def decode_freedom_keywords(profile_json: str) -> List[str]:
+    """Decode freedom profile JSON using the shared model-layer normalization."""
+    profile = decode_freedom_profile(profile_json)
+    return profile.get("keywords", [])
+
+
+def compute_freedom_score(user_keywords: List[str], team_keywords: List[str]) -> float:
+    """Compute freedom overlap score as intersection over team requirements.
+
+    freedom_score = len(user_keywords ∩ team_keywords) / len(team_keywords)
+    Returns 0.0 when team_keywords is empty.
+    """
+    if not team_keywords:
+        return 0.0
+    user_set = set(user_keywords)
+    team_set = set(team_keywords)
+    overlap_size = len(user_set & team_set)
+    return overlap_size / float(len(team_set))
+
+
+def get_matched_freedom_keywords(user_keywords: List[str], team_keywords: List[str]) -> List[str]:
+    """Return the list of keywords that match between user and team profiles."""
+    user_set = set(user_keywords)
+    team_set = set(team_keywords)
+    return sorted(list(user_set & team_set))

@@ -1,0 +1,43 @@
+{
+  "run_id": "R024",
+  "sample_id": "S009",
+  "sample_name": "zh_long_multi_keyword",
+  "language": "zh",
+  "provider": "openai_compatible",
+  "model": "qwen3-coder-next",
+  "base_url": "https://coding.dashscope.aliyuncs.com/v1",
+  "status": "PARTIAL",
+  "input": "我喜欢C语言、C++、Python、数据结构、算法、操作系统、计算机网络、数据库、离散数学和编译原理。",
+  "expected": [
+    "C语言",
+    "C++",
+    "Python",
+    "数据结构",
+    "算法",
+    "操作系统",
+    "计算机网络",
+    "数据库",
+    "离散数学",
+    "编译原理"
+  ],
+  "actual": [
+    "C语言",
+    "C++",
+    "Python",
+    "数据结构",
+    "算法"
+  ],
+  "matched_expected": [
+    "c++",
+    "c语言",
+    "python",
+    "数据结构",
+    "算法"
+  ],
+  "metrics": {
+    "precision": 1.0,
+    "recall": 0.5
+  },
+  "notes": "Long Chinese sentence with more than 5 valid keywords. Current product logic should truncate to 5.",
+  "timestamp_utc": "2026-04-18T17:36:12.455239+00:00"
+}
