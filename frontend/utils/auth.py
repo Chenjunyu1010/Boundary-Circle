@@ -81,7 +81,7 @@ def init_session_state():
         and not st.session_state.get("logged_in")
         and not st.session_state.get("access_token")
     ):
-        st.session_state._auth_restore_attempted = True
+        st.session_state["_auth_restore_attempted"] = True
         persisted_token = _get_persisted_access_token()
         if persisted_token:
             st.session_state.access_token = persisted_token
