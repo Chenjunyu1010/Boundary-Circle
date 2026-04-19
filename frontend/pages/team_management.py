@@ -21,6 +21,7 @@ if parent_dir not in sys.path:
 
 from utils.api import api_client
 from utils.auth import get_current_user, init_session_state, require_auth
+from utils.ui import apply_button_usability_style
 
 
 init_session_state()
@@ -203,6 +204,21 @@ def fetch_member_tags(circle_id: int, user_id: int) -> list[dict]:
     return []
 
 
+def build_match_explanation(match: dict) -> str:
+    """Build a concise template-based explanation for a match result."""
+    parts: list[str] = []
+
+    freedom_keywords = match.get("matched_freedom_keywords", []) or []
+    if freedom_keywords:
+        parts.append(f"Keyword overlap: {', '.join(freedom_keywords)}")
+
+    final_score = match.get("final_score")
+    if isinstance(final_score, (int, float)):
+        parts.append(f"Final score: {final_score:.2f}")
+
+    return " | ".join(parts) if parts else "Final score pending additional signals."
+
+
 def get_stored_user_matches(selected_team_id: int) -> list[dict]:
     """Return persisted matching users for the currently selected team."""
     if st.session_state.get("matching_selected_team_id") != selected_team_id:
@@ -239,6 +255,7 @@ def create_team(
     required_tags: list[str],
     required_tag_rules: list[dict],
     circle_id: int,
+    freedom_requirement_text: str = "",
 ) -> tuple[bool, str]:
     """Create a team."""
     current_user = get_current_user()
@@ -256,6 +273,7 @@ def create_team(
                 "required_tags": required_tags,
                 "required_tag_rules": required_tag_rules,
                 "circle_id": circle_id,
+                "freedom_requirement_text": freedom_requirement_text,
             },
         )
         if response.ok:
@@ -459,6 +477,19 @@ def format_member_tag_value(tag: dict) -> str:
     return str(raw_value)
 
 
+def build_team_freedom_summary(team: dict) -> str:
+    """Build a concise summary of a team's saved freedom requirement."""
+    freedom_text = (team.get("freedom_requirement_text") or "").strip()
+    freedom_keywords = team.get("freedom_requirement_profile_keywords", []) or []
+
+    parts: list[str] = []
+    if freedom_text:
+        parts.append(freedom_text)
+    if freedom_keywords:
+        parts.append(f"Keywords: {', '.join(freedom_keywords)}")
+    return " | ".join(parts)
+
+
 def split_invitations_for_management(
     invitations: list[dict], user_id: int
 ) -> tuple[list[dict], list[dict], list[dict], list[dict]]:
@@ -507,7 +538,7 @@ def render_team_detail() -> None:
     team = get_selected_team(teams)
     if team is None:
         st.warning("Selected team was not found.")
-        if st.button("Back to Team Overview", key="back_missing_team_detail"):
+        if st.button("⬅️ Back to Team Overview", key="back_missing_team_detail"):
             close_team_detail()
         return
 
@@ -526,7 +557,7 @@ def render_team_detail() -> None:
         if user_id in member_lookup
     ]
 
-    if st.button("Back to Team Overview", key=f"back_team_detail_{team.get('id')}"):
+    if st.button("⬅️ Back to Team Overview", key=f"back_team_detail_{team.get('id')}"):
         close_team_detail()
 
     st.title(team.get("name", "Team Detail"))
@@ -548,6 +579,9 @@ def render_team_detail() -> None:
             for rule in required_rules
         ]
         st.caption(f"Required rules: {', '.join(formatted_rules)}")
+    freedom_summary = build_team_freedom_summary(team)
+    if freedom_summary:
+        st.caption(f"Freedom requirement: {freedom_summary}")
 
     st.markdown("---")
     st.subheader("Members")
@@ -569,7 +603,7 @@ def render_team_detail() -> None:
                     st.caption(member.get("email", ""))
                 with action_col:
                     if member_id is not None and st.button(
-                        "View Profile",
+                        "👤 View Profile",
                         key=f"team_member_profile_{team.get('id')}_{member_id}",
                     ):
                         open_public_profile(int(member_id))
@@ -591,7 +625,7 @@ def render_team_detail() -> None:
                 with action_col:
                     invitee_id = invite.get("invitee_id")
                     if invitee_id is not None and st.button(
-                        "View Profile",
+                        "👤 View Profile",
                         key=f"pending_invitee_profile_{team.get('id')}_{invitee_id}",
                     ):
                         open_public_profile(int(invitee_id))
@@ -626,19 +660,23 @@ def render_team_detail() -> None:
             "Invite a circle member",
             options=list(options.keys()),
         )
-        invite_submitted = st.form_submit_button("Send Invitation", type="primary")
+        invite_submitted = st.form_submit_button("✉️ Send Invitation", type="primary")
         if invite_submitted:
             selected_user_id = options[selected_member]
-            success, message = send_invitation(
-                team_id=team["id"],
-                user_id=selected_user_id,
-                team_name=team.get("name", "Team"),
-            )
-            if success:
-                st.success(message)
-                st.rerun()
+            team_id = team.get("id")
+            if team_id is None or selected_user_id is None:
+                st.error("Unable to send invitation because team or user data is incomplete.")
             else:
-                st.error(message)
+                success, message = send_invitation(
+                    team_id=int(team_id),
+                    user_id=int(selected_user_id),
+                    team_name=team.get("name", "Team"),
+                )
+                if success:
+                    st.success(message)
+                    st.rerun()
+                else:
+                    st.error(message)
 
 
 def render_team_list() -> None:
@@ -650,7 +688,7 @@ def render_team_list() -> None:
     circle_id = st.session_state.get("current_circle_id")
     if not circle_id:
         st.warning("Join a circle first to view teams.")
-        if st.button("Go to Circle Hall", key="go_circle_hall_list"):
+        if st.button("🏛️ Go to Circle Hall", key="go_circle_hall_list"):
             st.switch_page("pages/circles.py")
         return
 
@@ -681,8 +719,10 @@ def render_team_list() -> None:
                     st.error(status)
                 st.caption(f"Members: {members}/{max_members}")
             with col_action:
-                if st.button("View Details", key=f"team_list_detail_{team.get('id')}"):
-                    open_team_detail(team.get("id"))
+                if st.button("🔍 View Details", key=f"team_list_detail_{team.get('id')}"):
+                    team_id = team.get("id")
+                    if team_id is not None:
+                        open_team_detail(int(team_id))
                 member_ids = team.get("member_ids", []) or []
                 is_joinable = (
                     team.get("status") == "Recruiting"
@@ -704,7 +744,7 @@ def render_create_team() -> None:
     circle_id = st.session_state.get("current_circle_id")
     if not circle_id:
         st.warning("Join a circle first to create a team.")
-        if st.button("Go to Circle Hall", key="go_circle_hall_create"):
+        if st.button("🏛️ Go to Circle Hall", key="go_circle_hall_create"):
             st.switch_page("pages/circles.py")
         return
 
@@ -767,7 +807,14 @@ def render_create_team() -> None:
         else:
             st.info("No circle tag definitions found. Team requirements will be empty.")
 
-        submitted = st.form_submit_button("Create Team", type="primary")
+        freedom_requirement_text = st.text_area(
+            "Freedom Tag Requirements (optional)",
+            placeholder="Describe what you're looking for in free text. e.g., Looking for someone passionate about AI and creative projects",
+            max_chars=500,
+            key=f"freedom_requirement_{circle_id}",
+        )
+
+        submitted = st.form_submit_button("➕ Create Team", type="primary")
 
         if submitted:
             if not team_name.strip():
@@ -800,6 +847,7 @@ def render_create_team() -> None:
                 required_tags=required_tags,
                 required_tag_rules=required_tag_rules,
                 circle_id=circle_id,
+                freedom_requirement_text=freedom_requirement_text.strip(),
             )
             if success:
                 st.success(message)
@@ -839,8 +887,10 @@ def render_my_teams() -> None:
                 st.write(
                     f"Members: {team.get('current_members', 0)}/{team.get('max_members', 0)}"
                 )
-                if st.button("View Details", key=f"my_created_team_detail_{team.get('id')}"):
-                    open_team_detail(team.get("id"))
+                if st.button("🔍 View Details", key=f"my_created_team_detail_{team.get('id')}"):
+                    team_id = team.get("id")
+                    if team_id is not None:
+                        open_team_detail(int(team_id))
 
     st.markdown("---")
     st.subheader("Teams I Joined")
@@ -856,8 +906,10 @@ def render_my_teams() -> None:
                 st.write(
                     f"Members: {team.get('current_members', 0)}/{team.get('max_members', 0)}"
                 )
-                if st.button("View Details", key=f"my_joined_team_detail_{team.get('id')}"):
-                    open_team_detail(team.get("id"))
+                if st.button("🔍 View Details", key=f"my_joined_team_detail_{team.get('id')}"):
+                    team_id = team.get("id")
+                    if team_id is not None:
+                        open_team_detail(int(team_id))
 
 
 def render_invitation_management() -> None:
@@ -889,7 +941,7 @@ def render_invitation_management() -> None:
                 accept_col, reject_col = st.columns(2)
                 with accept_col:
                     if st.button(
-                        "Accept",
+                        "✅ Accept",
                         key=f"accept_invitation_{invite.get('id')}",
                         type="primary",
                     ):
@@ -904,7 +956,7 @@ def render_invitation_management() -> None:
                         else:
                             st.error(message)
                 with reject_col:
-                    if st.button("Reject", key=f"reject_invitation_{invite.get('id')}"):
+                    if st.button("❌ Reject", key=f"reject_invitation_{invite.get('id')}"):
                         invite_id = invite.get("id")
                         if invite_id is None:
                             st.error("Unable to respond because invitation data is incomplete.")
@@ -942,13 +994,13 @@ def render_invitation_management() -> None:
                 profile_col, approve_col, reject_col = st.columns(3)
                 with profile_col:
                     if requester_id is not None and st.button(
-                        "View Profile",
+                        "👤 View Profile",
                         key=f"view_join_request_profile_{invite.get('id')}",
                     ):
                         open_public_profile(int(requester_id))
                 with approve_col:
                     if st.button(
-                        "Approve",
+                        "✅ Approve",
                         key=f"approve_join_request_{invite.get('id')}",
                         type="primary",
                     ):
@@ -963,7 +1015,7 @@ def render_invitation_management() -> None:
                         else:
                             st.error(message)
                 with reject_col:
-                    if st.button("Reject", key=f"reject_join_request_{invite.get('id')}"):
+                    if st.button("❌ Reject", key=f"reject_join_request_{invite.get('id')}"):
                         invite_id = invite.get("id")
                         if invite_id is None:
                             st.error("Unable to respond because request data is incomplete.")
@@ -1046,7 +1098,7 @@ def render_matching_section() -> None:
         matches = get_stored_user_matches(selected_team["id"])
         has_requested_matches = st.session_state.get("matching_requested", False)
 
-        if st.button("Get user recommendations", type="primary"):
+        if st.button("👥 Get user recommendations", type="primary"):
             matches = fetch_matching_users(selected_team["id"])
             has_requested_matches = True
             st.session_state.matching_requested = True
@@ -1068,20 +1120,32 @@ def render_matching_section() -> None:
                         )
                         cov = match.get("coverage_score", 0.0)
                         jac = match.get("jaccard_score", 0.0)
-                        st.caption(f"Coverage: {cov:.2f} | Similarity: {jac:.2f}")
+                        keyword_overlap = match.get("keyword_overlap_score", 0.0)
+                        final_score = match.get("final_score", 0.0)
+                        st.caption(
+                            f"Final: {final_score:.2f} | Coverage: {cov:.2f} | "
+                            f"Similarity: {jac:.2f} | Keyword overlap: {keyword_overlap:.2f}"
+                        )
                         matched = ", ".join(match.get("matched_tags", [])) or "-"
                         missing = ", ".join(match.get("missing_required_tags", [])) or "-"
                         st.write(f"Matched tags: {matched}")
                         st.write(f"Missing required tags: {missing}")
+                        freedom_keywords = match.get("matched_freedom_keywords", [])
+                        freedom_score = match.get("freedom_score", 0.0)
+                        if freedom_keywords:
+                            st.caption(f"Extra keyword match: {', '.join(freedom_keywords)}")
+                        if freedom_score > 0:
+                            st.caption(f"Freedom score: {freedom_score:.2f}")
+                        st.caption(build_match_explanation(match))
                     with profile_col:
                         if st.button(
-                            "View Profile",
+                            "👤 View Profile",
                             key=f"matching_profile_{selected_team['id']}_{match['user_id']}",
                         ):
                             open_public_profile(int(match["user_id"]))
                     with invite_col:
                         if st.button(
-                            "Invite to team",
+                            "✉️ Invite to team",
                             key=f"invite_match_{selected_team['id']}_{match['user_id']}",
                         ):
                             success, message = send_invitation(
@@ -1098,7 +1162,7 @@ def render_matching_section() -> None:
     st.subheader("Recommend teams for me")
     st.caption("You can send a join request directly to the team creator from here.")
 
-    if st.button("Find teams for me", key="find_matching_teams", type="primary"):
+    if st.button("🤝 Find teams for me", key="find_matching_teams", type="primary"):
         matches = fetch_matching_teams(circle_id)
         if not matches:
             st.info("No matching teams found yet.")
@@ -1118,9 +1182,21 @@ def render_matching_section() -> None:
                         )
                         cov = item.get("coverage_score", 0.0)
                         jac = item.get("jaccard_score", 0.0)
-                        st.caption(f"Coverage: {cov:.2f} | Similarity: {jac:.2f}")
+                        keyword_overlap = item.get("keyword_overlap_score", 0.0)
+                        final_score = item.get("final_score", 0.0)
+                        st.caption(
+                            f"Final: {final_score:.2f} | Coverage: {cov:.2f} | "
+                            f"Similarity: {jac:.2f} | Keyword overlap: {keyword_overlap:.2f}"
+                        )
                         missing = ", ".join(item.get("missing_required_tags", [])) or "-"
                         st.write(f"Missing required tags: {missing}")
+                        freedom_keywords = item.get("matched_freedom_keywords", [])
+                        freedom_score = item.get("freedom_score", 0.0)
+                        if freedom_keywords:
+                            st.caption(f"Extra keyword match: {', '.join(freedom_keywords)}")
+                        if freedom_score > 0:
+                            st.caption(f"Freedom score: {freedom_score:.2f}")
+                        st.caption(build_match_explanation(item))
                     with action_col:
                         team_id = team.get("id")
                         member_ids = team.get("member_ids", []) or []
@@ -1146,6 +1222,8 @@ def render_matching_section() -> None:
 
 def main() -> None:
     """Render the team management page."""
+    apply_button_usability_style()
+
     st.title("Team Management")
     st.markdown("Create teams, invite members, and manage invitations.")
 
@@ -1153,21 +1231,21 @@ def main() -> None:
 
     if not st.session_state.get("current_circle_id"):
         st.warning("Join a circle first to access team management.")
-        if st.button("Go to Circle Hall", key="go_circle_hall_main"):
+        if st.button("🏛️ Go to Circle Hall", key="go_circle_hall_main"):
             go_to_circle_hall()
         return
 
     if not can_access_current_circle(st.session_state["current_circle_id"]):
-        if st.button("Go to Circle Hall", key="go_circle_hall_forbidden"):
+        if st.button("🏛️ Go to Circle Hall", key="go_circle_hall_forbidden"):
             go_to_circle_hall()
         return
 
     nav_col1, nav_col2 = st.columns(2)
     with nav_col1:
-        if st.button("Back to Circle Detail", key="back_to_circle_detail_from_team"):
+        if st.button("🏠 Back to Circle Detail", key="back_to_circle_detail_from_team"):
             go_to_circle_detail()
     with nav_col2:
-        if st.button("Back to Circle Hall", key="back_to_circle_hall_from_team"):
+        if st.button("🏠 Back to Circle Hall", key="back_to_circle_hall_from_team"):
             go_to_circle_hall()
 
     if st.session_state.get("team_management_focus_detail"):

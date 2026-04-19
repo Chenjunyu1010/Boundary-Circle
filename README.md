@@ -11,6 +11,7 @@ Boundary Circle is a FastAPI + Streamlit project for circle-based identity, tag 
 - Controlled tag schema with `single_select` and `multi_select` definitions
 - Schema-driven team creation that uses real circle tag definitions instead of a fixed frontend tag list
 - Value-aware team matching based on structured team requirement rules
+- Circle-scoped free-text profile submission and freedom-tag matching (rerank-only)
 - Circle join-related tag workflow coverage in automated tests
 - Team creation, invitation, response, and leave flows with backend/API tests
 - Matching recommendations for teams and users (backend APIs and Streamlit "Matching" tab)
@@ -73,15 +74,84 @@ Recommended variables:
   - Optional
   - Defaults to `100000`
   - Controls the PBKDF2 iteration count used for password hashing
+- `LLM_PROVIDER`
+  - Optional
+  - Set to `openai_compatible` to enable real freedom-tag keyword extraction
+- `LLM_API_KEY`
+  - Optional unless `LLM_PROVIDER=openai_compatible`
+  - API key for the compatible chat-completions endpoint
+- `LLM_MODEL`
+  - Optional unless `LLM_PROVIDER=openai_compatible`
+  - Model name sent to `/chat/completions`
+- `LLM_BASE_URL`
+  - Optional unless `LLM_PROVIDER=openai_compatible`
+  - Base URL for the compatible API, for example `https://api.openai.com/v1`
 
 Example local setup:
 
 ```bash
+cp .env.example .env
+
 APP_ENV=development
 SECRET_KEY=your-local-secret-key
 ACCESS_TOKEN_EXPIRE_MINUTES=60
 PASSWORD_HASH_ITERATIONS=100000
 ```
+
+If you want real freedom-tag extraction instead of the empty-keyword fallback, add:
+
+```bash
+LLM_PROVIDER=openai_compatible
+LLM_API_KEY=your-api-key
+LLM_MODEL=qwen3-coder-next
+LLM_BASE_URL=https://coding.dashscope.aliyuncs.com/v1
+```
+
+You can use the included `.env.example` as a starting point:
+
+```bash
+cp .env.example .env
+```
+
+## LLM integration
+
+The repository supports real freedom-tag extraction through an OpenAI-compatible chat-completions API.
+
+Current integration points:
+
+- user free-text profile save: `PUT /circles/{circle_id}/profile`
+- team free-text requirement save: `POST /teams` with `freedom_requirement_text`
+
+When `LLM_PROVIDER=openai_compatible` and the other LLM variables are configured:
+
+- the backend sends the free-text content to the configured `/chat/completions` endpoint
+- the model returns JSON in the form `{"keywords": ["..."]}`
+- the backend normalizes, deduplicates, and caps the result at 5 keywords
+- these keywords are then used for rerank-only freedom matching
+
+When the LLM variables are not configured:
+
+- the backend falls back to an empty freedom profile: `{"keywords": []}`
+- the rest of the application still works
+
+Implementation notes:
+
+- configuration is centralized in `src/core/settings.py`
+- the OpenAI-compatible provider lives in `src/services/extraction.py`
+- the current extractor uses structured timeout settings plus one retry for transient network failures
+- current product logic intentionally caps extracted keywords at 5
+
+## LLM provider notes
+
+Real-provider validation in this project started with `qwen3.5-plus`. It produced strong results on some clear samples, but repeated live testing showed that it was too unstable for efficient manual validation because calls often timed out or were interrupted.
+
+To improve practical testing stability, the active validation model was switched to `qwen3-coder-next`. This lighter model made sample-by-sample testing much more workable, and prompt tuning was then used to improve:
+
+- negation handling
+- over-broad paraphrasing
+- generic filler-word extraction
+
+See `docs/LLM-test/SUMMARY.md` for the current testing conclusions.
 
 ## Local development
 
@@ -105,6 +175,10 @@ streamlit run frontend/Home.py
 
 The backend creates a local SQLite database file automatically under `data/boundary_circle.db` when needed.
 
+For the full local demo flow, including `.env` setup, LLM API configuration, backend/frontend startup, `stress2` seed usage, test accounts, and recommended end-to-end scenarios, see:
+
+- `00_local-llm-demo-guide.md`
+
 On startup, the app also applies a small SQLite-only compatibility upgrade for known
 missing columns in older local database files. This currently covers:
 
@@ -122,6 +196,7 @@ deterministic sample data:
 ```bash
 python scripts/seed_data.py demo
 python scripts/seed_data.py stress
+python scripts/seed_data.py stress2
 ```
 
 Reset one dataset without touching the other seed set or unrelated local records:
@@ -129,12 +204,14 @@ Reset one dataset without touching the other seed set or unrelated local records
 ```bash
 python scripts/seed_data.py demo --reset
 python scripts/seed_data.py stress --reset
+python scripts/seed_data.py stress2 --reset
 ```
 
 Recommended usage:
 
 - `demo`: smaller, presentation-friendly data for report walkthroughs
 - `stress`: larger, more varied data for matching, invitation, leave-team, and lock/unlock testing
+- `stress2`: the most complete local demo dataset for frontend walkthroughs, LLM-assisted freedom-tag scenarios, and richer matching/invitation cases
 
 ## Tests
 
@@ -194,6 +271,53 @@ Coverage should be discussed with the correct scope:
 
 The backend-only percentage is higher because the current automated tests exercise the FastAPI backend more thoroughly than the Streamlit page code.
 
+### LLM tests and CI policy
+
+Real LLM tests are intentionally **not** part of the default CI path.
+
+Reasons:
+
+- they require network access
+- they require valid API credentials
+- they depend on provider uptime and model behavior
+- model outputs can drift over time even when the prompt is unchanged
+
+The repository separates these layers:
+
+- default automated tests: deterministic local tests and mocked provider tests
+- live LLM tests: opt-in only
+- manual sample validation logs: stored under `docs/LLM-test/results/`
+
+The CI workflow excludes live LLM tests by default through:
+
+```bash
+pytest -m "not llm_live"
+```
+
+If you want to run live LLM tests manually, enable them explicitly:
+
+```bash
+RUN_LLM_LIVE_TESTS=1 pytest -v tests/test_llm_live.py
+```
+
+For manual single-sample validation against the real provider, use:
+
+```bash
+python scripts/run_llm_sample.py S001
+```
+
+This reads from `docs/LLM-test/corpus.json` and writes a new result file such as `docs/LLM-test/results/R024.json`.
+
+Relevant LLM testing assets:
+
+- `docs/LLM-test/corpus.json`
+- `docs/LLM-test/results/`
+- `docs/LLM-test/README.md`
+- `docs/LLM-test/SUMMARY.md`
+- `tests/test_extraction_service.py`
+- `tests/test_run_llm_sample.py`
+- `tests/test_llm_live.py`
+
 ## API surface
 
 Current backend routes are centered around these areas:
@@ -206,15 +330,16 @@ Current backend routes are centered around these areas:
 - `/circles/{circle_id}/tags/my` - list a user's submitted tags in a circle
 - `/tags/definitions/{tag_def_id}` - update and delete tag definitions
 - `/tags/{user_tag_id}` - delete a submitted user tag
-- `/teams` - create teams
+- `/circles/{circle_id}/profile` - update circle-scoped free-text profile (freedom-tag save)
+- `/teams` - create teams (supports `freedom_requirement_text`)
 - `/circles/{circle_id}/teams` - list teams in a circle
 - `/circles/{circle_id}/members` - list circle members
 - `/teams/{team_id}/invite` - send team invitations
 - `/invitations` - list invitations for the current user
 - `/invitations/{invite_id}/respond` - accept or reject an invitation
 - `/teams/{team_id}/leave` - leave a team
-- `/matching/users` - recommend users for a given team (team creator or members only)
-- `/matching/teams` - recommend suitable teams for the current user in a circle
+- `/matching/users` - recommend users for a given team (team creator or members only; includes `freedom_score` and `matched_freedom_keywords`)
+- `/matching/teams` - recommend suitable teams for the current user in a circle (includes `freedom_score` and `matched_freedom_keywords`)
 
 Interactive docs are available at `http://localhost:8000/docs` once the backend is running.
 
@@ -237,15 +362,22 @@ For selection-style tags:
 ## Matching semantics
 
 Team creation can now persist structured requirement rules alongside legacy `required_tags`.
+Freedom-tag matching adds an additive reranking layer:
 
-Current matching behavior:
+- Freedom tags are saved as raw text via `PUT /circles/{circle_id}/profile`
+- Backend extracts keywords and computes a freedom score for matching
+- Freedom matching is rerank-only: fixed-tag gating remains the primary filter
+- Candidates that fail fixed-tag requirements are excluded entirely
+- Among already-eligible matches, freedom scoring reorders results
+- If freedom matching fails or is unavailable, matches fall back to standard behavior
 
+Current structured matching behavior:
 - `single_select`: exact equality
 - `multi_select`: any overlap counts as a match
 - `integer`, `float`, `boolean`, `string`: exact equality
 - legacy teams without structured rules still fall back to tag-name-based matching
 
-This keeps existing team data compatible while allowing newer teams to match on actual selected values.
+This keeps existing team data compatible while allowing newer teams to match on actual selected values and free-text freedom preferences.
 
 ## Docker
 

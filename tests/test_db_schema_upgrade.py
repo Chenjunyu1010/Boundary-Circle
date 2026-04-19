@@ -11,6 +11,35 @@ from src.models.teams import Team
 def _create_old_schema(engine) -> None:
     statements = [
         """
+        CREATE TABLE circlemember (
+            id INTEGER NOT NULL PRIMARY KEY,
+            user_id INTEGER NOT NULL,
+            circle_id INTEGER NOT NULL,
+            joined_at TIMESTAMP NOT NULL,
+            role VARCHAR(6) NOT NULL,
+            FOREIGN KEY(user_id) REFERENCES user(id),
+            FOREIGN KEY(circle_id) REFERENCES circle(id),
+            UNIQUE(user_id, circle_id)
+        )
+        """,
+        """
+        CREATE TABLE circle (
+            id INTEGER NOT NULL PRIMARY KEY,
+            name VARCHAR NOT NULL,
+            description VARCHAR NOT NULL,
+            creator_id INTEGER NOT NULL,
+            FOREIGN KEY(creator_id) REFERENCES user(id)
+        )
+        """,
+        """
+        CREATE TABLE user (
+            id INTEGER NOT NULL PRIMARY KEY,
+            username VARCHAR NOT NULL,
+            email VARCHAR NOT NULL,
+            hashed_password VARCHAR NOT NULL
+        )
+        """,
+        """
         CREATE TABLE tagdefinition (
             id INTEGER NOT NULL PRIMARY KEY,
             circle_id INTEGER NOT NULL,
@@ -155,3 +184,24 @@ def test_running_sqlite_schema_upgrades_twice_is_safe(tmp_path: Path):
     with Session(engine) as session:
         assert session.exec(select(TagDefinition)).all() == []
         assert session.exec(select(Team)).all() == []
+
+
+def test_upgrade_adds_freedom_tag_columns_to_circle_member_and_team(tmp_path: Path):
+    # Use the existing old schema that doesn't have freedom tag columns
+    db_path = tmp_path / "old-schema.db"
+    engine = create_engine(f"sqlite:///{db_path}")
+    _create_old_schema(engine)
+
+    # Verify freedom columns don't exist before upgrade
+    assert "freedom_tag_text" not in _column_names(engine, "circlemember")
+    assert "freedom_tag_profile_json" not in _column_names(engine, "circlemember")
+    assert "freedom_requirement_text" not in _column_names(engine, "team")
+    assert "freedom_requirement_profile_json" not in _column_names(engine, "team")
+
+    run_sqlite_schema_upgrades(engine)
+
+    assert "freedom_tag_text" in _column_names(engine, "circlemember")
+    assert "freedom_tag_profile_json" in _column_names(engine, "circlemember")
+    assert "freedom_requirement_text" in _column_names(engine, "team")
+    assert "freedom_requirement_profile_json" in _column_names(engine, "team")
+

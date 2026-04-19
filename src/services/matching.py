@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 from typing import Any, List, Set
 
 from sqlmodel import Session, select
@@ -10,17 +11,14 @@ from src.models.teams import (
     Team,
     TeamMember,
     TeamRequirementRule,
+    decode_freedom_profile,
     decode_required_tag_rules,
     decode_required_tags,
 )
 
 
 def get_user_tag_names_for_circle(session: Session, user_id: int, circle_id: int) -> Set[str]:
-    """Return the set of tag *names* this user has submitted in a given circle.
-
-    The result is based on TagDefinition.name joined through UserTag for the
-    specified user and circle.
-    """
+    """Return the set of tag names this user has submitted in a given circle."""
     statement = (
         select(TagDefinition.name)
         .join(UserTag, TagDefinition.id == UserTag.tag_definition_id)
@@ -165,3 +163,95 @@ def jaccard_score(left: Set[str], right: Set[str]) -> float:
         return 0.0
     intersection_size = len(left & right)
     return intersection_size / float(len(union))
+
+
+def decode_freedom_keywords(profile_json: str) -> List[str]:
+    """Decode freedom profile JSON using the shared model-layer normalization."""
+    profile = decode_freedom_profile(profile_json)
+    return profile.get("keywords", [])
+
+
+_KEYWORD_ASCII_TOKEN_PATTERN = re.compile(r"[A-Za-z][A-Za-z0-9+#.-]{1,31}")
+
+
+def _keyword_match_tokens(keyword: str) -> Set[str]:
+    """Expand one keyword phrase into canonical match tokens.
+
+    Keep the original normalized phrase and any embedded ASCII tech tokens so
+    phrases like "会用AI" can overlap with "AI".
+    """
+    normalized = keyword.strip()
+    if not normalized:
+        return set()
+
+    tokens = {normalized.casefold()}
+    for token in _KEYWORD_ASCII_TOKEN_PATTERN.findall(normalized):
+        tokens.add(token.casefold())
+    return tokens
+
+
+def _build_keyword_token_map(keywords: List[str]) -> dict[str, Set[str]]:
+    """Map display keywords to their canonical match token sets."""
+    token_map: dict[str, Set[str]] = {}
+    for keyword in keywords:
+        tokens = _keyword_match_tokens(keyword)
+        if tokens:
+            token_map[keyword] = tokens
+    return token_map
+
+
+def _build_user_keyword_token_set(user_keywords: List[str]) -> Set[str]:
+    """Build canonical match tokens for all user keywords once."""
+    user_token_set: Set[str] = set()
+    for keyword in user_keywords:
+        user_token_set |= _keyword_match_tokens(keyword)
+    return user_token_set
+
+
+def analyze_freedom_keyword_overlap(
+    user_keywords: List[str],
+    team_keywords: List[str],
+) -> tuple[float, List[str]]:
+    """Compute overlap score and matched team keywords in one tokenization pass."""
+    if not team_keywords:
+        return 0.0, []
+
+    user_token_set = _build_user_keyword_token_set(user_keywords)
+    team_token_map = _build_keyword_token_map(team_keywords)
+    if not team_token_map:
+        return 0.0, []
+
+    matched_keywords = [
+        keyword
+        for keyword, tokens in team_token_map.items()
+        if tokens & user_token_set
+    ]
+    score = len(matched_keywords) / float(len(team_token_map))
+    return score, sorted(matched_keywords)
+
+
+def compute_freedom_score(user_keywords: List[str], team_keywords: List[str]) -> float:
+    """Compute freedom overlap score as intersection over team requirements.
+
+    freedom_score = len(user_keywords ∩ team_keywords) / len(team_keywords)
+    Returns 0.0 when team_keywords is empty.
+    """
+    score, _ = analyze_freedom_keyword_overlap(user_keywords, team_keywords)
+    return score
+
+
+def compute_final_matching_score(
+    *, coverage: float, jaccard: float, keyword_overlap: float
+) -> float:
+    """Compute the weighted final score for candidate ordering."""
+    return (
+        0.7 * coverage
+        + 0.2 * jaccard
+        + 0.1 * keyword_overlap
+    )
+
+
+def get_matched_freedom_keywords(user_keywords: List[str], team_keywords: List[str]) -> List[str]:
+    """Return the list of keywords that match between user and team profiles."""
+    _, matched_keywords = analyze_freedom_keyword_overlap(user_keywords, team_keywords)
+    return matched_keywords

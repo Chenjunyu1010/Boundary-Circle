@@ -119,12 +119,12 @@ def main() -> None:
     user_id = get_target_user_id()
     if user_id is None:
         st.error("Invalid profile link.")
-        st.page_link("Home.py", label="Back to Home")
+        st.page_link("Home.py", label="🏠 Back to Home")
         return
 
     profile = load_public_profile(user_id)
     if profile is None:
-        st.page_link("Home.py", label="Back to Home")
+        st.page_link("Home.py", label="🏠 Back to Home")
         return
 
     st.title(f"{profile.get('username', 'User')}'s Profile")
@@ -132,7 +132,7 @@ def main() -> None:
 
     return_page = st.session_state.get("public_profile_return_page")
     return_label = st.session_state.get("public_profile_return_label", "Back")
-    if st.button(return_label if return_page else "Back to Home", key="public_profile_back"):
+    if st.button(f"⬅️ {return_label}" if return_page else "🏠 Back to Home", key="public_profile_back"):
         go_back()
 
     render_avatar_placeholder(profile.get("username"))

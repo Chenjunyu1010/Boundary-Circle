@@ -31,6 +31,8 @@ class Team(SQLModel, table=True):
     status: TeamStatus = Field(default=TeamStatus.RECRUITING)
     required_tags_json: str = Field(default="[]")
     required_tag_rules_json: str = Field(default="[]")
+    freedom_requirement_text: str = ""
+    freedom_requirement_profile_json: str = '{"keywords": []}'
 
 
 class TeamMember(SQLModel, table=True):
@@ -60,6 +62,7 @@ class TeamCreate(SQLModel):
     max_members: int = Field(ge=2)
     required_tags: list[str] = []
     required_tag_rules: list[TeamRequirementRule] = []
+    freedom_requirement_text: str = Field(default="", max_length=2000)
 
 
 class TeamRead(SQLModel):
@@ -76,6 +79,8 @@ class TeamRead(SQLModel):
     required_tags: list[str]
     required_tag_rules: list[TeamRequirementRule] = []
     member_ids: list[int]
+    freedom_requirement_text: str = ""
+    freedom_requirement_profile_keywords: list[str] = []
 
 
 class InvitationCreate(SQLModel):
@@ -135,3 +140,51 @@ def decode_required_tag_rules(required_tag_rules_json: str) -> list[TeamRequirem
         except Exception:
             return []
     return decoded_rules
+
+
+def empty_freedom_profile() -> dict[str, list[str]]:
+    return {"keywords": []}
+
+
+def normalize_freedom_profile(data: object) -> dict[str, list[str]]:
+    if data is None:
+        return empty_freedom_profile()
+    if isinstance(data, str):
+        try:
+            data = json.loads(data)
+        except json.JSONDecodeError:
+            return empty_freedom_profile()
+    if not isinstance(data, dict):
+        return empty_freedom_profile()
+
+    keywords = data.get("keywords", [])
+    if not isinstance(keywords, list):
+        return empty_freedom_profile()
+
+    seen: set[str] = set()
+    deduped: list[str] = []
+    for item in keywords:
+        if isinstance(item, str):
+            trimmed = item.strip()
+            if trimmed and trimmed not in seen:
+                seen.add(trimmed)
+                deduped.append(trimmed)
+                if len(deduped) >= 5:
+                    break
+
+    return {"keywords": deduped}
+
+
+def decode_freedom_profile(raw: Optional[str]) -> dict[str, list[str]]:
+    if raw is None or raw == "":
+        return empty_freedom_profile()
+    try:
+        parsed = json.loads(raw)
+    except json.JSONDecodeError:
+        return empty_freedom_profile()
+    return normalize_freedom_profile(parsed)
+
+
+def encode_freedom_profile(profile: dict[str, list[str]]) -> str:
+    normalized = normalize_freedom_profile(profile)
+    return json.dumps(normalized)

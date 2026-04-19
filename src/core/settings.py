@@ -16,6 +16,10 @@ class Settings(BaseSettings):
     secret_key: Optional[str] = None
     access_token_expire_minutes: int = 60
     password_hash_iterations: int = 100_000
+    llm_provider: str = ""
+    llm_api_key: Optional[str] = None
+    llm_model: Optional[str] = None
+    llm_base_url: Optional[str] = None
 
     model_config = SettingsConfigDict(
         env_file=".env",

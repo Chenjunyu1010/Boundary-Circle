@@ -168,6 +168,35 @@ def test_stress_seed_matching_scores_are_not_uniform(db_session):
     matches = match_response.json()
     assert matches
     assert any(item["coverage_score"] < 1.0 or item["jaccard_score"] < 1.0 for item in matches)
+    assert all("freedom_score" in item for item in matches)
+    assert all("matched_freedom_keywords" in item for item in matches)
+    assert all(item["freedom_score"] >= 0.0 for item in matches)
+
+
+def test_stress_seed_for_amir_has_non_zero_keyword_overlap_candidates(db_session):
+    seed_dataset(db_session, "stress")
+
+    amir_headers = login_seed_user("seed_stress_amir")
+
+    circles_response = client.get("/circles/", headers=amir_headers)
+    assert circles_response.status_code == 200
+    systems_lab = find_by_name(circles_response.json(), "[SEED STRESS] Systems Lab")
+
+    teams_response = client.get(
+        f"/circles/{systems_lab['id']}/teams",
+        headers=amir_headers,
+    )
+    assert teams_response.status_code == 200
+    alpha_team = find_by_name(teams_response.json(), "[SEED STRESS] Systems Lab Alpha")
+
+    match_response = client.get(
+        f"/matching/users?team_id={alpha_team['id']}",
+        headers=amir_headers,
+    )
+    assert match_response.status_code == 200
+    matches = match_response.json()
+    assert matches
+    assert any(item["keyword_overlap_score"] > 0.0 for item in matches)
 
 
 def test_stress_seed_manual_invite_reaches_diana_and_duplicate_is_blocked(db_session):

@@ -17,9 +17,12 @@ from src.models.teams import (
     decode_required_tag_rules,
 )
 from src.services.matching import (
+    analyze_freedom_keyword_overlap,
     build_team_profile,
+    compute_final_matching_score,
     coverage_score,
     coverage_score_for_rules,
+    decode_freedom_keywords,
     describe_matched_rules,
     describe_missing_rules,
     get_team_member_ids,
@@ -40,7 +43,11 @@ class UserMatch(SQLModel):
     email: str
     coverage_score: float
     jaccard_score: float
+    freedom_score: float = 0.0
+    keyword_overlap_score: float = 0.0
+    final_score: float = 0.0
     matched_tags: List[str]
+    matched_freedom_keywords: List[str] = []
     missing_required_tags: List[str]
 
 
@@ -50,6 +57,10 @@ class TeamMatch(SQLModel):
     team: TeamRead
     coverage_score: float
     jaccard_score: float
+    freedom_score: float = 0.0
+    keyword_overlap_score: float = 0.0
+    final_score: float = 0.0
+    matched_freedom_keywords: List[str] = []
     missing_required_tags: List[str]
 
 
@@ -121,6 +132,9 @@ def match_users_for_team(
     team_profile = build_team_profile(session=session, team=team)
     team_member_ids = set(get_team_member_ids(session=session, team_id=team.id or 0))
 
+    # Decode team's freedom requirement profile
+    team_freedom_keywords = decode_freedom_keywords(team.freedom_requirement_profile_json)
+
     memberships = session.exec(
         select(CircleMember).where(CircleMember.circle_id == circle.id)
     ).all()
@@ -132,13 +146,13 @@ def match_users_for_team(
             continue
 
         user = session.get(User, user_id)
-        if user is None:
+        if user is None or user.id is None:
             continue
 
         user_tag_values = get_user_tag_values_for_circle(
             session=session,
             user_id=user_id,
-            circle_id=circle.id,
+            circle_id=team.circle_id,
         )
         user_tags = set(user_tag_values.keys())
 
@@ -155,6 +169,19 @@ def match_users_for_team(
             continue
 
         jac = jaccard_score(team_profile, user_tags)
+        
+        # Compute freedom score
+        user_freedom_keywords = decode_freedom_keywords(membership.freedom_tag_profile_json)
+        freedom_score, matched_freedom = analyze_freedom_keyword_overlap(
+            user_freedom_keywords,
+            team_freedom_keywords,
+        )
+        final_score = compute_final_matching_score(
+            coverage=cov,
+            jaccard=jac,
+            keyword_overlap=freedom_score,
+        )
+
         candidates.append(
             UserMatch(
                 user_id=user.id,
@@ -162,7 +189,11 @@ def match_users_for_team(
                 email=user.email,
                 coverage_score=cov,
                 jaccard_score=jac,
+                freedom_score=freedom_score,
+                keyword_overlap_score=freedom_score,
+                final_score=final_score,
                 matched_tags=matched_tags,
+                matched_freedom_keywords=matched_freedom,
                 missing_required_tags=missing_required,
             )
         )
@@ -171,7 +202,7 @@ def match_users_for_team(
         limit = 10
     limit = min(limit, 50)
 
-    candidates.sort(key=lambda m: (m.coverage_score, m.jaccard_score), reverse=True)
+    candidates.sort(key=lambda m: m.final_score, reverse=True)
     return candidates[:limit]
 
 
@@ -202,6 +233,17 @@ def match_teams_for_user(
     )
     user_tags = set(user_tag_values.keys())
 
+    # Get user's freedom keywords from CircleMember
+    user_freedom_keywords = []
+    user_membership = session.exec(
+        select(CircleMember).where(
+            CircleMember.circle_id == circle_id,
+            CircleMember.user_id == current_user.id,
+        )
+    ).first()
+    if user_membership:
+        user_freedom_keywords = decode_freedom_keywords(user_membership.freedom_tag_profile_json)
+
     from src.api.teams import build_team_read  # local import to avoid circular import at module level
 
     teams = session.exec(select(Team).where(Team.circle_id == circle_id)).all()
@@ -213,6 +255,9 @@ def match_teams_for_user(
             continue
         if team_read.status == TeamStatus.LOCKED:
             continue
+
+        # Decode team's freedom requirement profile
+        team_freedom_keywords = decode_freedom_keywords(team.freedom_requirement_profile_json)
 
         required_rules = decode_required_tag_rules(team.required_tag_rules_json)
         required_tags = get_team_required_tag_names(team)
@@ -229,11 +274,27 @@ def match_teams_for_user(
 
         team_profile = build_team_profile(session=session, team=team)
         jac = jaccard_score(team_profile, user_tags)
+        
+        # Compute freedom score
+        freedom_score, matched_freedom = analyze_freedom_keyword_overlap(
+            user_freedom_keywords,
+            team_freedom_keywords,
+        )
+        final_score = compute_final_matching_score(
+            coverage=cov,
+            jaccard=jac,
+            keyword_overlap=freedom_score,
+        )
+
         results.append(
             TeamMatch(
                 team=team_read,
                 coverage_score=cov,
                 jaccard_score=jac,
+                freedom_score=freedom_score,
+                keyword_overlap_score=freedom_score,
+                final_score=final_score,
+                matched_freedom_keywords=matched_freedom,
                 missing_required_tags=missing_required,
             )
         )
@@ -242,5 +303,5 @@ def match_teams_for_user(
         limit = 10
     limit = min(limit, 50)
 
-    results.sort(key=lambda m: (m.coverage_score, m.jaccard_score), reverse=True)
+    results.sort(key=lambda m: m.final_score, reverse=True)
     return results[:limit]

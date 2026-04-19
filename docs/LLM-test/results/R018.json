@@ -1,0 +1,32 @@
+{
+  "run_id": "R018",
+  "sample_id": "S003",
+  "sample_name": "zh_short_tech",
+  "language": "zh",
+  "provider": "openai_compatible",
+  "model": "qwen3-coder-next",
+  "base_url": "https://coding.dashscope.aliyuncs.com/v1",
+  "status": "PASS",
+  "input": "我喜欢 Python、FastAPI 和数据库设计。",
+  "expected": [
+    "Python",
+    "FastAPI",
+    "数据库设计"
+  ],
+  "actual": [
+    "Python",
+    "FastAPI",
+    "数据库设计"
+  ],
+  "matched_expected": [
+    "fastapi",
+    "python",
+    "数据库设计"
+  ],
+  "metrics": {
+    "precision": 1.0,
+    "recall": 1.0
+  },
+  "notes": "Short Chinese technical sample.",
+  "timestamp_utc": "2026-04-18T17:17:19.650561+00:00"
+}
