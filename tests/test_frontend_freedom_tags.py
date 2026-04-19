@@ -389,7 +389,7 @@ def test_build_match_explanation_prefers_keyword_and_tag_signals(monkeypatch):
 
     assert "Python" in explanation
     assert "FastAPI" in explanation
-    assert "0.91" in explanation
+    assert "Top keyword match" in explanation
     assert "Matched tags" not in explanation
 
 
@@ -406,8 +406,23 @@ def test_build_match_explanation_handles_missing_signals(monkeypatch):
         }
     )
 
-    assert "Final score" in explanation
-    assert "Keyword overlap" not in explanation
+    assert explanation == "Strong overall match based on shared tag coverage."
+
+
+def test_build_match_score_summary_avoids_duplicate_freedom_wording(monkeypatch):
+    """Score summary should keep numeric signals in one line without repeating freedom labels."""
+    _, _, _, team_module = load_team_management_module(monkeypatch)
+
+    summary = team_module.build_match_score_summary(
+        {
+            "final_score": 0.94,
+            "coverage_score": 1.0,
+            "jaccard_score": 0.86,
+            "keyword_overlap_score": 0.67,
+        }
+    )
+
+    assert summary == "Final 0.94 | Coverage 1.00 | Similarity 0.86 | Keyword 0.67"
 
 
 def test_build_team_freedom_summary_includes_text_and_keywords(monkeypatch):
@@ -438,6 +453,31 @@ def test_build_team_freedom_summary_returns_empty_when_absent(monkeypatch):
     )
 
     assert summary == ""
+
+
+def test_split_invitations_for_management_excludes_self_join_requests_from_review(monkeypatch):
+    """A user should never see their own join request inside the review queue."""
+    _, _, _, team_module = load_team_management_module(monkeypatch)
+
+    invitations = [
+        {
+            "id": 1,
+            "kind": "join_request",
+            "status": "pending",
+            "inviter_id": 7,
+            "invitee_id": 7,
+            "team_id": 11,
+            "team_name": "Broken Self Request",
+        }
+    ]
+
+    _, pending_requests, outgoing_requests, _ = team_module.split_invitations_for_management(
+        invitations,
+        7,
+    )
+
+    assert pending_requests == []
+    assert outgoing_requests == invitations
 
 
 def test_render_team_detail_hides_member_only_sections_for_non_team_member(monkeypatch):
@@ -497,6 +537,160 @@ def test_render_team_detail_hides_member_only_sections_for_non_team_member(monke
     assert any("join this team" in message.lower() for message in warnings)
     assert "Members" not in subheaders
     assert "Invite Members" not in subheaders
+
+
+def test_render_team_detail_shows_member_tag_summary(monkeypatch):
+    """Team member cards should surface each member's submitted circle tags."""
+    fake_streamlit, _, _, team_module = load_team_management_module(monkeypatch)
+
+    captions: list[str] = []
+
+    fake_streamlit.caption = lambda message="", *args, **kwargs: captions.append(str(message))
+    fake_streamlit.columns = lambda spec: tuple(
+        DummyContext() for _ in range(len(spec) if isinstance(spec, list) else spec)
+    )
+    fake_streamlit.container = lambda *args, **kwargs: DummyContext()
+    fake_streamlit.button = lambda *args, **kwargs: False
+
+    fake_streamlit.session_state.current_circle_id = 5
+    fake_streamlit.session_state.selected_team_id = 11
+
+    monkeypatch.setattr(team_module, "get_current_user", lambda: {"id": 2, "username": "creator"})
+    monkeypatch.setattr(
+        team_module,
+        "fetch_teams",
+        lambda circle_id: [
+            {
+                "id": 11,
+                "name": "Core Team",
+                "creator_id": 2,
+                "creator_username": "creator",
+                "description": "Private details",
+                "status": "Recruiting",
+                "current_members": 2,
+                "max_members": 5,
+                "member_ids": [2, 3],
+            }
+        ],
+    )
+    monkeypatch.setattr(
+        team_module,
+        "fetch_circle_members",
+        lambda circle_id: [
+            {"id": 2, "username": "creator", "email": "creator@example.com"},
+            {"id": 3, "username": "member", "email": "member@example.com"},
+        ],
+    )
+    monkeypatch.setattr(team_module, "fetch_team_invitations", lambda team_id: [])
+    monkeypatch.setattr(
+        team_module,
+        "fetch_member_tags",
+        lambda circle_id, user_id: [{"tag_name": "Tech Stack", "data_type": "multi_select", "value": '["Python", "SQL"]'}],
+    )
+
+    team_module.render_team_detail()
+
+    assert any("Tags: Tech Stack: Python, SQL" in caption for caption in captions)
+
+
+def test_render_team_detail_shows_pending_invitee_tag_summary(monkeypatch):
+    """Pending invitations should also show the invitee's submitted circle tags."""
+    fake_streamlit, _, _, team_module = load_team_management_module(monkeypatch)
+
+    captions: list[str] = []
+
+    fake_streamlit.caption = lambda message="", *args, **kwargs: captions.append(str(message))
+    fake_streamlit.columns = lambda spec: tuple(
+        DummyContext() for _ in range(len(spec) if isinstance(spec, list) else spec)
+    )
+    fake_streamlit.container = lambda *args, **kwargs: DummyContext()
+    fake_streamlit.button = lambda *args, **kwargs: False
+
+    fake_streamlit.session_state.current_circle_id = 5
+    fake_streamlit.session_state.selected_team_id = 11
+
+    monkeypatch.setattr(team_module, "get_current_user", lambda: {"id": 2, "username": "creator"})
+    monkeypatch.setattr(
+        team_module,
+        "fetch_teams",
+        lambda circle_id: [
+            {
+                "id": 11,
+                "name": "Core Team",
+                "creator_id": 2,
+                "creator_username": "creator",
+                "description": "Private details",
+                "status": "Recruiting",
+                "current_members": 1,
+                "max_members": 5,
+                "member_ids": [2],
+            }
+        ],
+    )
+    monkeypatch.setattr(
+        team_module,
+        "fetch_circle_members",
+        lambda circle_id: [
+            {"id": 2, "username": "creator", "email": "creator@example.com"},
+            {"id": 4, "username": "invitee", "email": "invitee@example.com"},
+        ],
+    )
+    monkeypatch.setattr(
+        team_module,
+        "fetch_team_invitations",
+        lambda team_id: [{"id": 55, "status": "pending", "invitee_id": 4, "team_id": 11}],
+    )
+    monkeypatch.setattr(
+        team_module,
+        "fetch_member_tags",
+        lambda circle_id, user_id: [{"tag_name": "Major", "data_type": "single_select", "value": "AI"}],
+    )
+
+    team_module.render_team_detail()
+
+    assert any("Tags: Major: AI" in caption for caption in captions)
+
+
+def test_render_team_list_shows_required_rules_summary(monkeypatch):
+    """Team list cards should surface schema-driven required rules, not only bare tag names."""
+    fake_streamlit, _, _, team_module = load_team_management_module(monkeypatch)
+
+    captions: list[str] = []
+
+    fake_streamlit.caption = lambda message="", *args, **kwargs: captions.append(str(message))
+    fake_streamlit.columns = lambda spec: tuple(
+        DummyContext() for _ in range(len(spec) if isinstance(spec, list) else spec)
+    )
+    fake_streamlit.container = lambda *args, **kwargs: DummyContext()
+    fake_streamlit.button = lambda *args, **kwargs: False
+
+    fake_streamlit.session_state.current_circle_id = 5
+
+    monkeypatch.setattr(team_module, "get_current_user", lambda: {"id": 7, "username": "viewer"})
+    monkeypatch.setattr(
+        team_module,
+        "fetch_teams",
+        lambda circle_id: [
+            {
+                "id": 11,
+                "name": "Core Team",
+                "creator_id": 2,
+                "creator_username": "creator",
+                "description": "Private details",
+                "status": "Recruiting",
+                "current_members": 1,
+                "max_members": 5,
+                "member_ids": [2],
+                "required_tags": ["Major"],
+                "required_tag_rules": [{"tag_name": "Major", "expected_value": "AI"}],
+            }
+        ],
+    )
+
+    team_module.render_team_list()
+
+    assert any("Required tags: Major" in caption for caption in captions)
+    assert any("Required rules: Major=AI" in caption for caption in captions)
 
 
 def test_team_management_main_hides_circle_hall_button_in_normal_state(monkeypatch):

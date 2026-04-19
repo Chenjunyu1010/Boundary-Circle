@@ -21,6 +21,11 @@ class InvitationKind(str, Enum):
     JOIN_REQUEST = "join_request"
 
 
+class NumericRangeValue(SQLModel):
+    min: Optional[Union[int, float]] = None
+    max: Optional[Union[int, float]] = None
+
+
 class Team(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     name: str
@@ -52,7 +57,7 @@ class Invitation(SQLModel, table=True):
 
 class TeamRequirementRule(SQLModel):
     tag_name: str
-    expected_value: Union[str, list[str], int, float, bool]
+    expected_value: Union[str, list[str], bool, int, float, NumericRangeValue]
 
 
 class TeamCreate(SQLModel):

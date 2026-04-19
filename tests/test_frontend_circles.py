@@ -236,3 +236,19 @@ def test_go_to_circle_hall_clears_detail_state_and_switches_page(monkeypatch):
     assert "selected_circle_id" not in fake_streamlit.session_state
     assert "current_circle_id" not in fake_streamlit.session_state
     assert switched["target"] == "pages/circles.py"
+
+
+def test_build_category_filter_options_uses_dynamic_circle_categories(monkeypatch):
+    _, circles_module, _ = load_circle_modules(monkeypatch)
+
+    categories = circles_module.build_category_filter_options(
+        [
+            {"id": 1, "category": "Course"},
+            {"id": 2, "category": "Sports"},
+            {"id": 3, "category": "Entertainment"},
+            {"id": 4, "category": "Course"},
+            {"id": 5, "category": ""},
+        ]
+    )
+
+    assert categories == ["All", "Course", "Entertainment", "Sports"]

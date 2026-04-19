@@ -36,6 +36,32 @@ def get_create_circle_button_columns() -> list[int]:
     return [3, 7]
 
 
+def build_category_filter_options(circles: list[dict]) -> list[str]:
+    """Build dynamic category filter options from the fetched circles."""
+    categories = sorted(
+        {
+            str(circle.get("category", "")).strip()
+            for circle in circles
+            if str(circle.get("category", "")).strip()
+        }
+    )
+    return ["All", *categories]
+
+
+def get_create_circle_category_options() -> list[str]:
+    """Return available categories for new circles."""
+    return [
+        "General",
+        "Course",
+        "Interest",
+        "Event",
+        "Community",
+        "Project",
+        "Sports",
+        "Entertainment",
+    ]
+
+
 def fetch_circles() -> list[dict]:
     """Fetch all circles from API."""
     try:
@@ -117,6 +143,9 @@ def main() -> None:
         circle_detail_page.main()
         return
 
+    circles = fetch_circles()
+    category_options = build_category_filter_options(circles)
+
     col1, col2 = st.columns([3, 1])
 
     with col1:
@@ -128,10 +157,8 @@ def main() -> None:
     with col2:
         category_filter = st.selectbox(
             "Category",
-            ["All", "Course", "Interest", "Event", "Community", "General"],
+            category_options,
         )
-
-    circles = fetch_circles()
 
     if search_query:
         circles = [
@@ -163,7 +190,7 @@ def main() -> None:
             )
             circle_category = st.selectbox(
                 "Category",
-                ["General", "Course", "Interest", "Event", "Community"],
+                get_create_circle_category_options(),
             )
 
             col_submit, col_cancel = st.columns(2)
