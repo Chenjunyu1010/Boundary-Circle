@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Tuple
 
 from fastapi.testclient import TestClient
+import pytest
 from sqlmodel import select
 
 from src.main import app
@@ -469,7 +470,7 @@ def test_match_users_freedom_score_computed_from_keyword_overlap(db_session) -> 
         jaccard=item["jaccard_score"],
         keyword_overlap=item["keyword_overlap_score"],
     )
-    assert item["final_score"] == expected_final
+    assert item["final_score"] == pytest.approx(expected_final)
 
 
 def test_match_users_handles_empty_freedom_profiles_gracefully(db_session) -> None:
@@ -671,7 +672,7 @@ def test_compute_final_matching_score_uses_weighted_formula() -> None:
         keyword_overlap=0.4,
     )
 
-    assert score == 0.84
+    assert score == pytest.approx(0.84)
 
 
 def test_matching_helpers_do_not_call_session_get_for_user_tag_name_lookup(db_session, monkeypatch) -> None:

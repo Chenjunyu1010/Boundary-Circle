@@ -200,23 +200,44 @@ def _build_keyword_token_map(keywords: List[str]) -> dict[str, Set[str]]:
     return token_map
 
 
+def _build_user_keyword_token_set(user_keywords: List[str]) -> Set[str]:
+    """Build canonical match tokens for all user keywords once."""
+    user_token_set: Set[str] = set()
+    for keyword in user_keywords:
+        user_token_set |= _keyword_match_tokens(keyword)
+    return user_token_set
+
+
+def analyze_freedom_keyword_overlap(
+    user_keywords: List[str],
+    team_keywords: List[str],
+) -> tuple[float, List[str]]:
+    """Compute overlap score and matched team keywords in one tokenization pass."""
+    if not team_keywords:
+        return 0.0, []
+
+    user_token_set = _build_user_keyword_token_set(user_keywords)
+    team_token_map = _build_keyword_token_map(team_keywords)
+    if not team_token_map:
+        return 0.0, []
+
+    matched_keywords = [
+        keyword
+        for keyword, tokens in team_token_map.items()
+        if tokens & user_token_set
+    ]
+    score = len(matched_keywords) / float(len(team_token_map))
+    return score, sorted(matched_keywords)
+
+
 def compute_freedom_score(user_keywords: List[str], team_keywords: List[str]) -> float:
     """Compute freedom overlap score as intersection over team requirements.
 
     freedom_score = len(user_keywords ∩ team_keywords) / len(team_keywords)
     Returns 0.0 when team_keywords is empty.
     """
-    if not team_keywords:
-        return 0.0
-    user_token_set: Set[str] = set()
-    for keyword in user_keywords:
-        user_token_set |= _keyword_match_tokens(keyword)
-
-    team_token_map = _build_keyword_token_map(team_keywords)
-    overlap_size = sum(
-        1 for tokens in team_token_map.values() if tokens & user_token_set
-    )
-    return overlap_size / float(len(team_token_map))
+    score, _ = analyze_freedom_keyword_overlap(user_keywords, team_keywords)
+    return score
 
 
 def compute_final_matching_score(
@@ -232,13 +253,5 @@ def compute_final_matching_score(
 
 def get_matched_freedom_keywords(user_keywords: List[str], team_keywords: List[str]) -> List[str]:
     """Return the list of keywords that match between user and team profiles."""
-    user_token_set: Set[str] = set()
-    for keyword in user_keywords:
-        user_token_set |= _keyword_match_tokens(keyword)
-
-    matched_keywords = [
-        keyword
-        for keyword, tokens in _build_keyword_token_map(team_keywords).items()
-        if tokens & user_token_set
-    ]
-    return sorted(matched_keywords)
+    _, matched_keywords = analyze_freedom_keyword_overlap(user_keywords, team_keywords)
+    return matched_keywords

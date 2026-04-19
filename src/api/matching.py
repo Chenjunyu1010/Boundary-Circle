@@ -17,15 +17,14 @@ from src.models.teams import (
     decode_required_tag_rules,
 )
 from src.services.matching import (
+    analyze_freedom_keyword_overlap,
     build_team_profile,
-    compute_freedom_score,
     compute_final_matching_score,
     coverage_score,
     coverage_score_for_rules,
     decode_freedom_keywords,
     describe_matched_rules,
     describe_missing_rules,
-    get_matched_freedom_keywords,
     get_team_member_ids,
     get_team_required_tag_names,
     get_user_tag_values_for_circle,
@@ -173,8 +172,10 @@ def match_users_for_team(
         
         # Compute freedom score
         user_freedom_keywords = decode_freedom_keywords(membership.freedom_tag_profile_json)
-        freedom_score = compute_freedom_score(user_freedom_keywords, team_freedom_keywords)
-        matched_freedom = get_matched_freedom_keywords(user_freedom_keywords, team_freedom_keywords)
+        freedom_score, matched_freedom = analyze_freedom_keyword_overlap(
+            user_freedom_keywords,
+            team_freedom_keywords,
+        )
         final_score = compute_final_matching_score(
             coverage=cov,
             jaccard=jac,
@@ -275,8 +276,10 @@ def match_teams_for_user(
         jac = jaccard_score(team_profile, user_tags)
         
         # Compute freedom score
-        freedom_score = compute_freedom_score(user_freedom_keywords, team_freedom_keywords)
-        matched_freedom = get_matched_freedom_keywords(user_freedom_keywords, team_freedom_keywords)
+        freedom_score, matched_freedom = analyze_freedom_keyword_overlap(
+            user_freedom_keywords,
+            team_freedom_keywords,
+        )
         final_score = compute_final_matching_score(
             coverage=cov,
             jaccard=jac,
