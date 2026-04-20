@@ -4,6 +4,7 @@ Dedicated profile page for viewing and editing the current user's profile.
 
 from __future__ import annotations
 
+import calendar
 import sys
 from pathlib import Path
 from typing import Optional
@@ -48,6 +49,16 @@ def compose_birthday(
     return f"{year:04d}-{month:02d}-{day:02d}"
 
 
+def get_birthday_day_options(
+    year: Optional[int], month: Optional[int]
+) -> list[Optional[int]]:
+    """Return valid day choices for the selected month and year."""
+    if year is None or month is None:
+        return [None] + list(range(1, 32))
+    _, max_day = calendar.monthrange(year, month)
+    return [None] + list(range(1, max_day + 1))
+
+
 def load_profile() -> Optional[dict]:
     response = api_client.get("/profile/me")
     if not response.ok:
@@ -69,7 +80,7 @@ def main():
     selected_year, selected_month, selected_day = split_birthday_parts(profile.get("birthday"))
     year_options = [None] + list(range(1980, 2011))
     month_options = [None] + list(range(1, 13))
-    day_options = [None] + list(range(1, 32))
+    day_options = get_birthday_day_options(selected_year, selected_month)
 
     with st.form("profile_form"):
         full_name = st.text_input("Full name", value=profile.get("full_name") or "")
@@ -94,6 +105,7 @@ def main():
                 index=month_options.index(selected_month) if selected_month in month_options else 0,
                 format_func=lambda value: "Month" if value is None else str(value),
             )
+        day_options = get_birthday_day_options(birthday_year, birthday_month)
         with day_col:
             birthday_day = st.selectbox(
                 "Day",
