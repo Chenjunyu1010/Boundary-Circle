@@ -339,6 +339,9 @@ def test_ui_button_css_uses_consistent_blue_red_and_neutral_button_palette(monke
     assert "border-bottom-color: var(--bc-tab-accent) !important;" in css
     assert ".stFormSubmitButton > button:focus,\n        button[role=\"tab\"]:focus" not in css
     assert '[data-testid="stPageLink"] a {' in css
+    assert "color: var(--bc-button-neutral-text) !important;" in css
+    assert '[data-testid="stPageLink"] a *,' in css
+    assert '[data-testid="stPageLink"] a span' in css
     assert "@media (prefers-color-scheme: dark)" not in css
 
 

@@ -171,7 +171,7 @@ def build_button_usability_css() -> str:
             min-height: 2.5rem;
             padding: 0.45rem 0.8rem;
             background: var(--bc-button-neutral-bg);
-            color: var(--bc-button-neutral-text);
+            color: var(--bc-button-neutral-text) !important;
             border: 1px solid var(--bc-button-neutral-border);
             border-radius: 10px;
             font-weight: 620;
@@ -183,9 +183,15 @@ def build_button_usability_css() -> str:
                 transform 0.15s ease;
         }
 
+        [data-testid="stPageLink"] a *,
+        [data-testid="stPageLink"] a p,
+        [data-testid="stPageLink"] a span {
+            color: var(--bc-button-neutral-text) !important;
+        }
+
         [data-testid="stPageLink"] a:hover {
             background: var(--bc-button-neutral-bg-hover);
-            color: var(--bc-button-neutral-text);
+            color: var(--bc-button-neutral-text) !important;
             border-color: var(--bc-button-neutral-border);
             box-shadow: 0 0 0 1px rgba(100, 116, 139, 0.14) inset;
             transform: translateY(-1px);
