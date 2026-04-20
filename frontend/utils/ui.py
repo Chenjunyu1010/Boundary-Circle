@@ -38,11 +38,24 @@ def build_button_usability_css() -> str:
                 var(--st-primary-color, #2563eb) 42%,
                 white 58%
             );
+            --bc-tab-accent: #dc2626;
             --bc-tab-active-bg: color-mix(
                 in srgb,
-                var(--st-primary-color, #2563eb) 14%,
+                #dc2626 8%,
                 var(--st-background-color, #ffffff) 86%
             );
+        }
+
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --bc-button-primary-bg: #374151;
+                --bc-button-primary-bg-hover: #1f2937;
+                --bc-button-primary-border: #6b7280;
+                --bc-button-danger-bg: #3f3f46;
+                --bc-button-danger-bg-hover: #27272a;
+                --bc-button-danger-border: #71717a;
+                --bc-tab-accent: #f87171;
+            }
         }
 
         /* Hide browser-native password reveal controls so Streamlit shows only one toggle. */
@@ -100,18 +113,18 @@ def build_button_usability_css() -> str:
 
         button[role="tab"] {
             background: var(--bc-button-neutral-bg) !important;
-            border: 1px solid var(--bc-button-neutral-border) !important;
+            border: 1px solid transparent !important;
+            border-bottom: 2px solid transparent !important;
             border-radius: 10px !important;
+            box-shadow: none !important;
         }
 
         button[role="tab"][aria-selected="true"] {
             background: var(--bc-tab-active-bg) !important;
-            border-color: color-mix(
-                in srgb,
-                var(--st-primary-color, #2563eb) 52%,
-                var(--bc-button-neutral-border) 48%
-            ) !important;
-            box-shadow: 0 0 0 1px rgba(37, 99, 235, 0.18) inset;
+            color: var(--bc-tab-accent) !important;
+            border-color: transparent !important;
+            border-bottom-color: var(--bc-tab-accent) !important;
+            box-shadow: none !important;
         }
 
         .stButton > button:focus,
