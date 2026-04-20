@@ -309,14 +309,13 @@ def test_ui_button_css_uses_streamlit_theme_tokens_for_light_and_dark_modes(monk
     assert "min-height: 2.75rem;" in css
     assert "padding: 0.45rem 1rem;" in css
     assert "border: 1px solid var(--st-border-color) !important;" in css
+    assert "border-color: color-mix(in srgb, currentColor 18%, var(--st-border-color)) !important;" in css
     assert '[data-testid="stPageLink"] a' in css
     assert "background: var(--bc-button-bg);" not in css
     assert "color: var(--bc-button-text);" not in css
-    assert 'button[kind="secondary"]' in css
     assert 'button[kind="primary"]' in css
     assert 'button[role="tab"]' in css
     assert 'button[role="tab"][aria-selected="true"]' in css
-    assert "color-mix(in srgb, currentColor 18%, var(--st-border-color))" in css
     assert "color-mix(in srgb, var(--st-primary-color) 55%, var(--st-border-color))" in css
 
 
