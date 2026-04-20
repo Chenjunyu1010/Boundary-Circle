@@ -17,7 +17,7 @@ import streamlit as st
 
 from utils.api import api_client
 from utils.auth import get_current_user, init_session_state, require_auth
-from utils.ui import apply_button_usability_style
+from utils.ui import apply_button_usability_style, render_button_variant_marker
 
 
 init_session_state()
@@ -733,6 +733,7 @@ def main():
                         st.caption(f"Options: {', '.join(tag.get('options', []))}")
                 with col3:
                     if is_creator and tag.get("id") is not None:
+                        render_button_variant_marker("danger")
                         if st.button(
                             "Delete",
                             key=f"delete_tag_definition_{circle_id}_{tag.get('id')}",
@@ -766,6 +767,7 @@ def main():
                     st.rerun()
             with option_remove_col:
                 disable_remove = len(option_values) <= 1
+                render_button_variant_marker("danger")
                 if st.button(
                     "Remove Last Option",
                     key=_admin_tag_form_key(circle_id, "remove_option"),

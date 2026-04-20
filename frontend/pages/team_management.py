@@ -21,7 +21,7 @@ if parent_dir not in sys.path:
 
 from utils.api import api_client
 from utils.auth import get_current_user, init_session_state, require_auth
-from utils.ui import apply_button_usability_style
+from utils.ui import apply_button_usability_style, render_button_variant_marker
 
 
 init_session_state()
@@ -1182,6 +1182,7 @@ def render_invitation_management() -> None:
                         else:
                             st.error(message)
                 with reject_col:
+                    render_button_variant_marker("danger")
                     if st.button("\u274C Reject", key=f"reject_invitation_{invite.get('id')}"):
                         invite_id = invite.get("id")
                         if invite_id is None:
@@ -1241,6 +1242,7 @@ def render_invitation_management() -> None:
                         else:
                             st.error(message)
                 with reject_col:
+                    render_button_variant_marker("danger")
                     if st.button("\u274C Reject", key=f"reject_join_request_{invite.get('id')}"):
                         invite_id = invite.get("id")
                         if invite_id is None:
@@ -1360,6 +1362,7 @@ def render_matching_section() -> None:
                         if st.button(
                             "Invite",
                             key=f"invite_match_{selected_team['id']}_{match['user_id']}",
+                            type="primary",
                         ):
                             success, message = send_invitation(
                                 selected_team["id"],
@@ -1410,6 +1413,7 @@ def render_matching_section() -> None:
                         elif is_joinable and st.button(
                             "Request to Join",
                             key=f"request_join_match_{team_id}",
+                            type="primary",
                         ):
                             success, message = request_to_join_team(int(team_id))
                             if success:

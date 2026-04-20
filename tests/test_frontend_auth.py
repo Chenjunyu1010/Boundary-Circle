@@ -308,15 +308,37 @@ def test_ui_button_css_uses_streamlit_theme_tokens_for_light_and_dark_modes(monk
 
     assert "min-height: 2.75rem;" in css
     assert "padding: 0.45rem 1rem;" in css
-    assert "border: 1px solid var(--st-border-color) !important;" in css
-    assert "border-color: color-mix(in srgb, currentColor 18%, var(--st-border-color)) !important;" in css
+    assert "--bc-button-primary-bg: #2563eb;" in css
+    assert "--bc-button-danger-bg: #dc2626;" in css
+    assert "--bc-button-neutral-border:" in css
+    assert "background: var(--bc-button-neutral-bg);" in css
+    assert "border: 1px solid var(--bc-button-neutral-border) !important;" in css
     assert '[data-testid="stPageLink"] a' in css
-    assert "background: var(--bc-button-bg);" not in css
-    assert "color: var(--bc-button-text);" not in css
+    assert "background: var(--bc-button-primary-bg) !important;" in css
+    assert "color: var(--bc-button-primary-text) !important;" in css
     assert 'button[kind="primary"]' in css
     assert 'button[role="tab"]' in css
     assert 'button[role="tab"][aria-selected="true"]' in css
-    assert "color-mix(in srgb, var(--st-primary-color) 55%, var(--st-border-color))" in css
+    assert '[data-testid="stPageLink"] a {' in css
+    assert "currentColor 18%" not in css
+
+
+def test_ui_button_variant_marker_renders_danger_hook(monkeypatch):
+    fake_streamlit, _, _, _ = load_frontend_modules(monkeypatch)
+    calls: list[tuple[str, bool]] = []
+
+    def fake_markdown(content, unsafe_allow_html=False, **kwargs):
+        calls.append((content, unsafe_allow_html))
+
+    fake_streamlit.markdown = fake_markdown
+    sys.modules.pop("frontend.utils.ui", None)
+    ui_module = importlib.import_module("frontend.utils.ui")
+
+    ui_module.render_button_variant_marker("danger")
+
+    assert calls == [
+        ('<div class="bc-button-marker" data-variant="danger"></div>', True)
+    ]
 
 
 def test_profile_page_day_options_follow_month_and_leap_year(monkeypatch):
