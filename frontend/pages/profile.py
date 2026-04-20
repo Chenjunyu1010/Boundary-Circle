@@ -17,6 +17,7 @@ if parent_dir not in sys.path:
 
 from utils.api import api_client, response_json_object
 from utils.auth import require_auth
+from utils.ui import apply_button_usability_style
 from navigation import get_navigation_page
 
 
@@ -68,6 +69,7 @@ def load_profile() -> Optional[dict]:
 
 
 def main():
+    apply_button_usability_style()
     require_auth()
     st.title("My Profile")
     st.caption("Manage your personal details and choose what other users can see.")
@@ -80,7 +82,6 @@ def main():
     selected_year, selected_month, selected_day = split_birthday_parts(profile.get("birthday"))
     year_options = [None] + list(range(1980, 2011))
     month_options = [None] + list(range(1, 13))
-    day_options = get_birthday_day_options(selected_year, selected_month)
 
     with st.form("profile_form"):
         full_name = st.text_input("Full name", value=profile.get("full_name") or "")
