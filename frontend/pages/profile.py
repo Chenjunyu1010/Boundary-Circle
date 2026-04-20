@@ -14,7 +14,7 @@ parent_dir = str(Path(__file__).resolve().parents[1])
 if parent_dir not in sys.path:
     sys.path.insert(0, parent_dir)
 
-from utils.api import api_client
+from utils.api import api_client, response_json_object
 from utils.auth import require_auth
 from navigation import get_navigation_page
 
@@ -53,7 +53,7 @@ def load_profile() -> Optional[dict]:
     if not response.ok:
         st.error(f"Failed to load profile: {getattr(response, 'reason', 'Unknown error')}")
         return None
-    return response.json()
+    return response_json_object(response)
 
 
 def main():
@@ -129,7 +129,7 @@ def main():
 
     response = api_client.put("/profile/me", data=payload)
     if response.ok:
-        updated_profile = response.json()
+        updated_profile = response_json_object(response)
         st.session_state.full_name = updated_profile.get("full_name")
         st.session_state.show_profile_completion_prompt = False
         st.success("Profile updated.")
@@ -138,7 +138,7 @@ def main():
 
     detail = getattr(response, "reason", "Unknown error")
     try:
-        detail = response.json().get("detail", detail)
+        detail = response_json_object(response).get("detail", detail)
     except Exception:
         pass
     st.error(f"Failed to update profile: {detail}")

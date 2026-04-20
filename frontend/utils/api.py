@@ -6,7 +6,7 @@ Uses the real backend API by default, with optional mock mode for development/te
 
 import json
 import os
-from typing import Optional
+from typing import Any, Optional
 
 import requests
 import streamlit as st
@@ -743,3 +743,13 @@ class APIClient:
 
 
 api_client = APIClient()
+
+
+def response_json_object(response) -> dict[str, Any]:
+    """Return a JSON object payload or an empty dict for non-object payloads."""
+    try:
+        payload = response.json()
+    except Exception:
+        return {}
+
+    return payload if isinstance(payload, dict) else {}

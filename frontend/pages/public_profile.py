@@ -14,7 +14,7 @@ parent_dir = str(Path(__file__).resolve().parents[1])
 if parent_dir not in sys.path:
     sys.path.insert(0, parent_dir)
 
-from utils.api import api_client
+from utils.api import api_client, response_json_object
 from utils.auth import require_auth
 from navigation import get_navigation_page
 
@@ -51,12 +51,12 @@ def load_public_profile(user_id: int) -> Optional[dict]:
     if not response.ok:
         detail = getattr(response, "reason", "Unknown error")
         try:
-            detail = response.json().get("detail", detail)
+            detail = response_json_object(response).get("detail", detail)
         except Exception:
             pass
         st.error(f"Failed to load public profile: {detail}")
         return None
-    return response.json()
+    return response_json_object(response)
 
 
 def build_public_profile_rows(profile: dict) -> list[tuple[str, str]]:

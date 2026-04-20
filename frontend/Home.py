@@ -14,7 +14,7 @@ if parent_dir not in sys.path:
     sys.path.insert(0, parent_dir)
 
 from utils.auth import get_current_user, init_session_state, is_authenticated, logout
-from utils.api import api_client
+from utils.api import api_client, response_json_object
 from utils.ui import apply_button_usability_style
 from navigation import register_navigation
 
@@ -35,7 +35,7 @@ def load_profile_summary() -> dict:
     response = api_client.get("/profile/me")
     if not response.ok:
         return {}
-    return response.json()
+    return response_json_object(response)
 
 
 def build_account_summary(user: dict, profile: dict) -> list[tuple[str, str, Optional[str]]]:

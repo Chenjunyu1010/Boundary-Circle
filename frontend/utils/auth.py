@@ -8,7 +8,7 @@ import streamlit as st
 import logging
 from typing import Optional
 
-from .api import api_client
+from .api import api_client, response_json_object
 
 
 AUTH_COOKIE_NAME = "boundary_circle_access_token"
@@ -70,7 +70,7 @@ def _restore_session_from_persisted_token(persisted_token: str) -> None:
         return
 
     if response.ok:
-        data = response.json()
+        data = response_json_object(response)
         st.session_state.user_id = data.get("id")
         st.session_state.username = data.get("username")
         st.session_state.email = data.get("email")
@@ -137,7 +137,7 @@ def _fetch_user_info() -> bool:
     try:
         response = api_client.get("/auth/me")
         if response.ok:
-            data = response.json()
+            data = response_json_object(response)
             st.session_state.user_id = data.get("id")
             st.session_state.username = data.get("username")
             st.session_state.email = data.get("email")
@@ -166,7 +166,9 @@ def _load_profile_prompt_state() -> None:
         if not response.ok:
             st.session_state.show_profile_completion_prompt = False
             return
-        st.session_state.show_profile_completion_prompt = _should_prompt_profile_completion(response.json())
+        st.session_state.show_profile_completion_prompt = _should_prompt_profile_completion(
+            response_json_object(response)
+        )
     except Exception:
         logging.exception("Failed to fetch profile onboarding state")
         st.session_state.show_profile_completion_prompt = False
@@ -181,7 +183,7 @@ def login(email: str, password: str) -> tuple[bool, str]:
         )
 
         if response.ok:
-            data = response.json()
+            data = response_json_object(response)
             access_token = data.get("access_token")
             if not access_token:
                 # Treat missing or empty access token as a login failure
@@ -229,7 +231,7 @@ def register(username: str, email: str, password: str) -> tuple[bool, str]:
         )
 
         if response.ok:
-            data = response.json()
+            data = response_json_object(response)
             st.session_state.user_id = data.get("id")
             st.session_state.username = data.get("username")
             st.session_state.email = data.get("email")
