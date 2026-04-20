@@ -86,6 +86,10 @@ Recommended variables:
 - `LLM_BASE_URL`
   - Optional unless `LLM_PROVIDER=openai_compatible`
   - Base URL for the compatible API, for example `https://api.openai.com/v1`
+- `ADMIN_SEED_KEY`
+  - Optional
+  - Required only if you want to use the remote admin seed API for Railway or other deployed environments
+  - Must be sent via the `X-Admin-Key` request header
 
 Example local setup:
 
@@ -212,6 +216,64 @@ Recommended usage:
 - `demo`: smaller, presentation-friendly data for report walkthroughs
 - `stress`: larger, more varied data for matching, invitation, leave-team, and lock/unlock testing
 - `stress2`: the most complete local demo dataset for frontend walkthroughs, LLM-assisted freedom-tag scenarios, and richer matching/invitation cases
+
+### Remote seed import for deployed environments
+
+If your backend is deployed on Railway, you can reuse the existing seed datasets through the admin API instead of editing the SQLite file directly.
+
+First, set an admin seed key in the deployed backend environment:
+
+```bash
+ADMIN_SEED_KEY=your-long-random-secret
+```
+
+Available endpoints:
+
+- `POST /admin/seed?dataset=demo|stress|stress2`
+- `POST /admin/seed/reset?dataset=demo|stress|stress2`
+
+Both endpoints require:
+
+```text
+X-Admin-Key: your-long-random-secret
+```
+
+Example with `curl`:
+
+```bash
+curl -X POST "https://your-backend.up.railway.app/admin/seed?dataset=stress" \
+  -H "X-Admin-Key: your-long-random-secret"
+```
+
+Reset the same dataset:
+
+```bash
+curl -X POST "https://your-backend.up.railway.app/admin/seed/reset?dataset=stress" \
+  -H "X-Admin-Key: your-long-random-secret"
+```
+
+You can also use the included helper script:
+
+```bash
+python scripts/seed_remote.py stress \
+  --base-url https://your-backend.up.railway.app \
+  --admin-key your-long-random-secret
+```
+
+Reset remotely:
+
+```bash
+python scripts/seed_remote.py stress \
+  --base-url https://your-backend.up.railway.app \
+  --admin-key your-long-random-secret \
+  --reset
+```
+
+Notes:
+
+- The remote admin seed API is intended for private deployment management, not public frontend use.
+- If `ADMIN_SEED_KEY` is not configured, the admin seed API returns `503`.
+- Re-running the same dataset is safe: the seed logic resets that dataset first and then imports it again, so counts stay consistent.
 
 ## Tests
 

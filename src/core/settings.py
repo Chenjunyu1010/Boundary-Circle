@@ -14,6 +14,7 @@ class Settings(BaseSettings):
 
     app_env: str = "development"
     secret_key: Optional[str] = None
+    admin_seed_key: Optional[str] = None
     access_token_expire_minutes: int = 60
     password_hash_iterations: int = 100_000
     llm_provider: str = ""
