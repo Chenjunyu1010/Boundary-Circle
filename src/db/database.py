@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 
 from sqlalchemy import text
@@ -10,8 +11,10 @@ data_dir.mkdir(exist_ok=True)
 sqlite_file_name = data_dir / "boundary_circle.db"
 sqlite_url = f"sqlite:///{sqlite_file_name.as_posix()}"
 
-# echo=True will print all SQL queries to the console, helpful for debugging
-engine = create_engine(sqlite_url, echo=True)
+SQL_ECHO = os.environ.get("SQL_ECHO", "false").strip().lower() == "true"
+
+# Keep SQL echo opt-in so production logs stay readable.
+engine = create_engine(sqlite_url, echo=SQL_ECHO)
 
 
 def _is_sqlite_engine(db_engine: Engine) -> bool:
