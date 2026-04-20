@@ -308,7 +308,9 @@ def test_ui_button_css_uses_streamlit_theme_tokens_for_light_and_dark_modes(monk
 
     assert "min-height: 2.75rem;" in css
     assert "padding: 0.45rem 1rem;" in css
-    assert "--bc-button-primary-bg: #334155;" in css
+    assert "--bc-button-primary-bg: color-mix(" in css
+    assert "--st-background-color" in css
+    assert "--st-text-color" in css
     assert "--bc-button-danger-bg: color-mix(" in css
     assert "--bc-tab-accent: #dc2626;" in css
     assert "--bc-button-neutral-border:" in css
@@ -322,10 +324,13 @@ def test_ui_button_css_uses_streamlit_theme_tokens_for_light_and_dark_modes(monk
     assert 'button[role="tab"][aria-selected="true"]' in css
     assert "background: transparent !important;" in css
     assert "button[role=\"tab\"]:hover" in css
+    assert "button[role=\"tab\"]:focus" in css
+    assert "outline: none !important;" in css
     assert "border-bottom: 2px solid transparent !important;" in css
     assert "color: var(--bc-tab-accent) !important;" in css
     assert "border-color: transparent !important;" in css
     assert "border-bottom-color: var(--bc-tab-accent) !important;" in css
+    assert ".stFormSubmitButton > button:focus,\n        button[role=\"tab\"]:focus" not in css
     assert '[data-testid="stPageLink"] a {' in css
     assert "currentColor 18%" not in css
     assert "@media (prefers-color-scheme: dark)" not in css
