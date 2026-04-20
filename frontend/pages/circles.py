@@ -18,7 +18,7 @@ if parent_dir not in sys.path:
 import streamlit as st
 from views import circle_detail as circle_detail_page
 from utils.auth import get_current_user, init_session_state, require_auth
-from utils.api import api_client
+from utils.api import api_client, response_json_object
 from utils.ui import apply_button_usability_style
 
 # Initialize session state
@@ -95,10 +95,7 @@ def create_circle(
             },
         )
         if response.ok:
-            try:
-                payload = response.json()
-            except Exception:  # pragma: no cover - defensive
-                payload = {}
+            payload = response_json_object(response)
             return True, "Circle created successfully!", payload.get("id")
         return False, f"Failed to create circle: {response.reason}", None
     except Exception as exc:  # pragma: no cover - defensive
@@ -210,8 +207,7 @@ def main() -> None:
                     )
                     if success:
                         st.session_state.show_create_form = False
-                        if circle_id is not None:
-                            prepare_circle_detail_navigation(circle_id)
+                        st.session_state.circle_create_success_message = message
                         st.rerun()
                     else:
                         st.error(message)
@@ -221,6 +217,10 @@ def main() -> None:
                 st.rerun()
 
     st.markdown("---")
+    success_message = st.session_state.pop("circle_create_success_message", None)
+    if success_message:
+        st.success(success_message)
+
     if not circles:
         st.info("No circles found. Be the first to create one!")
         return

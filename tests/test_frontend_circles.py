@@ -108,6 +108,27 @@ def test_create_circle_does_not_send_creator_id_query_param(monkeypatch):
     assert captured["params"] is None
 
 
+def test_create_circle_success_message_can_be_shown_without_detail_navigation(monkeypatch):
+    fake_streamlit, circles_module, _ = load_circle_modules(monkeypatch)
+
+    class Response:
+        ok = True
+        reason = "OK"
+
+        def json(self):
+            return {"id": 9, "name": "AI Circle"}
+
+    monkeypatch.setattr(circles_module, "get_current_user", lambda: {"id": 42})
+    monkeypatch.setattr(circles_module.api_client, "post", lambda *args, **kwargs: Response())
+
+    success, message, circle_id = circles_module.create_circle("AI Circle", "desc", "Course")
+
+    assert success is True
+    assert message == "Circle created successfully!"
+    assert circle_id == 9
+    assert "circle_create_success_message" not in fake_streamlit.session_state
+
+
 def test_prepare_circle_detail_navigation_sets_detail_focus(monkeypatch):
     fake_streamlit, circles_module, _ = load_circle_modules(monkeypatch)
 
