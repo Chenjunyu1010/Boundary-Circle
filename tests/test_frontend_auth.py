@@ -427,6 +427,41 @@ def test_auth_init_session_state_preserves_persisted_token_on_transient_failure(
     assert cookie_calls == []
 
 
+def test_auth_init_session_state_attempts_browser_storage_rehydration_when_no_cookie(monkeypatch):
+    fake_streamlit, _, auth_module, _ = load_frontend_modules(
+        monkeypatch,
+        mock_mode="false",
+    )
+    html_calls = []
+
+    monkeypatch.setattr(auth_module, "_restore_session_from_persisted_token", lambda persisted_token: None)
+    monkeypatch.setattr(auth_module, "_get_persisted_access_token", lambda: None)
+    monkeypatch.setattr(auth_module, "_run_browser_auth_bridge", lambda: html_calls.append("bridge"))
+
+    auth_module.init_session_state()
+
+    assert html_calls == ["bridge"]
+
+
+def test_sync_auth_cookie_persists_browser_storage_and_secure_flag(monkeypatch):
+    _, _, auth_module, _ = load_frontend_modules(monkeypatch)
+    html_payloads = []
+
+    def fake_html(markup, **kwargs):
+        html_payloads.append(markup)
+
+    components_v1 = sys.modules["streamlit.components.v1"]
+    monkeypatch.setattr(components_v1, "html", fake_html)
+
+    auth_module._sync_auth_cookie("persisted-token")
+
+    assert html_payloads
+    markup = html_payloads[0]
+    assert "localStorage.setItem" in markup
+    assert "boundary_circle_access_token" in markup
+    assert "Secure" in markup
+
+
 def test_validation_helpers_reject_invalid_inputs(monkeypatch):
     _, _, _, validation_module = load_frontend_modules(monkeypatch)
 

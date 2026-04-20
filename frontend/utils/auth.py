@@ -13,6 +13,7 @@ from .api import api_client, response_json_object
 
 AUTH_COOKIE_NAME = "boundary_circle_access_token"
 AUTH_COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24 * 7
+AUTH_BRIDGE_FLAG = "boundary_circle_auth_bridge_ran"
 
 
 def _clear_auth_session() -> None:
@@ -32,25 +33,25 @@ def _sync_auth_cookie(access_token: Optional[str]) -> None:
         logging.exception("Failed to import Streamlit components for auth cookie sync")
         return
 
+    script = (
+        "<script>"
+        "const secure = window.location.protocol === 'https:' ? '; Secure' : '';"
+        f"const cookieName = {AUTH_COOKIE_NAME!r};"
+        f"const bridgeFlag = {AUTH_BRIDGE_FLAG!r};"
+    )
     if access_token:
-        cookie_value = (
-            f"{AUTH_COOKIE_NAME}={access_token}; "
-            f"Max-Age={AUTH_COOKIE_MAX_AGE_SECONDS}; Path=/; SameSite=Lax"
+        script += (
+            f"document.cookie = `${{cookieName}}={access_token}; Max-Age={AUTH_COOKIE_MAX_AGE_SECONDS}; Path=/; SameSite=Lax${{secure}}`;"
+            f"window.localStorage.setItem(cookieName, {access_token!r});"
         )
     else:
-        cookie_value = (
-            f"{AUTH_COOKIE_NAME}=; Max-Age=0; Path=/; SameSite=Lax"
+        script += (
+            "document.cookie = `${cookieName}=; Max-Age=0; Path=/; SameSite=Lax${secure}`;"
+            "window.localStorage.removeItem(cookieName);"
         )
+    script += "window.sessionStorage.removeItem(bridgeFlag);</script>"
 
-    html(
-        (
-            "<script>"
-            f"document.cookie = {cookie_value!r};"
-            "</script>"
-        ),
-        height=0,
-        width=0,
-    )
+    html(script, height=0, width=0)
 
 
 def _get_persisted_access_token() -> Optional[str]:
@@ -58,6 +59,36 @@ def _get_persisted_access_token() -> Optional[str]:
     if not cookies:
         return None
     return cookies.get(AUTH_COOKIE_NAME)
+
+
+def _run_browser_auth_bridge() -> None:
+    """Rehydrate the auth cookie from browser storage when Streamlit cannot see it yet."""
+    try:
+        from streamlit.components.v1 import html
+    except Exception:
+        logging.exception("Failed to import Streamlit components for auth bridge")
+        return
+
+    html(
+        (
+            "<script>"
+            "const secure = window.location.protocol === 'https:' ? '; Secure' : '';"
+            f"const cookieName = {AUTH_COOKIE_NAME!r};"
+            f"const bridgeFlag = {AUTH_BRIDGE_FLAG!r};"
+            "const persistedToken = window.localStorage.getItem(cookieName);"
+            "const hasCookie = document.cookie.split('; ').some((item) => item.startsWith(`${cookieName}=`));"
+            "if (!persistedToken || hasCookie) {"
+            "  window.sessionStorage.removeItem(bridgeFlag);"
+            "} else if (!window.sessionStorage.getItem(bridgeFlag)) {"
+            "  window.sessionStorage.setItem(bridgeFlag, '1');"
+            f"  document.cookie = `${{cookieName}}=${{persistedToken}}; Max-Age={AUTH_COOKIE_MAX_AGE_SECONDS}; Path=/; SameSite=Lax${{secure}}`;"
+            "  window.location.reload();"
+            "}"
+            "</script>"
+        ),
+        height=0,
+        width=0,
+    )
 
 
 def _restore_session_from_persisted_token(persisted_token: str) -> None:
@@ -109,6 +140,8 @@ def init_session_state():
         persisted_token = _get_persisted_access_token()
         if persisted_token:
             _restore_session_from_persisted_token(persisted_token)
+        else:
+            _run_browser_auth_bridge()
 
 
 def is_authenticated() -> bool:
