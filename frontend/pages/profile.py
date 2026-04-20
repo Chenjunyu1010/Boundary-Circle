@@ -82,7 +82,6 @@ def main():
     selected_year, selected_month, selected_day = split_birthday_parts(profile.get("birthday"))
     year_options = [None] + list(range(1980, 2011))
     month_options = [None] + list(range(1, 13))
-    day_options = get_birthday_day_options(selected_year, selected_month)
 
     with st.form("profile_form"):
         full_name = st.text_input("Full name", value=profile.get("full_name") or "")
