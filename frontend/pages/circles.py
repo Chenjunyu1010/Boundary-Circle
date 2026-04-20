@@ -33,7 +33,51 @@ st.set_page_config(
 
 def get_create_circle_button_columns() -> list[int]:
     """Return the column split used for the create-circle action row."""
-    return [3, 7]
+    return [3, 3, 4]
+
+
+def get_current_circle_filter_mode(session_state: dict) -> str:
+    """Return the current ownership filter mode for the circle list."""
+    mode = session_state.get("circle_filter_mode", "joined")
+    if mode in {"joined", "created", "all"}:
+        return mode
+    return "joined"
+
+
+def advance_circle_filter_mode(filter_mode: str) -> str:
+    """Return the next ownership filter mode in the UI cycle."""
+    if filter_mode == "joined":
+        return "created"
+    if filter_mode == "created":
+        return "all"
+    return "joined"
+
+
+def filter_circles_by_membership_mode(circles: list[dict], filter_mode: str) -> list[dict]:
+    """Filter circles by ownership or membership state."""
+    if filter_mode == "joined":
+        return [circle for circle in circles if circle.get("is_member") or circle.get("is_creator")]
+    if filter_mode == "created":
+        return [circle for circle in circles if circle.get("is_creator")]
+    return circles
+
+
+def get_circle_filter_button_label(filter_mode: str) -> str:
+    """Return the next filter-mode label shown on the toggle button."""
+    if filter_mode == "joined":
+        return "Created by Me"
+    if filter_mode == "created":
+        return "All Circles"
+    return "Joined Circles"
+
+
+def get_circle_list_heading(filter_mode: str) -> str:
+    """Return the active list heading for the selected filter mode."""
+    if filter_mode == "joined":
+        return "Joined Circles"
+    if filter_mode == "created":
+        return "Created by Me"
+    return "Available Circles"
 
 
 def build_category_filter_options(circles: list[dict]) -> list[str]:
@@ -141,6 +185,9 @@ def main() -> None:
         return
 
     circles = fetch_circles()
+    current_filter_mode = get_current_circle_filter_mode(st.session_state)
+    st.session_state.circle_filter_mode = current_filter_mode
+    circles = filter_circles_by_membership_mode(circles, current_filter_mode)
     category_options = build_category_filter_options(circles)
 
     col1, col2 = st.columns([3, 1])
@@ -169,10 +216,17 @@ def main() -> None:
         circles = [c for c in circles if c.get("category") == category_filter]
 
     st.markdown("---")
-    col1, col2 = st.columns(get_create_circle_button_columns())
+    col1, col2, _ = st.columns(get_create_circle_button_columns())
     with col1:
         if st.button("➕ Create Circle", type="primary"):
             st.session_state.show_create_form = True
+    with col2:
+        if st.button(
+            get_circle_filter_button_label(current_filter_mode),
+            key="toggle_circle_filter_mode",
+        ):
+            st.session_state.circle_filter_mode = advance_circle_filter_mode(current_filter_mode)
+            st.rerun()
 
     if st.session_state.get("show_create_form", False):
         with st.form("create_circle_form"):
@@ -225,7 +279,7 @@ def main() -> None:
         st.info("No circles found. Be the first to create one!")
         return
 
-    st.markdown(f"### Available Circles ({len(circles)})")
+    st.markdown(f"### {get_circle_list_heading(current_filter_mode)} ({len(circles)})")
 
     for i in range(0, len(circles), 2):
         col1, col2 = st.columns(2)

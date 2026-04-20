@@ -290,6 +290,21 @@ def test_ui_password_css_hides_browser_native_reveal_controls(monkeypatch):
     assert password_rule in css
 
 
+def test_ui_button_css_uses_streamlit_theme_tokens_for_light_and_dark_modes(monkeypatch):
+    load_frontend_modules(monkeypatch)
+    sys.modules.pop("frontend.utils.ui", None)
+    ui_module = importlib.import_module("frontend.utils.ui")
+
+    css = ui_module.build_button_usability_css()
+
+    assert "var(--st-text-color)" in css
+    assert "var(--st-background-color)" in css
+    assert "var(--st-secondary-background-color)" in css
+    assert "var(--st-border-color)" in css
+    assert "var(--st-primary-color)" in css
+    assert '[data-testid="stPageLink"] a' in css
+
+
 def test_auth_logout_when_called_clears_authentication_state(monkeypatch):
     fake_streamlit, _, auth_module, _ = load_frontend_modules(monkeypatch)
 
