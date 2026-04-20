@@ -10,52 +10,17 @@ def build_button_usability_css() -> str:
     return """
         <style>
         :root {
-            --bc-button-primary-bg: color-mix(
-                in srgb,
-                var(--st-background-color, #ffffff) 78%,
-                var(--st-text-color, #111827) 22%
-            );
-            --bc-button-primary-bg-hover: color-mix(
-                in srgb,
-                var(--st-background-color, #ffffff) 68%,
-                var(--st-text-color, #111827) 32%
-            );
-            --bc-button-primary-border: color-mix(
-                in srgb,
-                var(--st-background-color, #ffffff) 52%,
-                var(--st-text-color, #111827) 48%
-            );
+            --bc-button-primary-bg: #1d4ed8;
+            --bc-button-primary-bg-hover: #1e40af;
+            --bc-button-primary-border: #1e3a8a;
             --bc-button-primary-text: #ffffff;
-            --bc-button-neutral-bg: color-mix(
-                in srgb,
-                var(--st-background-color, #ffffff) 92%,
-                #64748b 8%
-            );
-            --bc-button-neutral-bg-hover: color-mix(
-                in srgb,
-                var(--st-background-color, #ffffff) 86%,
-                #64748b 14%
-            );
-            --bc-button-neutral-border: color-mix(
-                in srgb,
-                var(--st-border-color, #cbd5e1) 72%,
-                #64748b 28%
-            );
-            --bc-button-danger-bg: color-mix(
-                in srgb,
-                var(--st-background-color, #ffffff) 72%,
-                #3f0d12 28%
-            );
-            --bc-button-danger-bg-hover: color-mix(
-                in srgb,
-                var(--st-background-color, #ffffff) 62%,
-                #3f0d12 38%
-            );
-            --bc-button-danger-border: color-mix(
-                in srgb,
-                var(--st-background-color, #ffffff) 48%,
-                #3f0d12 52%
-            );
+            --bc-button-neutral-bg: #334155;
+            --bc-button-neutral-bg-hover: #1f2937;
+            --bc-button-neutral-border: #475569;
+            --bc-button-neutral-text: #ffffff;
+            --bc-button-danger-bg: #dc2626;
+            --bc-button-danger-bg-hover: #b91c1c;
+            --bc-button-danger-border: #991b1b;
             --bc-button-danger-text: #ffffff;
             --bc-button-focus-ring: color-mix(
                 in srgb,
@@ -82,7 +47,7 @@ def build_button_usability_css() -> str:
             width: 100%;
             padding: 0.45rem 1rem;
             background: var(--bc-button-neutral-bg);
-            color: inherit;
+            color: var(--bc-button-neutral-text) !important;
             border: 1px solid var(--bc-button-neutral-border) !important;
             border-radius: 10px;
             font-weight: 650;
@@ -111,7 +76,8 @@ def build_button_usability_css() -> str:
         .stButton > button:hover,
         .stFormSubmitButton > button:hover {
             background: var(--bc-button-neutral-bg-hover);
-            border-color: color-mix(in srgb, var(--bc-button-neutral-border) 82%, #475569 18%) !important;
+            color: var(--bc-button-neutral-text) !important;
+            border-color: var(--bc-button-neutral-border) !important;
             box-shadow: 0 0 0 1px rgba(100, 116, 139, 0.14) inset;
             transform: translateY(-1px);
         }
@@ -125,25 +91,35 @@ def build_button_usability_css() -> str:
 
         button[role="tab"] {
             background: transparent !important;
-            border: 1px solid transparent !important;
+            color: inherit !important;
+            border: none !important;
             border-bottom: 2px solid transparent !important;
-            border-radius: 10px !important;
+            border-radius: 0 !important;
             box-shadow: none !important;
         }
 
         button[role="tab"]:hover {
             background: transparent !important;
+            border: none !important;
+            box-shadow: none !important;
+        }
+
+        button[role="tab"]:active {
+            background: transparent !important;
+            border: none !important;
             box-shadow: none !important;
         }
 
         button[role="tab"]:focus {
             outline: none !important;
+            border: none !important;
             box-shadow: none !important;
         }
+
         button[role="tab"][aria-selected="true"] {
             background: transparent !important;
             color: var(--bc-tab-accent) !important;
-            border-color: transparent !important;
+            border: none !important;
             border-bottom-color: var(--bc-tab-accent) !important;
             box-shadow: none !important;
         }
@@ -195,7 +171,7 @@ def build_button_usability_css() -> str:
             min-height: 2.5rem;
             padding: 0.45rem 0.8rem;
             background: var(--bc-button-neutral-bg);
-            color: inherit;
+            color: var(--bc-button-neutral-text);
             border: 1px solid var(--bc-button-neutral-border);
             border-radius: 10px;
             font-weight: 620;
@@ -209,7 +185,8 @@ def build_button_usability_css() -> str:
 
         [data-testid="stPageLink"] a:hover {
             background: var(--bc-button-neutral-bg-hover);
-            border-color: color-mix(in srgb, var(--bc-button-neutral-border) 82%, #475569 18%);
+            color: var(--bc-button-neutral-text);
+            border-color: var(--bc-button-neutral-border);
             box-shadow: 0 0 0 1px rgba(100, 116, 139, 0.14) inset;
             transform: translateY(-1px);
         }
