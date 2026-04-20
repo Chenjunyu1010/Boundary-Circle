@@ -48,6 +48,7 @@ def load_frontend_modules(monkeypatch, mock_mode: str = "true"):
     fake_streamlit.switch_page = lambda *args, **kwargs: None
     fake_streamlit.context = ModuleType("context")
     fake_streamlit.context.cookies = {}
+    fake_streamlit.markdown = lambda *args, **kwargs: None
 
     components_module = ModuleType("streamlit.components")
     components_v1_module = ModuleType("streamlit.components.v1")
@@ -103,6 +104,8 @@ def load_circle_detail_module(monkeypatch):
         "frontend.views.circle_detail",
         "utils.api",
         "utils.auth",
+        "frontend.utils.ui",
+        "utils.ui",
     ]:
         sys.modules.pop(name, None)
 
@@ -138,6 +141,8 @@ def load_auth_page_module(monkeypatch):
         "frontend.pages.auth",
         "utils.auth",
         "utils.validation",
+        "frontend.utils.ui",
+        "utils.ui",
     ]:
         sys.modules.pop(name, None)
 
@@ -154,6 +159,8 @@ def load_profile_page_module(monkeypatch):
         "frontend.pages.profile",
         "utils.api",
         "utils.auth",
+        "frontend.utils.ui",
+        "utils.ui",
     ]:
         sys.modules.pop(name, None)
 
@@ -216,6 +223,8 @@ def load_home_module(monkeypatch):
         "frontend.Home",
         "utils.api",
         "utils.auth",
+        "frontend.utils.ui",
+        "utils.ui",
     ]:
         sys.modules.pop(name, None)
 

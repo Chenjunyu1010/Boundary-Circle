@@ -41,9 +41,11 @@ def load_circle_detail_module(monkeypatch):
         "frontend.views.circle_detail",
         "frontend.utils.api",
         "frontend.utils.auth",
+        "frontend.utils.ui",
         "streamlit",
         "utils.api",
         "utils.auth",
+        "utils.ui",
     ]:
         sys.modules.pop(name, None)
 
@@ -94,9 +96,11 @@ def load_team_management_module(monkeypatch):
         "frontend.pages.team_management",
         "frontend.utils.api",
         "frontend.utils.auth",
+        "frontend.utils.ui",
         "streamlit",
         "utils.api",
         "utils.auth",
+        "utils.ui",
     ]:
         sys.modules.pop(name, None)
 
@@ -719,3 +723,32 @@ def test_team_management_main_hides_circle_hall_button_in_normal_state(monkeypat
 
     assert any("Back to Circle Detail" in label for label in button_labels)
     assert all("Back to Circle Hall" not in label for label in button_labels)
+
+
+def test_team_management_main_reloads_ui_module_after_stale_streamlit_cache(monkeypatch):
+    """Loading team management should not reuse a cached UI module bound to stale stubs."""
+    stale_streamlit = ModuleType("streamlit")
+    stale_streamlit.session_state = SessionState()
+    monkeypatch.setitem(sys.modules, "streamlit", stale_streamlit)
+    sys.modules.pop("utils.ui", None)
+    importlib.import_module("utils.ui")
+
+    fake_streamlit, _, _, team_module = load_team_management_module(monkeypatch)
+
+    fake_streamlit.session_state.current_circle_id = 5
+    fake_streamlit.session_state.team_management_focus_detail = False
+    fake_streamlit.button = lambda *args, **kwargs: False
+    fake_streamlit.tabs = lambda labels: [DummyContext() for _ in labels]
+    fake_streamlit.columns = lambda spec: tuple(
+        DummyContext() for _ in range(len(spec) if isinstance(spec, list) else spec)
+    )
+
+    monkeypatch.setattr(team_module, "require_auth", lambda: None)
+    monkeypatch.setattr(team_module, "can_access_current_circle", lambda circle_id: True)
+    monkeypatch.setattr(team_module, "render_team_list", lambda: None)
+    monkeypatch.setattr(team_module, "render_create_team", lambda: None)
+    monkeypatch.setattr(team_module, "render_my_teams", lambda: None)
+    monkeypatch.setattr(team_module, "render_invitation_management", lambda: None)
+    monkeypatch.setattr(team_module, "render_matching_section", lambda: None)
+
+    team_module.main()
