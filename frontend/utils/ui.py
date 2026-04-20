@@ -20,7 +20,7 @@ def build_button_usability_css() -> str:
             min-height: 2.75rem;
             width: 100%;
             padding: 0.45rem 1rem;
-            border: 1px solid var(--st-border-color);
+            border: 1px solid var(--st-border-color) !important;
             border-radius: 10px;
             font-weight: 650;
             letter-spacing: 0.01em;
@@ -30,6 +30,16 @@ def build_button_usability_css() -> str:
             line-height: 1.25;
             justify-content: center;
             text-align: center;
+        }
+
+        .stButton > button[kind="secondary"],
+        .stFormSubmitButton > button[kind="secondary"] {
+            border-color: color-mix(in srgb, currentColor 18%, var(--st-border-color)) !important;
+        }
+
+        .stButton > button[kind="primary"],
+        .stFormSubmitButton > button[kind="primary"] {
+            border-color: color-mix(in srgb, var(--st-primary-color) 55%, var(--st-border-color)) !important;
         }
 
         .stButton > button:hover,
