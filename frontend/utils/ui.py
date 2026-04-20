@@ -47,8 +47,19 @@ def build_button_usability_css() -> str:
             box-shadow: 0 0 0 1px currentColor inset;
         }
 
+        button[role="tab"] {
+            border: 1px solid color-mix(in srgb, currentColor 16%, var(--st-border-color)) !important;
+            border-radius: 10px !important;
+        }
+
+        button[role="tab"][aria-selected="true"] {
+            border-color: color-mix(in srgb, var(--st-primary-color) 55%, var(--st-border-color)) !important;
+            box-shadow: 0 0 0 1px color-mix(in srgb, var(--st-primary-color) 30%, transparent) inset;
+        }
+
         .stButton > button:focus,
-        .stFormSubmitButton > button:focus {
+        .stFormSubmitButton > button:focus,
+        button[role="tab"]:focus {
             outline: 3px solid color-mix(in srgb, var(--st-primary-color) 45%, white) !important;
             outline-offset: 1px;
         }
