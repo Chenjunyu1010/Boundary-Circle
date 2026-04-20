@@ -20,6 +20,7 @@ def build_button_usability_css() -> str:
             min-height: 2.75rem;
             width: 100%;
             padding: 0.45rem 1rem;
+            border: 1px solid var(--st-border-color);
             border-radius: 10px;
             font-weight: 650;
             letter-spacing: 0.01em;
@@ -58,6 +59,7 @@ def build_button_usability_css() -> str:
             align-items: center;
             min-height: 2.5rem;
             padding: 0.45rem 0.8rem;
+            border: 1px solid var(--st-border-color);
             border-radius: 10px;
             font-weight: 620;
             text-decoration: none;
