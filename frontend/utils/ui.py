@@ -10,21 +10,9 @@ def build_button_usability_css() -> str:
     return """
         <style>
         :root {
-            --bc-button-primary-bg: color-mix(
-                in srgb,
-                var(--st-background-color, #ffffff) 76%,
-                var(--st-text-color, #111827) 24%
-            );
-            --bc-button-primary-bg-hover: color-mix(
-                in srgb,
-                var(--st-background-color, #ffffff) 66%,
-                var(--st-text-color, #111827) 34%
-            );
-            --bc-button-primary-border: color-mix(
-                in srgb,
-                var(--st-background-color, #ffffff) 52%,
-                var(--st-text-color, #111827) 48%
-            );
+            --bc-button-primary-bg: #334155;
+            --bc-button-primary-bg-hover: #1f2937;
+            --bc-button-primary-border: #475569;
             --bc-button-primary-text: #ffffff;
             --bc-button-neutral-bg: color-mix(
                 in srgb,
@@ -105,7 +93,7 @@ def build_button_usability_css() -> str:
             background: var(--bc-button-primary-bg) !important;
             color: var(--bc-button-primary-text) !important;
             border-color: var(--bc-button-primary-border) !important;
-            box-shadow: 0 10px 24px rgba(37, 99, 235, 0.22);
+            box-shadow: 0 10px 24px rgba(15, 23, 42, 0.22);
         }
 
         .stButton > button:hover,
@@ -120,14 +108,19 @@ def build_button_usability_css() -> str:
         .stFormSubmitButton > button[kind="primary"]:hover {
             background: var(--bc-button-primary-bg-hover) !important;
             border-color: var(--bc-button-primary-border) !important;
-            box-shadow: 0 14px 28px rgba(37, 99, 235, 0.28);
+            box-shadow: 0 14px 28px rgba(15, 23, 42, 0.28);
         }
 
         button[role="tab"] {
-            background: var(--bc-button-neutral-bg) !important;
+            background: transparent !important;
             border: 1px solid transparent !important;
             border-bottom: 2px solid transparent !important;
             border-radius: 10px !important;
+            box-shadow: none !important;
+        }
+
+        button[role="tab"]:hover {
+            background: transparent !important;
             box-shadow: none !important;
         }
 
