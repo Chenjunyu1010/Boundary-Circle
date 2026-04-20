@@ -140,7 +140,6 @@ def build_button_usability_css() -> str:
             outline: none !important;
             box-shadow: none !important;
         }
-
         button[role="tab"][aria-selected="true"] {
             background: transparent !important;
             color: var(--bc-tab-accent) !important;
@@ -150,8 +149,7 @@ def build_button_usability_css() -> str:
         }
 
         .stButton > button:focus,
-        .stFormSubmitButton > button:focus,
-        button[role="tab"]:focus {
+        .stFormSubmitButton > button:focus {
             outline: 3px solid var(--bc-button-focus-ring) !important;
             outline-offset: 1px;
         }

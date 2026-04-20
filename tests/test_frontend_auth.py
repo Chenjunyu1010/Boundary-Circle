@@ -330,6 +330,7 @@ def test_ui_button_css_uses_streamlit_theme_tokens_for_light_and_dark_modes(monk
     assert "color: var(--bc-tab-accent) !important;" in css
     assert "border-color: transparent !important;" in css
     assert "border-bottom-color: var(--bc-tab-accent) !important;" in css
+    assert ".stFormSubmitButton > button:focus,\n        button[role=\"tab\"]:focus" not in css
     assert '[data-testid="stPageLink"] a {' in css
     assert "currentColor 18%" not in css
     assert "@media (prefers-color-scheme: dark)" not in css
