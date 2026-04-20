@@ -65,7 +65,7 @@ def get_create_circle_category_options() -> list[str]:
 def fetch_circles() -> list[dict]:
     """Fetch all circles from API."""
     try:
-        response = api_client.get("/circles")
+        response = api_client.get("/circles/")
         if response.ok:
             return response.json()
         st.error(f"Failed to load circles: {response.reason}")
@@ -87,7 +87,7 @@ def create_circle(
 
     try:
         response = api_client.post(
-            "/circles",
+            "/circles/",
             data={
                 "name": name,
                 "description": description,

@@ -104,7 +104,7 @@ def test_create_circle_does_not_send_creator_id_query_param(monkeypatch):
     assert success is True
     assert message == "Circle created successfully!"
     assert circle_id == 9
-    assert captured["endpoint"] == "/circles"
+    assert captured["endpoint"] == "/circles/"
     assert captured["params"] is None
 
 
