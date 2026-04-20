@@ -10,9 +10,21 @@ def build_button_usability_css() -> str:
     return """
         <style>
         :root {
-            --bc-button-primary-bg: #334155;
-            --bc-button-primary-bg-hover: #1f2937;
-            --bc-button-primary-border: #475569;
+            --bc-button-primary-bg: color-mix(
+                in srgb,
+                var(--st-background-color, #ffffff) 78%,
+                var(--st-text-color, #111827) 22%
+            );
+            --bc-button-primary-bg-hover: color-mix(
+                in srgb,
+                var(--st-background-color, #ffffff) 68%,
+                var(--st-text-color, #111827) 32%
+            );
+            --bc-button-primary-border: color-mix(
+                in srgb,
+                var(--st-background-color, #ffffff) 52%,
+                var(--st-text-color, #111827) 48%
+            );
             --bc-button-primary-text: #ffffff;
             --bc-button-neutral-bg: color-mix(
                 in srgb,
@@ -121,6 +133,11 @@ def build_button_usability_css() -> str:
 
         button[role="tab"]:hover {
             background: transparent !important;
+            box-shadow: none !important;
+        }
+
+        button[role="tab"]:focus {
+            outline: none !important;
             box-shadow: none !important;
         }
 
