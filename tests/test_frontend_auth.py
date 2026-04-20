@@ -67,6 +67,31 @@ def load_frontend_modules(monkeypatch, mock_mode: str = "true"):
     return fake_streamlit, api_module, auth_module, validation_module
 
 
+def test_api_client_reads_streamlit_secrets_when_env_missing(monkeypatch):
+    for name in [
+        "frontend.utils.api",
+        "streamlit",
+    ]:
+        sys.modules.pop(name, None)
+
+    monkeypatch.delenv("API_BASE_URL", raising=False)
+    monkeypatch.delenv("MOCK_MODE", raising=False)
+
+    fake_streamlit = ModuleType("streamlit")
+    fake_streamlit.session_state = SessionState()
+    fake_streamlit.secrets = {
+        "API_BASE_URL": "https://backend.example.com",
+        "MOCK_MODE": "false",
+    }
+    monkeypatch.setitem(sys.modules, "streamlit", fake_streamlit)
+
+    api_module = importlib.import_module("frontend.utils.api")
+    client = api_module.APIClient()
+
+    assert client.base_url == "https://backend.example.com"
+    assert client.mock_mode is False
+
+
 def load_circle_detail_module(monkeypatch):
     fake_streamlit, _, _, _ = load_frontend_modules(monkeypatch)
     fake_streamlit.query_params = {}

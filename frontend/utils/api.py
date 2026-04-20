@@ -12,8 +12,23 @@ import requests
 import streamlit as st
 
 
-BASE_URL = os.environ.get("API_BASE_URL", "http://127.0.0.1:8000")
-MOCK_MODE = os.environ.get("MOCK_MODE", "false").lower() == "true"
+def _get_config_value(name: str, default: str) -> str:
+    """Read config from environment first, then Streamlit secrets."""
+    env_value = os.environ.get(name)
+    if env_value:
+        return env_value
+
+    try:
+        secrets = getattr(st, "secrets", {})
+        value = secrets.get(name)
+    except Exception:
+        value = None
+
+    return str(value) if value is not None else default
+
+
+BASE_URL = _get_config_value("API_BASE_URL", "http://127.0.0.1:8000")
+MOCK_MODE = _get_config_value("MOCK_MODE", "false").lower() == "true"
 
 
 class APIClient:
