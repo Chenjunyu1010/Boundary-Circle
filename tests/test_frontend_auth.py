@@ -308,12 +308,11 @@ def test_ui_button_css_uses_streamlit_theme_tokens_for_light_and_dark_modes(monk
 
     assert "min-height: 2.75rem;" in css
     assert "padding: 0.45rem 1rem;" in css
-    assert "--bc-button-primary-bg: #1d4ed8;" in css
-    assert "--bc-button-danger-bg: #b91c1c;" in css
-    assert "@media (prefers-color-scheme: dark)" in css
-    assert "--bc-button-primary-bg: #374151;" in css
-    assert "--bc-button-danger-bg: #3f3f46;" in css
+    assert "--bc-button-primary-bg: color-mix(" in css
+    assert "--bc-button-danger-bg: color-mix(" in css
     assert "--bc-tab-accent: #dc2626;" in css
+    assert "--st-background-color" in css
+    assert "--st-text-color" in css
     assert "--bc-button-neutral-border:" in css
     assert "background: var(--bc-button-neutral-bg);" in css
     assert "border: 1px solid var(--bc-button-neutral-border) !important;" in css
@@ -323,12 +322,14 @@ def test_ui_button_css_uses_streamlit_theme_tokens_for_light_and_dark_modes(monk
     assert 'button[kind="primary"]' in css
     assert 'button[role="tab"]' in css
     assert 'button[role="tab"][aria-selected="true"]' in css
+    assert "background: transparent !important;" in css
     assert "border-bottom: 2px solid transparent !important;" in css
     assert "color: var(--bc-tab-accent) !important;" in css
     assert "border-color: transparent !important;" in css
     assert "border-bottom-color: var(--bc-tab-accent) !important;" in css
     assert '[data-testid="stPageLink"] a {' in css
     assert "currentColor 18%" not in css
+    assert "@media (prefers-color-scheme: dark)" not in css
 
 
 def test_ui_button_variant_marker_renders_danger_hook(monkeypatch):

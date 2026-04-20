@@ -10,9 +10,21 @@ def build_button_usability_css() -> str:
     return """
         <style>
         :root {
-            --bc-button-primary-bg: #1d4ed8;
-            --bc-button-primary-bg-hover: #1e40af;
-            --bc-button-primary-border: #1e3a8a;
+            --bc-button-primary-bg: color-mix(
+                in srgb,
+                var(--st-background-color, #ffffff) 76%,
+                var(--st-text-color, #111827) 24%
+            );
+            --bc-button-primary-bg-hover: color-mix(
+                in srgb,
+                var(--st-background-color, #ffffff) 66%,
+                var(--st-text-color, #111827) 34%
+            );
+            --bc-button-primary-border: color-mix(
+                in srgb,
+                var(--st-background-color, #ffffff) 52%,
+                var(--st-text-color, #111827) 48%
+            );
             --bc-button-primary-text: #ffffff;
             --bc-button-neutral-bg: color-mix(
                 in srgb,
@@ -29,9 +41,21 @@ def build_button_usability_css() -> str:
                 var(--st-border-color, #cbd5e1) 72%,
                 #64748b 28%
             );
-            --bc-button-danger-bg: #b91c1c;
-            --bc-button-danger-bg-hover: #991b1b;
-            --bc-button-danger-border: #7f1d1d;
+            --bc-button-danger-bg: color-mix(
+                in srgb,
+                var(--st-background-color, #ffffff) 72%,
+                #3f0d12 28%
+            );
+            --bc-button-danger-bg-hover: color-mix(
+                in srgb,
+                var(--st-background-color, #ffffff) 62%,
+                #3f0d12 38%
+            );
+            --bc-button-danger-border: color-mix(
+                in srgb,
+                var(--st-background-color, #ffffff) 48%,
+                #3f0d12 52%
+            );
             --bc-button-danger-text: #ffffff;
             --bc-button-focus-ring: color-mix(
                 in srgb,
@@ -44,18 +68,6 @@ def build_button_usability_css() -> str:
                 #dc2626 8%,
                 var(--st-background-color, #ffffff) 86%
             );
-        }
-
-        @media (prefers-color-scheme: dark) {
-            :root {
-                --bc-button-primary-bg: #374151;
-                --bc-button-primary-bg-hover: #1f2937;
-                --bc-button-primary-border: #6b7280;
-                --bc-button-danger-bg: #3f3f46;
-                --bc-button-danger-bg-hover: #27272a;
-                --bc-button-danger-border: #71717a;
-                --bc-tab-accent: #f87171;
-            }
         }
 
         /* Hide browser-native password reveal controls so Streamlit shows only one toggle. */
@@ -120,7 +132,7 @@ def build_button_usability_css() -> str:
         }
 
         button[role="tab"][aria-selected="true"] {
-            background: var(--bc-tab-active-bg) !important;
+            background: transparent !important;
             color: var(--bc-tab-accent) !important;
             border-color: transparent !important;
             border-bottom-color: var(--bc-tab-accent) !important;
