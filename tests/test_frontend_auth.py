@@ -308,8 +308,8 @@ def test_ui_button_css_uses_streamlit_theme_tokens_for_light_and_dark_modes(monk
 
     assert "min-height: 2.75rem;" in css
     assert "padding: 0.45rem 1rem;" in css
-    assert "--bc-button-primary-bg: #2563eb;" in css
-    assert "--bc-button-danger-bg: #dc2626;" in css
+    assert "--bc-button-primary-bg: #1d4ed8;" in css
+    assert "--bc-button-danger-bg: #b91c1c;" in css
     assert "--bc-button-neutral-border:" in css
     assert "background: var(--bc-button-neutral-bg);" in css
     assert "border: 1px solid var(--bc-button-neutral-border) !important;" in css

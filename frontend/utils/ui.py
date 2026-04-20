@@ -10,9 +10,9 @@ def build_button_usability_css() -> str:
     return """
         <style>
         :root {
-            --bc-button-primary-bg: #2563eb;
-            --bc-button-primary-bg-hover: #1d4ed8;
-            --bc-button-primary-border: #1e40af;
+            --bc-button-primary-bg: #1d4ed8;
+            --bc-button-primary-bg-hover: #1e40af;
+            --bc-button-primary-border: #1e3a8a;
             --bc-button-primary-text: #ffffff;
             --bc-button-neutral-bg: color-mix(
                 in srgb,
@@ -29,9 +29,9 @@ def build_button_usability_css() -> str:
                 var(--st-border-color, #cbd5e1) 72%,
                 #64748b 28%
             );
-            --bc-button-danger-bg: #dc2626;
-            --bc-button-danger-bg-hover: #b91c1c;
-            --bc-button-danger-border: #991b1b;
+            --bc-button-danger-bg: #b91c1c;
+            --bc-button-danger-bg-hover: #991b1b;
+            --bc-button-danger-border: #7f1d1d;
             --bc-button-danger-text: #ffffff;
             --bc-button-focus-ring: color-mix(
                 in srgb,
