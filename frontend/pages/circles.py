@@ -38,19 +38,21 @@ def get_create_circle_button_columns() -> list[int]:
 
 def get_current_circle_filter_mode(session_state: dict) -> str:
     """Return the current ownership filter mode for the circle list."""
-    mode = session_state.get("circle_filter_mode", "joined")
+    mode = session_state.get("circle_filter_mode", "all")
     if mode in {"joined", "created", "all"}:
         return mode
-    return "joined"
+    return "all"
 
 
 def advance_circle_filter_mode(filter_mode: str) -> str:
     """Return the next ownership filter mode in the UI cycle."""
+    if filter_mode == "all":
+        return "joined"
     if filter_mode == "joined":
         return "created"
     if filter_mode == "created":
         return "all"
-    return "joined"
+    return "all"
 
 
 def filter_circles_by_membership_mode(circles: list[dict], filter_mode: str) -> list[dict]:
