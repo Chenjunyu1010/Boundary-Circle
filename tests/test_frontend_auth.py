@@ -297,12 +297,23 @@ def test_ui_button_css_uses_streamlit_theme_tokens_for_light_and_dark_modes(monk
 
     css = ui_module.build_button_usability_css()
 
-    assert "var(--st-text-color)" in css
-    assert "var(--st-background-color)" in css
-    assert "var(--st-secondary-background-color)" in css
-    assert "var(--st-border-color)" in css
-    assert "var(--st-primary-color)" in css
+    assert "min-height: 2.75rem;" in css
+    assert "padding: 0.45rem 1rem;" in css
     assert '[data-testid="stPageLink"] a' in css
+    assert "background: var(--bc-button-bg);" not in css
+    assert "color: var(--bc-button-text);" not in css
+    assert 'button[kind="primary"]' not in css
+
+
+def test_profile_page_day_options_follow_month_and_leap_year(monkeypatch):
+    load_frontend_modules(monkeypatch)
+    sys.modules.pop("frontend.pages.profile", None)
+    profile_page_module = importlib.import_module("frontend.pages.profile")
+
+    assert profile_page_module.get_birthday_day_options(2001, 2) == [None, *list(range(1, 29))]
+    assert profile_page_module.get_birthday_day_options(2000, 2) == [None, *list(range(1, 30))]
+    assert profile_page_module.get_birthday_day_options(2001, 4) == [None, *list(range(1, 31))]
+    assert profile_page_module.get_birthday_day_options(None, None) == [None, *list(range(1, 32))]
 
 
 def test_auth_logout_when_called_clears_authentication_state(monkeypatch):
