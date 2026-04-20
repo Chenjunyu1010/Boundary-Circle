@@ -273,3 +273,45 @@ def test_build_category_filter_options_uses_dynamic_circle_categories(monkeypatc
     )
 
     assert categories == ["All", "Course", "Entertainment", "Sports"]
+
+
+def test_circle_filter_mode_defaults_to_joined(monkeypatch):
+    _, circles_module, _ = load_circle_modules(monkeypatch)
+
+    assert circles_module.get_current_circle_filter_mode({}) == "joined"
+
+
+def test_circle_filter_mode_cycle_rotates_joined_created_all(monkeypatch):
+    _, circles_module, _ = load_circle_modules(monkeypatch)
+
+    assert circles_module.advance_circle_filter_mode("joined") == "created"
+    assert circles_module.advance_circle_filter_mode("created") == "all"
+    assert circles_module.advance_circle_filter_mode("all") == "joined"
+
+
+def test_filter_circles_by_membership_mode_supports_joined_created_and_all(monkeypatch):
+    _, circles_module, _ = load_circle_modules(monkeypatch)
+    circles = [
+        {"id": 1, "name": "Created", "is_creator": True, "is_member": True},
+        {"id": 2, "name": "Joined", "is_creator": False, "is_member": True},
+        {"id": 3, "name": "Other", "is_creator": False, "is_member": False},
+    ]
+
+    joined = circles_module.filter_circles_by_membership_mode(circles, "joined")
+    created = circles_module.filter_circles_by_membership_mode(circles, "created")
+    all_circles = circles_module.filter_circles_by_membership_mode(circles, "all")
+
+    assert [circle["id"] for circle in joined] == [1, 2]
+    assert [circle["id"] for circle in created] == [1]
+    assert [circle["id"] for circle in all_circles] == [1, 2, 3]
+
+
+def test_circle_filter_mode_labels_match_current_state(monkeypatch):
+    _, circles_module, _ = load_circle_modules(monkeypatch)
+
+    assert circles_module.get_circle_filter_button_label("joined") == "Created by Me"
+    assert circles_module.get_circle_filter_button_label("created") == "All Circles"
+    assert circles_module.get_circle_filter_button_label("all") == "Joined Circles"
+    assert circles_module.get_circle_list_heading("joined") == "Joined Circles"
+    assert circles_module.get_circle_list_heading("created") == "Created by Me"
+    assert circles_module.get_circle_list_heading("all") == "Available Circles"
