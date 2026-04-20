@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 import re
-from typing import Any, List, Set
+from typing import Any, List, Optional, Set
 
 from sqlmodel import Session, select
 
@@ -18,7 +18,7 @@ from src.models.teams import (
 )
 
 
-def _coerce_numeric_value(value: Any) -> float | None:
+def _coerce_numeric_value(value: Any) -> Optional[float]:
     """Return a comparable numeric value or None when coercion fails."""
     if isinstance(value, bool):
         return None

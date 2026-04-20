@@ -497,7 +497,7 @@ def build_stress_dataset() -> DatasetSeed:
     def range_rule(tag_name: str, min_value, max_value) -> TeamRequirementRule:
         return TeamRequirementRule(tag_name=tag_name, expected_value={"min": min_value, "max": max_value})
 
-    def _rule_bounds(expected_value: Any) -> tuple[Optional[float], Optional[float]] | None:
+    def _rule_bounds(expected_value: Any) -> Optional[Tuple[Optional[float], Optional[float]]]:
         if hasattr(expected_value, "min") and hasattr(expected_value, "max"):
             min_value = getattr(expected_value, "min")
             max_value = getattr(expected_value, "max")

@@ -1,4 +1,4 @@
-from typing import Literal
+from typing import Literal, Optional
 
 from fastapi import APIRouter, Depends, Header, HTTPException, status
 from pydantic import BaseModel
@@ -31,7 +31,7 @@ class AdminSeedResponse(BaseModel):
 
 
 def _require_admin_seed_key(
-    x_admin_key: str | None = Header(default=None),
+    x_admin_key: Optional[str] = Header(default=None),
     settings: Settings = Depends(get_settings),
 ) -> None:
     if not settings.admin_seed_key:
