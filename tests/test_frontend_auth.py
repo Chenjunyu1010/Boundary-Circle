@@ -247,6 +247,16 @@ def test_auth_register_and_login_valid_credentials_update_session_state(monkeypa
     assert fake_streamlit.session_state.email == "alice@example.com"
 
 
+def test_ui_password_css_hides_browser_native_reveal_controls():
+    ui_module = importlib.import_module("frontend.utils.ui")
+
+    css = ui_module.build_button_usability_css()
+
+    assert 'input[type="password"]::-ms-reveal' in css
+    assert 'input[type="password"]::-ms-clear' in css
+    assert "display: none;" in css
+
+
 def test_auth_logout_when_called_clears_authentication_state(monkeypatch):
     fake_streamlit, _, auth_module, _ = load_frontend_modules(monkeypatch)
 

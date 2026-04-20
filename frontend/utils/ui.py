@@ -9,6 +9,12 @@ def build_button_usability_css() -> str:
     """Return shared button CSS used across Streamlit pages."""
     return """
         <style>
+        /* Hide browser-native password reveal controls so Streamlit shows only one toggle. */
+        input[type="password"]::-ms-reveal,
+        input[type="password"]::-ms-clear {
+            display: none;
+        }
+
         .stButton > button,
         .stFormSubmitButton > button {
             min-height: 2.75rem;
